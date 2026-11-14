@@ -19,9 +19,9 @@ targets:
     platform: iOS
     sources:
       - path: Sources
+      - path: Resources
+        buildPhase: resources
     settings:
       base:
         INFOPLIST_KEY_NSAppTransportSecurity_NSExceptionDomains_nexus.tunnelto.me_NSIncludesSubdomains: YES
         INFOPLIST_KEY_NSAppTransportSecurity_NSExceptionDomains_nexus.tunnelto.me_NSTemporaryExceptionAllowsInsecureHTTPLoads: NO
-    resources:
-      - path: Resources

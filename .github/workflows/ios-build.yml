@@ -39,11 +39,15 @@ jobs:
         run: |
           APP_PATH="$PWD/NEXUS.xcarchive/Products/Applications/NEXUS.app"
           test -d "$APP_PATH"
+          test -s "$APP_PATH/Assets.car"
+          test -s "$APP_PATH/NeuralPing.wav"
           mkdir -p "$RUNNER_TEMP/unsigned-ipa/Payload"
           cp -R "$APP_PATH" "$RUNNER_TEMP/unsigned-ipa/Payload/NEXUS.app"
           (cd "$RUNNER_TEMP/unsigned-ipa" && /usr/bin/zip -qry "$GITHUB_WORKSPACE/NEXUS-native-unsigned.ipa" Payload)
           test -s "$GITHUB_WORKSPACE/NEXUS-native-unsigned.ipa"
+          IPA_KB=$(du -k "$GITHUB_WORKSPACE/NEXUS-native-unsigned.ipa" | cut -f1)
           echo "Native IPA size: $(du -h "$GITHUB_WORKSPACE/NEXUS-native-unsigned.ipa" | cut -f1)"
+          test "$IPA_KB" -ge 70000
       - name: Upload native IPA
         uses: actions/upload-artifact@v4
         with:
