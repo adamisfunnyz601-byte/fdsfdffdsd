@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import AVFoundation
 
 @MainActor
 final class NexusModel: ObservableObject {
@@ -15,6 +16,18 @@ final class NexusModel: ObservableObject {
     @Published var connected = false
     private let base = URL(string: "https://nexus.tunnelto.me")!
     private var poller: Task<Void, Never>?
+    private var activeSound: AVAudioPlayer?
+
+    func playSound(_ name: String) {
+        guard let url = Bundle.main.url(forResource: name, withExtension: "wav") else {
+            error = "Sound asset not found: \\(name)"; return
+        }
+        do {
+            activeSound = try AVAudioPlayer(contentsOf: url)
+            activeSound?.prepareToPlay()
+            activeSound?.play()
+        } catch { self.error = error.localizedDescription }
+    }
 
     private var cookies: HTTPCookieStorage { .shared }
     private lazy var session: URLSession = {
