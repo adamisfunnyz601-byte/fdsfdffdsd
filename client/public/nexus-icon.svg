@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+<defs>
+ <radialGradient id="space" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="#28105f"/><stop offset=".52" stop-color="#10082d"/><stop offset="1" stop-color="#03030d"/></radialGradient>
+ <radialGradient id="nebula"><stop stop-color="#a855f7" stop-opacity=".8"/><stop offset="1" stop-color="#6d28d9" stop-opacity="0"/></radialGradient>
+ <linearGradient id="shield" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#d8b4fe"/><stop offset=".32" stop-color="#9333ea"/><stop offset=".72" stop-color="#6d28d9"/><stop offset="1" stop-color="#3b0764"/></linearGradient>
+ <linearGradient id="lock" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#c4b5fd"/></linearGradient>
+ <filter id="glow" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="24" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs>
+<rect width="1024" height="1024" rx="220" fill="url(#space)"/>
+<ellipse cx="190" cy="245" rx="390" ry="250" fill="url(#nebula)" opacity=".55"/>
+<ellipse cx="850" cy="780" rx="420" ry="300" fill="url(#nebula)" opacity=".42"/>
+<g fill="#fff">
+ <circle cx="130" cy="150" r="5"/><circle cx="260" cy="330" r="3"/><circle cx="820" cy="145" r="5"/><circle cx="900" cy="300" r="3"/><circle cx="130" cy="740" r="4"/><circle cx="300" cy="880" r="3"/><circle cx="760" cy="900" r="5"/><circle cx="900" cy="680" r="4"/><circle cx="680" cy="110" r="2"/><circle cx="480" cy="180" r="3"/><circle cx="560" cy="850" r="3"/>
+</g>
+<g filter="url(#glow)">
+ <path d="M512 170 820 290v225c0 207-128 321-308 410C332 836 204 722 204 515V290z" fill="url(#shield)" stroke="#d8b4fe" stroke-width="18" stroke-linejoin="round"/>
+ <path d="M512 222 765 320v194c0 169-99 267-253 345-154-78-253-176-253-345V320z" fill="#18083b" opacity=".55"/>
+ <path d="M392 470v-75a120 120 0 0 1 240 0v75" fill="none" stroke="url(#lock)" stroke-width="54" stroke-linecap="round"/>
+ <rect x="340" y="440" width="344" height="270" rx="54" fill="url(#lock)" stroke="#fff" stroke-width="8"/>
+ <circle cx="512" cy="555" r="38" fill="#4c1d95"/>
+ <path d="M490 580h44l-12 68h-20z" fill="#4c1d95"/>
+</g>
+</svg>

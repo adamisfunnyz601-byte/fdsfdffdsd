@@ -1,0 +1,19 @@
+{
+  "name": "NEXUS OS",
+  "short_name": "NEXUS",
+  "description": "Your digital universe",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#09090f",
+  "theme_color": "#09090f",
+  "icons": [
+    {
+      "src": "/nexus-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

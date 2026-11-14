@@ -5,6 +5,8 @@ on:
   push:
     paths:
       - "electron/**"
+      - "client/**"
+      - "capacitor.config.ts"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/build-windows.yml"
@@ -40,6 +42,20 @@ jobs:
           npm ls electron electron-builder debug --depth=0
           node -e "require.resolve('electron'); require.resolve('electron-builder'); require.resolve('debug'); console.log('Electron build dependencies are resolvable.')"
 
+      - name: Type-check all TypeScript and TSX sources
+        run: npm run check
+
+      - name: Build bundled web interface
+        run: npm run build
+
+      - name: Verify the complete local NEXUS UI bundle
+        shell: pwsh
+        run: |
+          if (-not (Test-Path dist/public/index.html)) { throw 'Bundled NEXUS UI is missing.' }
+          $scripts = Get-ChildItem dist/public/assets -Filter *.js -File -ErrorAction SilentlyContinue
+          if (-not $scripts) { throw 'Bundled NEXUS JavaScript assets are missing.' }
+          if (-not (Select-String -Path dist/public/index.html -Pattern '/assets/.*\.js' -Quiet)) { throw 'The app entry HTML does not reference its bundled JavaScript.' }
+
       - name: Build Windows installer
         run: npm run desktop:dist -- --publish=never
 
@@ -53,7 +69,9 @@ jobs:
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
-          name: Secure-Web-Gateway-Windows-Installer
+          name: nexus-windows-installer
           path: dist-electron/*.exe
           if-no-files-found: error
           retention-days: 14
+
+# Rebuild latest NEXUS source after the WebAuthn TypeScript fix.

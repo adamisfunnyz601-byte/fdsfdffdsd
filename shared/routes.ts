@@ -32,7 +32,6 @@ export const api = {
       input: z.object({
         serialKey: z.string(),
         username: z.string().trim().min(1, "Username is required").max(32, "Username must be 32 characters or fewer"),
-        turnstileToken: z.string().max(2048).optional(),
       }),
       responses: {
         200: z.custom<typeof users.$inferSelect>(),
@@ -210,6 +209,9 @@ export const api = {
     }
   }
 };
+
+export type CreateKeyRequest = z.infer<typeof api.admin.generateKey.input>;
+export type CreateHistoryRequest = z.infer<typeof api.history.create.input>;
 
 // ============================================
 // HELPER

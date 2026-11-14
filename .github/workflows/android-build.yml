@@ -1,0 +1,123 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/mobile-notifications-responsive-platforms
+    paths:
+      - ".github/workflows/android-build.yml"
+      - "capacitor.config.ts"
+      - "client/**"
+      - "package.json"
+      - "package-lock.json"
+      - "script/**"
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    env:
+      GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Pin stable npm version
+        run: |
+          npm install --global npm@10.9.4
+          npm --version
+      - name: Install app dependencies (resilient)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm config set registry https://registry.npmjs.org/
+          npm config set fetch-retries 5
+          npm config set fetch-retry-mintimeout 20000
+          npm config set fetch-retry-maxtimeout 120000
+          npm config set fetch-timeout 300000
+          # The checked-in lockfile contains Replit-only mirror URLs and predates
+          # the Capacitor dependencies. Ignore it in CI rather than fetching from
+          # a private mirror or failing on an out-of-sync lockfile.
+          for attempt in 1 2 3; do
+            if npm install --package-lock=false --no-audit --no-fund --prefer-online --maxsockets=5; then
+              exit 0
+            fi
+            echo "npm install failed (attempt $attempt/3); clearing npm's cache and retrying..."
+            npm cache clean --force || true
+            sleep 5
+          done
+          echo "Dependency installation failed after 3 attempts."
+          exit 1
+      - name: Type-check all TypeScript and TSX sources
+        run: npm run check
+      - name: Build web application
+        run: npm run build
+
+      - name: Verify the complete local NEXUS UI bundle
+        run: |
+          test -s dist/public/index.html
+          find dist/public/assets -maxdepth 1 -type f -name '*.js' | grep -q .
+          grep -Eq '/assets/[^"]+\.js' dist/public/index.html
+      - name: Generate Android Studio project with bundled local website
+        run: |
+          npx cap add android
+          npx cap sync android
+      - name: Add Android microphone and notification permissions
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("android/app/src/main/AndroidManifest.xml")
+          xml = path.read_text()
+          permissions = [
+              "android.permission.RECORD_AUDIO",
+              "android.permission.CAMERA",
+              "android.permission.MODIFY_AUDIO_SETTINGS",
+              "android.permission.POST_NOTIFICATIONS",
+          ]
+          for permission in permissions:
+              if permission not in xml:
+                  xml = xml.replace("<application", f'  <uses-permission android:name="{permission}" />\n  <application', 1)
+          path.write_text(xml)
+          PY
+      - name: Configure Firebase Cloud Messaging (optional)
+        if: ${{ env.GOOGLE_SERVICES_JSON_BASE64 != '' }}
+        env:
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > android/app/google-services.json
+          python - <<'PY'
+          from pathlib import Path
+          app = Path("android/app/build.gradle")
+          text = app.read_text()
+          if "com.google.gms.google-services" not in text:
+              text += "\napply plugin: 'com.google.gms.google-services'\n"
+              app.write_text(text)
+          root = Path("android/build.gradle")
+          text = root.read_text()
+          if "com.google.gms:google-services" not in text:
+              text = text.replace("dependencies {", "dependencies {\n        classpath 'com.google.gms:google-services:4.4.2'", 1)
+              root.write_text(text)
+          PY
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug
+      - name: Upload APK and Android Studio project
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexus-android-build
+          path: |
+            android/app/build/outputs/apk/debug/app-debug.apk
+            android/
+          if-no-files-found: error
+          retention-days: 14
+
+# Rebuild latest NEXUS source after the WebAuthn TypeScript fix.

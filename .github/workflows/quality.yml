@@ -1,0 +1,49 @@
+name: Quality checks
+
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Pin stable npm version
+        run: |
+          npm install --global npm@10.9.4
+          npm --version
+      - name: Install dependencies (resilient)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm config set registry https://registry.npmjs.org/
+          npm config set fetch-retries 5
+          npm config set fetch-retry-mintimeout 20000
+          npm config set fetch-retry-maxtimeout 120000
+          npm config set fetch-timeout 300000
+          # The current lockfile contains Replit-only mirror URLs and is out of
+          # sync with package.json. Do not use it in GitHub Actions.
+          for attempt in 1 2 3; do
+            if npm install --package-lock=false --no-audit --no-fund --prefer-online --maxsockets=5; then
+              exit 0
+            fi
+            echo "npm install failed (attempt $attempt/3); clearing npm cache and retrying..."
+            npm cache clean --force || true
+            sleep 5
+          done
+          echo "Dependency installation failed after 3 attempts."
+          exit 1
+      - name: Type-check
+        run: npm run check
+      - name: Production build
+        run: npm run build

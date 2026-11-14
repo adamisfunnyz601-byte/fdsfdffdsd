@@ -1,3 +1,4 @@
+import { apiUrl } from "@/lib/api-url";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@shared/routes";
 import { useAuth } from "@/hooks/use-auth";
@@ -20,12 +21,12 @@ export function useChat({ recipientId = null, groupId = null }: ChatChannel = {}
   const messagesUrl = channelParams.toString()
     ? `${api.chat.list.path}?${channelParams.toString()}`
     : api.chat.list.path;
-  const messagesKey = [api.chat.list.path, recipientId ?? null, groupId ?? null] as const;
+  const messagesKey = [api.chat.list.path, user?.id ?? null, recipientId ?? null, groupId ?? null] as const;
 
   const { data: messages, isLoading: isLoadingMessages } = useQuery({
     queryKey: messagesKey,
     queryFn: async () => {
-      const res = await fetch(messagesUrl);
+      const res = await fetch(apiUrl(messagesUrl), { credentials: "include", cache: "no-store" });
       if (!res.ok) throw new Error("Failed to fetch messages");
       const incoming = await res.json();
       const cachedMessages = queryClient.getQueryData<any[]>(messagesKey);
@@ -38,15 +39,21 @@ export function useChat({ recipientId = null, groupId = null }: ChatChannel = {}
           : message;
       });
     },
-    refetchInterval: 900,
-    refetchIntervalInBackground: true,
+    enabled: Boolean(user?.id),
+    // Global chat has no recipient/group ID; it must still poll so every device
+    // reads the same Neon-backed conversation. Pause background polling to avoid
+    // unnecessary requests through mobile webviews and reverse proxies.
+    refetchInterval: 3000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
     staleTime: 250,
   });
 
   const { data: users, isLoading: isLoadingUsers } = useQuery({
     queryKey: [api.chat.users.path],
     queryFn: async () => {
-      const res = await fetch(api.chat.users.path);
+      const res = await fetch(apiUrl(api.chat.users.path), { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch users");
       return res.json();
     },
@@ -65,8 +72,9 @@ export function useChat({ recipientId = null, groupId = null }: ChatChannel = {}
       mediaType?: string | null;
       replyToId?: number | null;
     }) => {
-      const res = await fetch(api.chat.send.path, {
+      const res = await fetch(apiUrl(api.chat.send.path), {
         method: api.chat.send.method,
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
@@ -137,7 +145,7 @@ export function useChat({ recipientId = null, groupId = null }: ChatChannel = {}
 
   const deleteMessage = useMutation({
     mutationFn: async (id: number) => {
-      const res = await fetch(`/api/chat/messages/${id}`, { method: 'DELETE' });
+      const res = await fetch(apiUrl(`/api/chat/messages/${id}`), { method: 'DELETE', credentials: 'include' });
       if (!res.ok) throw new Error("Delete failed");
     },
     onSuccess: () => {

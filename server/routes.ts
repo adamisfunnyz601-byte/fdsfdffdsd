@@ -1,8 +1,8 @@
 
-import { db } from "./db";
-import { users, accessKeys, searchHistory, messages, groupChats, groupChatMembers, customEmojis, friendRequests, blocks, oauthAccounts, moderationLogs, blockBlastScores, dihhroAwards, communityServers, communityServerMembers, communityServerCategories, communityServerChannels, chatMessageReactions, chatPolls, chatPollOptions, chatPollVotes } from "@shared/schema";
+import { db, pool } from "./db";
+import { users, accessKeys, searchHistory, messages, groupChats, groupChatMembers, customEmojis, friendRequests, blocks, moderationLogs, blockBlastScores, communityServers, communityServerMembers, communityServerCategories, communityServerChannels, communityServerMessages, chatMessageReactions, chatPolls, chatPollOptions, chatPollVotes, passkeyCredentials } from "@shared/schema";
 import { eq, desc, and, or, gt, sql, inArray } from "drizzle-orm";
-import type { Express, Request, RequestHandler } from "express";
+import type { Express, Request } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
@@ -15,7 +15,7 @@ import {
 } from "@shared/profile-tag";
 import { z } from "zod";
 import session from "express-session";
-import createMemoryStore from "memorystore";
+import connectPgSimple from "connect-pg-simple";
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from "crypto";
 import sharp from "sharp";
 import { rateLimit } from "express-rate-limit";
@@ -29,22 +29,13 @@ const verifyAccountPassword = (password: string, stored: string) => {
   if (!salt || !hash || !/^[a-f0-9]{32}$/.test(salt) || !/^[a-f0-9]{128}$/.test(hash)) return false;
   return timingSafeEqual(scryptSync(password, salt, 64), Buffer.from(hash, "hex"));
 };
-type OAuthProvider = "google" | "microsoft";
-
 declare module "express-session" {
   interface SessionData {
-    oauthFlow?: {
-      provider: OAuthProvider;
-      state: string;
-      nonce: string;
-      codeVerifier: string;
-      redirectUri: string;
-      returnTo: string;
-    };
+    passkeyFlow?: { challenge: string; userId: number; purpose: "register" | "login"; expiresAt: number };
   }
 }
 
-const MemoryStore = createMemoryStore(session);
+const PgSessionStore = connectPgSimple(session);
 const OWNER_KEY = "TSHSKDB163)#(";
 const PRESENCE_STATUSES = ["online", "idle", "dnd", "offline"] as const;
 type ProfileImageKind = "avatar" | "banner";
@@ -53,19 +44,10 @@ const PROFILE_IMAGE_DATA_URL = /^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/]+=
 const PROFILE_THUMBNAIL_CACHE_LIMIT = 32;
 const profileThumbnailCache = new Map<string, Buffer>();
 const profileThumbnailJobs = new Map<string, Promise<Buffer>>();
-const oauthConfigCache = new Map<OAuthProvider, Promise<import("openid-client").Configuration>>();
 
 const authRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 12,
-  standardHeaders: "draft-8",
-  legacyHeaders: false,
-  message: { message: "Too many sign-in attempts. Try again in a few minutes." },
-});
-
-const oauthStartRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 20,
   standardHeaders: "draft-8",
   legacyHeaders: false,
   message: { message: "Too many sign-in attempts. Try again in a few minutes." },
@@ -79,57 +61,6 @@ const accessRequestRateLimit = rateLimit({
   message: { message: "Too many access requests. Try again later." },
 });
 
-function isOAuthProvider(value: string): value is OAuthProvider {
-  return value === "google" || value === "microsoft";
-}
-
-function isOAuthProviderConfigured(provider: OAuthProvider) {
-  const prefix = provider === "google" ? "GOOGLE" : "MICROSOFT";
-  return Boolean(process.env[`${prefix}_CLIENT_ID`] && process.env[`${prefix}_CLIENT_SECRET`]);
-}
-
-function getOAuthConfig(provider: OAuthProvider) {
-  const existing = oauthConfigCache.get(provider);
-  if (existing) return existing;
-
-  const prefix = provider === "google" ? "GOOGLE" : "MICROSOFT";
-  const clientId = process.env[`${prefix}_CLIENT_ID`];
-  const clientSecret = process.env[`${prefix}_CLIENT_SECRET`];
-  if (!clientId || !clientSecret) {
-    throw new Error(`${provider} sign-in is not configured`);
-  }
-
-  const issuer = provider === "google"
-    ? "https://accounts.google.com"
-    : "https://login.microsoftonline.com/common/v2.0";
-  const discovery = import("openid-client").then(({ discovery }) =>
-    discovery(new URL(issuer), clientId, clientSecret),
-  );
-  oauthConfigCache.set(provider, discovery);
-  discovery.catch(() => oauthConfigCache.delete(provider));
-  return discovery;
-}
-
-function getOAuthRedirectUri(provider: OAuthProvider) {
-  let baseUrl = process.env.OAUTH_REDIRECT_BASE_URL;
-  if (!baseUrl && process.env.NODE_ENV !== "production") {
-    const devDomain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(",")[0];
-    if (devDomain) baseUrl = devDomain.startsWith("http") ? devDomain : `https://${devDomain}`;
-  }
-  if (!baseUrl && process.env.NODE_ENV !== "production") {
-    baseUrl = `http://localhost:${process.env.PORT || 5000}`;
-  }
-  if (!baseUrl) {
-    throw new Error("OAUTH_REDIRECT_BASE_URL must be set for production sign-in");
-  }
-
-  const parsed = new URL(baseUrl);
-  if (parsed.protocol !== "https:" && process.env.NODE_ENV === "production") {
-    throw new Error("Production OAuth redirect URL must use HTTPS");
-  }
-  return new URL(`/api/auth/oauth/${provider}/callback`, parsed.origin).toString();
-}
-
 function saveSession(req: Request) {
   return new Promise<void>((resolve, reject) => {
     req.session.save((error) => error ? reject(error) : resolve());
@@ -140,79 +71,6 @@ function regenerateSession(req: Request) {
   return new Promise<void>((resolve, reject) => {
     req.session.regenerate((error) => error ? reject(error) : resolve());
   });
-}
-
-function turnstileGuard(): RequestHandler {
-  return async (req, res, next) => {
-    const secret = process.env.CLOUDFLARE_TURNSTILE_SECRET_KEY;
-
-    if (!secret) {
-      return res.status(503).json({
-        message: "Cloudflare Turnstile secret is missing. Add CLOUDFLARE_TURNSTILE_SECRET_KEY to Replit Secrets."
-      });
-    }
-
-    const token = req.body?.turnstileToken;
-    if (typeof token !== "string" || token.length === 0 || token.length > 2048) {
-      return res.status(400).json({
-        message: "Complete the Cloudflare verification first."
-      });
-    }
-
-    try {
-      const form = new URLSearchParams({
-        secret,
-        response: token
-      });
-
-      if (req.ip) form.set("remoteip", req.ip);
-
-      const verificationResponse = await fetch(
-        "https://challenges.cloudflare.com/turnstile/v0/siteverify",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: form
-        }
-      );
-
-      if (!verificationResponse.ok) {
-        return res.status(503).json({
-          message: "Cloudflare verification is temporarily unavailable. Try again."
-        });
-      }
-
-      const result = await verificationResponse.json() as {
-        success?: boolean;
-        hostname?: string;
-        "error-codes"?: string[];
-      };
-
-      const requestHost = req.hostname.toLowerCase();
-      const verifiedHost = result.hostname?.toLowerCase();
-
-      if (result.success !== true) {
-        console.warn("Turnstile verification rejected:", result["error-codes"] || []);
-        return res.status(403).json({
-          message: "Cloudflare verification failed or expired. Please complete it again."
-        });
-      }
-
-      if (verifiedHost && verifiedHost !== requestHost) {
-        console.warn("Turnstile hostname mismatch:", { verifiedHost, requestHost });
-        return res.status(403).json({
-          message: "Cloudflare hostname mismatch. Check the hostname in your Turnstile widget."
-        });
-      }
-
-      return next();
-    } catch (error) {
-      console.error("Turnstile Siteverify request failed:", error);
-      return res.status(503).json({
-        message: "Could not contact Cloudflare verification. Try again."
-      });
-    }
-  };
 }
 
 function profileImageUrl(
@@ -279,22 +137,129 @@ declare module "express-session" {
   }
 }
 
+async function ensureSessionStoreTable() {
+  // Create the connect-pg-simple schema directly through Drizzle before the
+  // session middleware is registered. This avoids relying on table.sql being
+  // present beside a bundled dist/index.cjs on Windows/self-hosted installs.
+  await db.execute(sql.raw(`
+    CREATE TABLE IF NOT EXISTS user_sessions (
+      sid VARCHAR NOT NULL PRIMARY KEY,
+      sess JSON NOT NULL,
+      expire TIMESTAMP(6) NOT NULL
+    )
+  `));
+  await db.execute(sql.raw(`
+    CREATE INDEX IF NOT EXISTS IDX_user_sessions_expire
+    ON user_sessions (expire)
+  `));
+}
+
+async function ensureCommunityServerTables() {
+  // These idempotent DDL statements keep fresh deployments from exposing
+  // server screens whose backing tables were never created by a manual db:push.
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS community_servers (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      visibility TEXT NOT NULL DEFAULT 'private',
+      invite_code TEXT NOT NULL UNIQUE,
+      owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS community_server_members (
+      id SERIAL PRIMARY KEY,
+      server_id INTEGER NOT NULL REFERENCES community_servers(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      role TEXT NOT NULL DEFAULT 'member',
+      joined_at TIMESTAMP DEFAULT NOW()
+    )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS community_server_member_unique
+      ON community_server_members(server_id, user_id)`,
+    `CREATE TABLE IF NOT EXISTS community_server_categories (
+      id SERIAL PRIMARY KEY,
+      server_id INTEGER NOT NULL REFERENCES community_servers(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      position INTEGER NOT NULL DEFAULT 0
+    )`,
+    `CREATE TABLE IF NOT EXISTS community_server_channels (
+      id SERIAL PRIMARY KEY,
+      server_id INTEGER NOT NULL REFERENCES community_servers(id) ON DELETE CASCADE,
+      category_id INTEGER REFERENCES community_server_categories(id) ON DELETE SET NULL,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'text',
+      topic TEXT NOT NULL DEFAULT '',
+      position INTEGER NOT NULL DEFAULT 0,
+      is_locked BOOLEAN NOT NULL DEFAULT FALSE
+    )`,
+    `CREATE TABLE IF NOT EXISTS passkey_credentials (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      credential_id TEXT NOT NULL UNIQUE,
+      public_key TEXT NOT NULL,
+      counter INTEGER NOT NULL DEFAULT 0,
+      transports JSONB NOT NULL DEFAULT '[]'::jsonb,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS community_server_messages (
+      id SERIAL PRIMARY KEY,
+      server_id INTEGER NOT NULL REFERENCES community_servers(id) ON DELETE CASCADE,
+      channel_id INTEGER NOT NULL REFERENCES community_server_channels(id) ON DELETE CASCADE,
+      author_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      content TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW(),
+      edited_at TIMESTAMP
+    )`,
+  ];
+  for (const statement of statements) await db.execute(sql.raw(statement));
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // Session middleware
+  await ensureCommunityServerTables();
+  await ensureSessionStoreTable();
+  // Session middleware. Store sessions in Neon so logins survive server restarts.
+  // The table is created automatically on first boot by connect-pg-simple.
+  const sessionSecret = process.env.SESSION_SECRET;
+  if (!sessionSecret || sessionSecret.length < 32) {
+    throw new Error("SESSION_SECRET must be set to a stable random value of at least 32 characters.");
+  }
   app.use(
     session({
-      cookie: { maxAge: 86400000 },
-      store: new MemoryStore({
-        checkPeriod: 86400000,
+      name: "nexus.sid",
+      store: new PgSessionStore({
+        pool,
+        tableName: "user_sessions",
+        createTableIfMissing: false,
+        pruneSessionInterval: 15 * 60,
       }),
+      secret: sessionSecret,
       resave: false,
       saveUninitialized: false,
-      secret: process.env.SESSION_SECRET || "super secret hacker key",
+      rolling: true,
+      proxy: process.env.NODE_ENV === "production",
+      cookie: {
+        httpOnly: true,
+        path: "/",
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+        secure: process.env.NODE_ENV === "production",
+      },
     })
   );
+
+  // Tunnelto terminates HTTPS before forwarding requests to the local server.
+  // Trust the forwarded protocol and set cross-origin cookies for Capacitor
+  // clients only when the original request was HTTPS; local HTTP development
+  // retains Lax cookies so browsers do not reject insecure SameSite=None.
+  app.use((req, _res, next) => {
+    const isHttpsRequest = req.secure || req.get("x-forwarded-proto") === "https";
+    req.session.cookie.secure = isHttpsRequest;
+    req.session.cookie.sameSite = isHttpsRequest ? "none" : "lax";
+    next();
+  });
 
   // Middleware to check auth
   const requireAuth = (req: Request, res: any, next: any) => {
@@ -310,7 +275,6 @@ export async function registerRoutes(
     }
     next();
   };
-  const chatAiRateLimit = rateLimit({ windowMs: 60_000, limit: 5, keyGenerator: (req: Request) => String(req.session.userId), standardHeaders: true, legacyHeaders: false, message: { message: "The chat AI is busy. Please wait a minute before asking again." } });
   let nexusAiBotPromise: Promise<any> | null = null;
   const getNexusAiBot = async () => {
     if (!nexusAiBotPromise) {
@@ -371,6 +335,153 @@ export async function registerRoutes(
     };
   };
 
+  // Passkey registration and authentication use WebAuthn challenges stored in the session.
+  const getWebAuthnSettings = (req: Request) => {
+    // Web and Capacitor apps have different valid WebAuthn origins. Derive the
+    // origin from the actual client request so passkeys work on web, iOS and Android.
+    const requestOrigin = typeof req.headers.origin === "string" && req.headers.origin !== "null"
+      ? req.headers.origin
+      : undefined;
+    const configuredOrigin = requestOrigin || process.env.WEBAUTHN_ORIGIN
+      || (process.env.NODE_ENV !== "production" ? `http://localhost:${process.env.PORT || 5000}` : "");
+    if (!configuredOrigin) throw new Error("Set WEBAUTHN_ORIGIN or send a valid app Origin header to enable passkeys.");
+    const parsed = new URL(configuredOrigin);
+    const isLocalAppOrigin = parsed.hostname === "localhost" && ["capacitor:", "https:", "http:"].includes(parsed.protocol);
+    if (process.env.NODE_ENV === "production" && parsed.protocol !== "https:" && !isLocalAppOrigin) {
+      throw new Error("Passkeys require HTTPS or a trusted Capacitor localhost origin.");
+    }
+    const configuredRpId = process.env.WEBAUTHN_RP_ID;
+    const rpID = configuredRpId && (parsed.hostname === configuredRpId || parsed.hostname.endsWith(`.${configuredRpId}`))
+      ? configuredRpId
+      : parsed.hostname;
+    const expectedOrigin = parsed.protocol === "capacitor:" ? configuredOrigin.replace(/\/$/, "") : parsed.origin;
+    return { expectedOrigin, rpID };
+  };
+
+  app.post("/api/auth/passkeys/register/options", requireAuth, async (req, res) => {
+    try {
+      const { generateRegistrationOptions } = await import("@simplewebauthn/server");
+      const { expectedOrigin, rpID } = getWebAuthnSettings(req);
+      const account = await storage.getUser(Number(req.session.userId!));
+      if (!account) return res.status(404).json({ message: "NEXUS account not found." });
+      const existing = await db.select().from(passkeyCredentials).where(eq(passkeyCredentials.userId, account.id));
+      const options = await generateRegistrationOptions({
+        rpName: "NEXUS",
+        rpID,
+        userID: Buffer.from(String(account.id)),
+        userName: account.username,
+        userDisplayName: account.displayName || account.username,
+        attestationType: "none",
+        authenticatorSelection: { residentKey: "required", userVerification: "preferred" },
+        excludeCredentials: existing.map(item => ({ id: item.credentialId, transports: item.transports as any })),
+      });
+      req.session.passkeyFlow = { challenge: options.challenge, userId: account.id, purpose: "register", expiresAt: Date.now() + 120000 };
+      await saveSession(req);
+      return res.json(options);
+    } catch (error: any) {
+      console.error("[passkey] Registration options failed:", error?.message || error);
+      return res.status(503).json({ message: error?.message || "Could not prepare passkey registration." });
+    }
+  });
+
+  app.post("/api/auth/passkeys/register/verify", requireAuth, async (req, res) => {
+    try {
+      const flow = req.session.passkeyFlow;
+      if (!flow || flow.purpose !== "register" || flow.userId !== Number(req.session.userId!) || flow.expiresAt < Date.now()) {
+        return res.status(400).json({ message: "Passkey registration expired. Try again." });
+      }
+      const { verifyRegistrationResponse } = await import("@simplewebauthn/server");
+      const { expectedOrigin, rpID } = getWebAuthnSettings(req);
+      const verification = await verifyRegistrationResponse({
+        response: req.body?.response,
+        expectedChallenge: flow.challenge,
+        expectedOrigin,
+        expectedRPID: rpID,
+        requireUserVerification: false,
+      });
+      if (!verification.verified || !verification.registrationInfo) return res.status(400).json({ message: "Passkey verification failed." });
+      const credential = verification.registrationInfo.credential;
+      await db.insert(passkeyCredentials).values({
+        userId: flow.userId,
+        credentialId: credential.id,
+        publicKey: Buffer.from(credential.publicKey).toString("base64url"),
+        counter: credential.counter,
+        transports: credential.transports || [],
+      }).onConflictDoNothing();
+      delete req.session.passkeyFlow;
+      await saveSession(req);
+      return res.json({ verified: true });
+    } catch (error: any) {
+      console.error("[passkey] Registration verification failed:", error?.message || error);
+      return res.status(400).json({ message: error?.message || "Could not verify this passkey." });
+    }
+  });
+
+  app.post("/api/auth/passkeys/login/options", authRateLimit, async (req, res) => {
+    try {
+      const username = String(req.body?.username || "").trim();
+      if (!username) return res.status(400).json({ message: "Enter your NEXUS username first." });
+      const [account] = await db.select().from(users).where(eq(users.username, username)).limit(1);
+      if (!account) return res.status(404).json({ message: "No passkey-enabled account was found." });
+      const credentials = await db.select().from(passkeyCredentials).where(eq(passkeyCredentials.userId, account.id));
+      if (!credentials.length) return res.status(404).json({ message: "This account has no registered passkeys yet." });
+      const { generateAuthenticationOptions } = await import("@simplewebauthn/server");
+      const { rpID } = getWebAuthnSettings(req);
+      const options = await generateAuthenticationOptions({
+        rpID,
+        userVerification: "preferred",
+        allowCredentials: credentials.map(item => ({ id: item.credentialId, transports: item.transports as any })),
+      });
+      req.session.passkeyFlow = { challenge: options.challenge, userId: account.id, purpose: "login", expiresAt: Date.now() + 120000 };
+      await saveSession(req);
+      return res.json(options);
+    } catch (error: any) {
+      console.error("[passkey] Authentication options failed:", error?.message || error);
+      return res.status(503).json({ message: error?.message || "Could not prepare passkey sign-in." });
+    }
+  });
+
+  app.post("/api/auth/passkeys/login/verify", authRateLimit, async (req, res) => {
+    try {
+      const flow = req.session.passkeyFlow;
+      if (!flow || flow.purpose !== "login" || flow.expiresAt < Date.now()) return res.status(400).json({ message: "Passkey sign-in expired. Try again." });
+      const credentialId = String(req.body?.response?.id || "");
+      const [credential] = await db.select().from(passkeyCredentials)
+        .where(and(eq(passkeyCredentials.credentialId, credentialId), eq(passkeyCredentials.userId, flow.userId))).limit(1);
+      if (!credential) return res.status(401).json({ message: "This passkey is not registered to that account." });
+      const { verifyAuthenticationResponse } = await import("@simplewebauthn/server");
+      const { expectedOrigin, rpID } = getWebAuthnSettings(req);
+      const verification = await verifyAuthenticationResponse({
+        response: req.body?.response,
+        expectedChallenge: flow.challenge,
+        expectedOrigin,
+        expectedRPID: rpID,
+        credential: {
+          id: credential.credentialId,
+          publicKey: new Uint8Array(Buffer.from(credential.publicKey, "base64url")),
+          counter: credential.counter,
+          transports: credential.transports as any,
+        },
+        requireUserVerification: false,
+      });
+      if (!verification.verified) return res.status(401).json({ message: "Passkey verification failed." });
+      await db.update(passkeyCredentials).set({ counter: verification.authenticationInfo.newCounter }).where(eq(passkeyCredentials.id, credential.id));
+      const account = await storage.getUser(flow.userId);
+      if (!account) return res.status(404).json({ message: "NEXUS account not found." });
+      delete req.session.passkeyFlow;
+      await regenerateSession(req);
+      req.session.userId = account.id;
+      req.session.role = account.role;
+      await db.update(users).set({ presenceStatus: "online", lastSeen: new Date() }).where(eq(users.id, account.id));
+      await saveSession(req);
+      res.setHeader("Cache-Control", "no-store");
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("[passkey] Authentication verification failed:", error?.message || error);
+      return res.status(401).json({ message: error?.message || "Passkey sign-in failed." });
+    }
+  });
+
   app.get("/api/profile-images/:id/:kind/:variant/:version", requireAuth, async (req, res) => {
     const userId = Number(req.params.id);
     const kind = req.params.kind;
@@ -415,7 +526,36 @@ export async function registerRoutes(
   });
 
   // === AUTH ===
-  app.post(api.auth.login.path, authRateLimit, turnstileGuard(), async (req, res) => {
+  // Public username/password registration. The random serialKey is retained only
+  // for compatibility with the existing users table; it is never shown to users.
+  app.post("/api/auth/register", authRateLimit, async (req, res) => {
+    try {
+      const username = String(req.body?.username || "").trim();
+      const password = String(req.body?.password || "");
+      if (!/^[a-zA-Z0-9_]{3,24}$/.test(username)) {
+        return res.status(400).json({ message: "Username must be 3–24 characters and use letters, numbers or underscores." });
+      }
+      if (password.length < 8 || password.length > 128) {
+        return res.status(400).json({ message: "Password must be between 8 and 128 characters." });
+      }
+      const [existing] = await db.select({ id: users.id }).from(users)
+        .where(sql`lower(${users.username}) = ${username.toLowerCase()}`).limit(1);
+      if (existing) return res.status(409).json({ message: "That username is already taken." });
+
+      const [created] = await db.insert(users).values({
+        username,
+        serialKey: "NEXUS_ACCOUNT_" + randomBytes(32).toString("hex"),
+        passwordHash: hashAccountPassword(password),
+        role: "user",
+      }).returning();
+      return res.status(201).json({ message: "Account created.", user: safeUser(created) });
+    } catch (error) {
+      console.error("Account registration failed:", error);
+      return res.status(500).json({ message: "Could not create your account right now." });
+    }
+  });
+
+  app.post(api.auth.login.path, authRateLimit, async (req, res) => {
     try {
       const { serialKey, username } = api.auth.login.input.parse(req.body);
 
@@ -479,14 +619,20 @@ export async function registerRoutes(
         return res.status(403).json({ message: "This account is currently banned." });
       }
 
-      // Set session
+      // Rotate the session ID at login to prevent session fixation, then
+      // explicitly persist the authenticated identity before returning success.
+      // This avoids a fast follow-up profile/chat request arriving before the
+      // PostgreSQL session store has committed the new userId.
+      await regenerateSession(req);
       req.session.userId = user.id;
       req.session.role = user.role;
       await db.update(users).set({
         presenceStatus: "online",
         lastSeen: new Date(),
       }).where(eq(users.id, user.id));
+      await saveSession(req);
 
+      res.setHeader("Cache-Control", "no-store");
       res.json(safeUser({ ...user, presenceStatus: "online", lastSeen: new Date() }));
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -767,7 +913,7 @@ export async function registerRoutes(
       if (name === "me") return res.json({ message: args.join(" ").slice(0, 200) ? `* ${actor.username} ${args.join(" ").slice(0,200)}` : "Usage: /me <action>" });
       if (name === "shrug") return res.json({ message: "¯\\_(ツ)_/¯" });
       if (name === "8ball") return res.json({ message: ["Absolutely.","Probably.","Ask again later.","Unlikely.","No."][Math.floor(Math.random()*5)] });
-      if (name === "choose") return res.json({ message: args.join(" ").split("|").map(x=>x.trim()).filter(Boolean).sort(()=>Math.random()-.5)[0] || "Usage: /choose option A | option B" });
+      if (name === "choose") return res.json({ message: args.join(" ").split("|").map((x:string)=>x.trim()).filter(Boolean).sort(()=>Math.random()-.5)[0] || "Usage: /choose option A | option B" });
       if (name === "rules") return res.json({ message: "Be respectful, do not harass others, and follow the community rules." });
       if (name === "serverinfo") return res.json({ message: "Secure Web Gateway community chat." });
       if (name === "userinfo" || name === "profile" || name === "avatar") {
@@ -783,7 +929,7 @@ export async function registerRoutes(
     if (!target && args[0]) {
       const all = await storage.getAllUsers();
       target = all.find((u:any) => u.username.toLowerCase() === args[0].replace(/^@/,"").toLowerCase());
-      targetId = target?.id;
+      targetId = target?.id ?? 0;
     }
     if (needsTarget && (!target || !targetId)) return res.status(400).json({ message: "Specify a valid target username or user ID." });
     if (target) {
@@ -824,59 +970,10 @@ export async function registerRoutes(
     res.json({ message: `/${name} recorded for ${target?.username || "the current chat"}.` });
   });
 
-  // DIHHRO membership and Block Blast monthly leaderboard
+  // Block Blast monthly leaderboard.
   const monthKeyFor = (d = new Date()) => d.getUTCFullYear() + "-" + String(d.getUTCMonth()+1).padStart(2,"0");
-  app.post("/api/admin/dihhro/grant", requireAuth, async (req,res) => {
-    const actor = await storage.getUser(req.session.userId!);
-    if (!actor || !["owner","admin"].includes(String(actor.role).toLowerCase())) return res.status(403).json({message:"Only owners and admins can gift Dihhro."});
-    const targetId = Number(req.body?.userId), months = Math.max(1,Math.min(12,Number(req.body?.months)||1));
-    if (!Number.isInteger(targetId) || targetId < 1) return res.status(400).json({message:"Enter a valid user ID."});
-    const target = await storage.getUser(targetId); if (!target) return res.status(404).json({message:"User not found."});
-    const start = target.dihhroUntil && target.dihhroUntil > new Date() ? target.dihhroUntil : new Date();
-    const expires = new Date(start.getTime()+months*30*86400000);
-    await db.update(users).set({dihhroUntil:expires}).where(eq(users.id,targetId));
-    await db.insert(moderationLogs).values({actorId:req.session.userId!,targetId,action:"dihhro-gift",reason:"Gifted "+months+" month(s) of Dihhro",expiresAt:expires});
-    res.json({success:true,userId:targetId,dihhroUntil:expires});
-  });
-  app.get("/api/dihhro/me", requireAuth, async (req,res) => { const u=await storage.getUser(req.session.userId!); res.json({active:Boolean(u?.dihhroUntil&&u.dihhroUntil>new Date()),expiresAt:u?.dihhroUntil||null}); });
-  app.post("/api/dihhro/gift-links", requireAuth, async (req,res) => {
-    const actor = await storage.getUser(req.session.userId!);
-    if (!actor || !["owner","admin"].includes(String(actor.role).toLowerCase())) return res.status(403).json({message:"Only owners and admins can create Dihhro gift links."});
-    const code = "DH-" + randomBytes(18).toString("hex");
-    await storage.createAccessKey({key:code,type:"dihhro-gift",createdBy:actor.id});
-    return res.status(201).json({url:"/gift/"+code,code});
-  });
-  app.get("/api/dihhro/gift-links/:code", async (req,res) => {
-    const key = await storage.getAccessKey(String(req.params.code||""));
-    if (!key || key.type !== "dihhro-gift" || key.isUsed) return res.status(410).json({valid:false,message:"This Dihhro gift link is invalid, revoked, or already claimed."});
-    return res.json({valid:true,months:1});
-  });
-  app.post("/api/dihhro/gift-links/:code/claim", requireAuth, async (req,res) => {
-    const key = await storage.getAccessKey(String(req.params.code||""));
-    if (!key || key.type !== "dihhro-gift" || key.isUsed) return res.status(410).json({message:"This Dihhro gift link is invalid, revoked, or already claimed."});
-    const [claimed] = await db.update(accessKeys).set({isUsed:true}).where(and(eq(accessKeys.id,key.id),eq(accessKeys.isUsed,false))).returning({id:accessKeys.id});
-    if (!claimed) return res.status(410).json({message:"This gift has already been claimed."});
-    const target = await storage.getUser(req.session.userId!);
-    if (!target) return res.status(401).json({message:"Sign in to claim this gift."});
-    const start = target.dihhroUntil && target.dihhroUntil > new Date() ? target.dihhroUntil : new Date();
-    const expires = new Date(start.getTime()+30*86400000);
-    await db.update(users).set({dihhroUntil:expires}).where(eq(users.id,target.id));
-    await db.insert(moderationLogs).values({actorId:key.createdBy || target.id,targetId:target.id,action:"dihhro-gift-claimed",reason:"Claimed one month of Dihhro",expiresAt:expires});
-    return res.json({success:true,dihhroUntil:expires});
-  });
-
   app.get("/api/blockblast/leaderboard", requireAuth, async (req,res) => {
     const month = typeof req.query.month === "string" && /^\d{4}-\d{2}$/.test(req.query.month) ? req.query.month : monthKeyFor();
-    const now = new Date(); const previousDate = new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()-1,1)); const previousMonth = monthKeyFor(previousDate);
-    if (monthKeyFor() !== previousMonth) {
-      const [alreadyAwarded] = await db.select().from(dihhroAwards).where(eq(dihhroAwards.monthKey,previousMonth)).limit(1);
-      if (!alreadyAwarded) {
-        const previousRows = await db.select({userId:blockBlastScores.userId,score:blockBlastScores.score}).from(blockBlastScores).where(eq(blockBlastScores.monthKey,previousMonth)).orderBy(desc(blockBlastScores.score)).limit(100);
-        const monthlyBest = new Map<number,number>(); previousRows.forEach(row=>monthlyBest.set(row.userId,Math.max(monthlyBest.get(row.userId)||0,row.score)));
-        const winner = Array.from(monthlyBest.entries()).sort((a,b)=>b[1]-a[1])[0];
-        if (winner) { const winnerUser=await storage.getUser(winner[0]); const base=winnerUser?.dihhroUntil&&winnerUser.dihhroUntil>new Date()?winnerUser.dihhroUntil:new Date(); const expiry=new Date(base.getTime()+30*86400000); await db.update(users).set({dihhroUntil:expiry}).where(eq(users.id,winner[0])); await db.insert(dihhroAwards).values({userId:winner[0],monthKey:previousMonth,score:winner[1],expiresAt:expiry}); }
-      }
-    }
     const rows = await db.select({userId:blockBlastScores.userId,score:blockBlastScores.score,username:users.username,displayName:users.displayName}).from(blockBlastScores).innerJoin(users,eq(users.id,blockBlastScores.userId)).where(eq(blockBlastScores.monthKey,month)).orderBy(desc(blockBlastScores.score)).limit(100);
     const best = new Map<number,typeof rows[number]>(); rows.forEach(row=>{const old=best.get(row.userId);if(!old||row.score>old.score)best.set(row.userId,row);});
     res.json({month,entries:Array.from(best.values()).sort((a,b)=>b.score-a.score).map((row,index)=>({...row,rank:index+1}))});
@@ -941,11 +1038,26 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Invalid group" });
     }
     const messages = await storage.getMessages(req.session.userId!, recipientId, groupId);
+    res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
     res.json(messages);
   });
 
   app.post(api.chat.send.path, requireAuth, async (req, res) => {
     const input = api.chat.send.input.parse(req.body);
+    if (input.mediaUrl) {
+      const mediaUrl = input.mediaUrl;
+      const dataMatch = /^data:(image\/(?:png|jpeg|gif|webp|avif)|video\/[a-z0-9.+-]+|audio\/[a-z0-9.+-]+)(?:;[a-z0-9._=-]+)*;base64,([A-Za-z0-9+/]*={0,2})$/i.exec(mediaUrl);
+      const isHttpUrl = /^https:\/\//i.test(mediaUrl) && mediaUrl.length <= 2048;
+      if (!dataMatch && !isHttpUrl) return res.status(400).json({ message: "Unsupported attachment format." });
+      if (dataMatch && Math.floor(dataMatch[2].length * 3 / 4) > 8 * 1024 * 1024) {
+        return res.status(413).json({ message: "Attachments must be 8 MB or smaller." });
+      }
+      const actualKind = dataMatch?.[1].split("/")[0];
+      if (actualKind && input.mediaType && !(input.mediaType === actualKind || (actualKind === "audio" && input.mediaType === "audio/namaf1"))) {
+        return res.status(400).json({ message: "Attachment type does not match its audio, image or video data." });
+      }
+    }
     const chatEmoteMatch = typeof input.content === "string" ? input.content.match(/^\[CHAT_EMOTE:(\d+)\]$/) : null;
     if (typeof input.content === "string" && input.content.startsWith("[CHAT_EMOTE:") && !chatEmoteMatch) return res.status(400).json({ message: "Invalid chat emote." });
     if (chatEmoteMatch) {
@@ -1017,7 +1129,7 @@ export async function registerRoutes(
   });
 
   // NEXUS AI behaves as a friendly chat participant in Global Chat, groups, and its own DM.
-  app.post("/api/chat/ai", requireAuth, chatAiRateLimit, async (req, res) => {
+  app.post("/api/chat/ai", requireAuth, async (req, res) => {
     const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim().slice(0, 1200) : "";
     const requestedRecipientId = req.body?.recipientId == null ? undefined : Number(req.body.recipientId);
     const groupId = req.body?.groupId == null ? undefined : Number(req.body.groupId);
@@ -1469,8 +1581,7 @@ export async function registerRoutes(
         if (!fonts.includes(rawFont) && !customText && !customFont) return res.status(400).json({message:"Unsupported font or text gradient."});
         const current = await storage.getUser(req.session.userId!);
         const fontName = customText ? rawFont.split("|")[1] : rawFont;
-        const usesDihhroFont = customText || customFont || fontName === "comic-sans";
-        if (usesDihhroFont && !["owner","admin"].includes(current?.role || "") && !(current?.dihhroUntil && current.dihhroUntil > new Date())) return res.status(403).json({message:"Custom fonts and text gradients are DIHTRO perks."});
+
         update.usernameFont = rawFont || null;
       }
       if (profileGradient !== undefined) {
@@ -1488,7 +1599,7 @@ export async function registerRoutes(
         );
         if ((!gradients.includes(selectedGradient) && !customProfile) || !validStyle2) return res.status(400).json({message:"Invalid profile gradient settings."});
         const current = await storage.getUser(req.session.userId!);
-        if (selectedGradient !== "none" && !["owner","admin"].includes(current?.role || "") && !(current?.dihhroUntil && current.dihhroUntil > new Date())) return res.status(403).json({message:"Profile gradients are a DIHTRO perk."});
+
         update.profileGradient = selectedGradient === "none" && !isStyle2 ? null : rawGradient;
       }
       if (tagSymbol !== undefined || tagText !== undefined || tagColor !== undefined) {
@@ -1880,6 +1991,23 @@ export async function registerRoutes(
     for(const peer of blockBlastMembers.keys()){const queue=blockBlastSignals.get(peer)||[];queue.push({from:id,signal:{type:"left"},createdAt:Date.now()});blockBlastSignals.set(peer,queue);}
     blockBlastSignals.delete(id); res.json({success:true});
   });
+  app.get('/api/chat/voice/ice-config', requireAuth, (_req, res) => {
+    const fallback = [{ urls: 'stun:stun.l.google.com:19302' }];
+    let iceServers = fallback;
+    const configured = process.env.WEBRTC_ICE_SERVERS;
+    if (configured) {
+      try {
+        const parsed = JSON.parse(configured);
+        if (Array.isArray(parsed) && parsed.length > 0 && parsed.every((item) => item && typeof item === 'object' && item.urls)) {
+          iceServers = parsed;
+        }
+      } catch (error) {
+        console.error('WEBRTC_ICE_SERVERS must be a valid JSON array:', error);
+      }
+    }
+    res.set('Cache-Control', 'no-store').json({ iceServers });
+  });
+
   app.post('/api/chat/voice/start', requireAuth, async (req, res) => {
     const calleeId = Number(req.body?.calleeId);
     const callerId = Number(req.session.userId!);
@@ -2008,7 +2136,7 @@ export async function registerRoutes(
   });
 
   // === ACCESS REQUESTS (public - no auth required) ===
-  app.post('/api/access-requests', accessRequestRateLimit, turnstileGuard(), async (req, res) => {
+  app.post('/api/access-requests', accessRequestRateLimit, async (req, res) => {
     try {
       const { username, name, password, message } = req.body;
       const requestedUsername = String(username || name || "").trim();
@@ -2214,7 +2342,7 @@ export async function registerRoutes(
         <h2 style="color:#f55">[PROXY_ERROR]</h2>
         <p><b>TARGET:</b> ${req.query.url}</p>
         <p><b>REASON:</b> ${err.message || 'Connection refused or timeout'}</p>
-        <p style="color:#888">Some sites (Roblox, Google, etc.) block server-side requests with Cloudflare protection. Try: wikipedia.org, github.com, reddit.com</p>
+        <p style="color:#888">Some sites (Roblox, Google, etc.) block server-side requests. Try: wikipedia.org, github.com, reddit.com</p>
       </body></html>`);
     }
   });
@@ -2509,6 +2637,51 @@ export async function registerRoutes(
     if (!name) return res.status(400).json({ message: "Category name is required." });
     const [category] = await db.insert(communityServerCategories).values({ serverId, name, position: Date.now() % 100000000 }).returning();
     res.status(201).json(category);
+  });
+
+  app.get("/api/servers/:id/channels/:channelId/messages", requireAuth, async (req, res) => {
+    const serverId = Number(req.params.id), channelId = Number(req.params.channelId);
+    if (!Number.isInteger(serverId) || serverId < 1 || !Number.isInteger(channelId) || channelId < 1) {
+      return res.status(400).json({ message: "Invalid server or channel." });
+    }
+    const { server, member } = await serverAccess(serverId, Number(req.session.userId));
+    if (!server) return res.status(404).json({ message: "Server not found." });
+    if (server.visibility !== "public" && !member) return res.status(403).json({ message: "Join this private server to view messages." });
+    const [channel] = await db.select({ id: communityServerChannels.id }).from(communityServerChannels)
+      .where(and(eq(communityServerChannels.id, channelId), eq(communityServerChannels.serverId, serverId))).limit(1);
+    if (!channel) return res.status(404).json({ message: "Channel not found." });
+    const rows = await db.select({
+      id: communityServerMessages.id, channelId: communityServerMessages.channelId,
+      authorId: communityServerMessages.authorId, content: communityServerMessages.content,
+      createdAt: communityServerMessages.createdAt, editedAt: communityServerMessages.editedAt,
+      username: users.username, displayName: users.displayName, avatarUrl: users.avatarUrl,
+    }).from(communityServerMessages)
+      .innerJoin(users, eq(users.id, communityServerMessages.authorId))
+      .where(and(eq(communityServerMessages.serverId, serverId), eq(communityServerMessages.channelId, channelId)))
+      .orderBy(desc(communityServerMessages.createdAt)).limit(100);
+    res.set("Cache-Control", "private, no-store").json(rows.reverse());
+  });
+
+  app.post("/api/servers/:id/channels/:channelId/messages", requireAuth, async (req, res) => {
+    const serverId = Number(req.params.id), channelId = Number(req.params.channelId);
+    const userId = Number(req.session.userId);
+    if (!Number.isInteger(serverId) || serverId < 1 || !Number.isInteger(channelId) || channelId < 1) {
+      return res.status(400).json({ message: "Invalid server or channel." });
+    }
+    const { server, member } = await serverAccess(serverId, userId);
+    if (!server) return res.status(404).json({ message: "Server not found." });
+    if (!member) return res.status(403).json({ message: "Join this server before sending messages." });
+    const [channel] = await db.select().from(communityServerChannels)
+      .where(and(eq(communityServerChannels.id, channelId), eq(communityServerChannels.serverId, serverId))).limit(1);
+    if (!channel) return res.status(404).json({ message: "Channel not found." });
+    if (channel.type === "voice") return res.status(400).json({ message: "Voice channels do not accept text messages." });
+    if (channel.isLocked && !canManageServer(server, member)) return res.status(403).json({ message: "This channel is locked." });
+    const content = typeof req.body?.content === "string" ? req.body.content.trim() : "";
+    if (!content || content.length > 2000) return res.status(400).json({ message: "Messages must be between 1 and 2,000 characters." });
+    const [message] = await db.insert(communityServerMessages).values({ serverId, channelId, authorId: userId, content }).returning();
+    const [author] = await db.select({ username: users.username, displayName: users.displayName, avatarUrl: users.avatarUrl })
+      .from(users).where(eq(users.id, userId)).limit(1);
+    res.status(201).json({ ...message, ...author });
   });
 
   app.post("/api/servers/:id/channels", requireAuth, async (req, res) => {

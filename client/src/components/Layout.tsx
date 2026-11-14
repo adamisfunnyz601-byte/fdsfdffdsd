@@ -1,7 +1,8 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Globe, MessageSquare, History, ShieldAlert, LogOut, Menu, X, Cpu, Settings, Blocks, UserRound, ShoppingBag, Gamepad2, Users, ScrollText, Server, Sparkles, Command } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { applyNexusAppearance, readNexusAppearance } from "@/lib/appearance";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Avatar } from "./ProfileModal";
@@ -30,6 +31,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
     navItems.push({ href: "/admin", label: "Admin Console", icon: Command, section: "Staff" });
   const sections = Array.from(new Set(navItems.map(item => item.section)));
   const closeMenu = () => setIsMobileMenuOpen(false);
+  useEffect(() => {
+    const apply = () => applyNexusAppearance(readNexusAppearance());
+    apply();
+    window.addEventListener("nexus-appearance-change", apply);
+    return () => window.removeEventListener("nexus-appearance-change", apply);
+  }, []);
 
   return (
     <div className="nexus-shell min-h-screen flex flex-col md:flex-row">

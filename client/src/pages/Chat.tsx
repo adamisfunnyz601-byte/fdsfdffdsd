@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { Layout } from "@/components/Layout";
+import { apiUrl } from "@/lib/api-url";
 import { CyberInput } from "@/components/CyberInput";
 import { CyberButton } from "@/components/CyberButton";
 import { CyberCard } from "@/components/CyberCard";
@@ -23,6 +24,13 @@ import { ProfileModal, Avatar } from "@/components/ProfileModal";
 import { getFontClass, getUsernameGradientStyle } from "@/components/ProfileTextStyle";
 import { UserProfileTag } from "@/components/UserProfileTag";
 import { EmojiButton } from "@/components/EmojiPicker";
+import { getRtcConfiguration } from "@/lib/webrtc";
+
+// Route API requests to the configured backend while keeping external media URLs intact.
+const apiFetch: typeof fetch = (input, init) => {
+  const target = typeof input === "string" && input.startsWith("/") ? apiUrl(input) : input;
+  return fetch(target, init);
+};
 
 // ============================================================
 // CONSTANTS
@@ -30,6 +38,14 @@ import { EmojiButton } from "@/components/EmojiPicker";
 const SESSION_CRYPT = "X-256-CHA-CHA-POLY";
 
 // GIF search is proxied through the server so the GIPHY API key stays private.
+
+const VOICE_AUDIO_CONSTRAINTS: MediaTrackConstraints = {
+  echoCancellation: { ideal: true },
+  noiseSuppression: { ideal: true },
+  autoGainControl: { ideal: true },
+  channelCount: { ideal: 1 },
+  sampleRate: { ideal: 48000 },
+};
 
 const DEFAULT_SOUNDS = [
   { id: 'S1', name: 'Neural ping', url: 'https://www.soundjay.com/buttons/sounds/button-20.mp3' },
@@ -175,7 +191,7 @@ interface LogEntry { id: string; time: string; type: 'info' | 'warn' | 'crit'; m
 function MessageContent({ content }: { content: string }) {
   const { data: customEmojis = [] } = useQuery<any[]>({
     queryKey: ["/api/emojis"],
-    queryFn: async () => { const response = await fetch("/api/emojis", { credentials: "same-origin" }); if (!response.ok) return []; return response.json(); },
+    queryFn: async () => { const response = await apiFetch("/api/emojis", { credentials: "same-origin" }); if (!response.ok) return []; return response.json(); },
     staleTime: 60000,
   });
   const emojiMap = new Map(customEmojis.map((emoji: any) => [emoji.name, emoji.url]));
@@ -247,7 +263,7 @@ function LazyMediaAttachment({
     if (mediaUrl || loading) return;
     setLoading(true);
     try {
-      const response = await fetch(`/api/chat/messages/${message.id}/media`);
+      const response = await apiFetch(`/api/chat/messages/${message.id}/media`);
       if (!response.ok) throw new Error("Attachment unavailable");
       const data = await response.json();
       setMediaUrl(data.mediaUrl);
@@ -542,7 +558,7 @@ export default function Chat() {
       const params = new URLSearchParams();
       if (selectedRecipientId) params.set("recipientId", String(selectedRecipientId));
       if (selectedGroupId) params.set("groupId", String(selectedGroupId));
-      const response = await fetch(`/api/chat/interactions${params.toString() ? "?" + params.toString() : ""}`, { credentials: "same-origin" });
+      const response = await apiFetch(`/api/chat/interactions${params.toString() ? "?" + params.toString() : ""}`, { credentials: "same-origin" });
       if (!response.ok) throw new Error("Could not load chat reactions and polls");
       return response.json();
     },
@@ -616,7 +632,7 @@ export default function Chat() {
   const groupCallActiveRef=useRef(false);
 
   const groupVoicePost=async(path:string,body:any)=>{
-    const response=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),credentials:"same-origin"});
+    const response=await apiFetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),credentials:"same-origin"});
     const data=await response.json().catch(()=>({}));
     if(!response.ok) throw new Error(data.message||"Group call request failed.");
     return data;
@@ -630,10 +646,10 @@ export default function Chat() {
     if(existing)return existing;
     let stream=groupLocalStreamRef.current;
     if(!stream){
-      stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:groupCallWithVideo?{facingMode:"user"}:false});
+      stream=await navigator.mediaDevices.getUserMedia({audio:VOICE_AUDIO_CONSTRAINTS,video:groupCallWithVideo?{facingMode:"user"}:false});
       groupLocalStreamRef.current=stream;
     }
-    const peer=new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
+    const peer=new RTCPeerConnection(await getRtcConfiguration());
     stream.getTracks().forEach(track=>peer.addTrack(track,stream!));
     peer.onicecandidate=event=>{if(event.candidate)sendGroupPeerSignal(peerId,{type:"ice",candidate:event.candidate.toJSON()});};
     peer.ontrack=event=>{
@@ -680,7 +696,7 @@ export default function Chat() {
       pushLog("JOINED_GROUP_CALL","info");
     }catch(error:any){toast({title:"GROUP_CALL_FAILED",description:error.message||"Could not join.",variant:"destructive"});}
   };
-const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const inviteGroupId=groupCallGroupId||selectedGroupId;if(!inviteGroupId)return;try{const response=await fetch("/api/chat/group-voice/members?groupId="+inviteGroupId,{credentials:"same-origin"});if(!response.ok)throw new Error("Could not load group members.");setGroupInviteUsers(await response.json());}catch(error:any){toast({title:"INVITE_LIST_FAILED",description:error.message,variant:"destructive"});}};
+const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const inviteGroupId=groupCallGroupId||selectedGroupId;if(!inviteGroupId)return;try{const response=await apiFetch("/api/chat/group-voice/members?groupId="+inviteGroupId,{credentials:"same-origin"});if(!response.ok)throw new Error("Could not load group members.");setGroupInviteUsers(await response.json());}catch(error:any){toast({title:"INVITE_LIST_FAILED",description:error.message,variant:"destructive"});}};
   const inviteToGroupCall=async(userId:number)=>{
     if(!groupCallIdRef.current)return;
     try{await groupVoicePost("/api/chat/group-voice/invite",{roomId:groupCallIdRef.current,userId});toast({title:"INVITE_SENT"});}
@@ -698,7 +714,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
   // --- SOUNDBOARD STATE ---
   const [customSounds, setCustomSounds] = useState<SoundEntry[]>([]);
   const [sounds, setSounds] = useState<SoundEntry[]>(DEFAULT_SOUNDS);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => typeof window === "undefined" || window.matchMedia("(min-width: 1024px)").matches);
   const [searchTerm, setSearchTerm] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [isRecordingPaused, setIsRecordingPaused] = useState(false);
@@ -743,7 +759,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
   const { data: groups = [] } = useQuery<any[]>({
     queryKey: ['/api/chat/groups'],
     queryFn: async () => {
-      const response = await fetch('/api/chat/groups', { credentials: 'same-origin', cache: 'no-store' });
+      const response = await apiFetch('/api/chat/groups', { credentials: 'same-origin', cache: 'no-store' });
       if (!response.ok) throw new Error('Could not load your group chats');
       return response.json();
     },
@@ -753,17 +769,17 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
   });
   const { data: callEmoteInventory = [] } = useQuery<any[]>({
     queryKey: ["/api/shop/inventory"],
-    queryFn: async () => { const response = await fetch("/api/shop/inventory", { credentials: "same-origin" }); return response.ok ? response.json() : []; },
+    queryFn: async () => { const response = await apiFetch("/api/shop/inventory", { credentials: "same-origin" }); return response.ok ? response.json() : []; },
     staleTime: 20000,
   });
   const { data: chatEmoteItems = [] } = useQuery<any[]>({
     queryKey: ["/api/shop/items", "chat-emotes"],
-    queryFn: async () => { const response = await fetch("/api/shop/items", { credentials: "same-origin" }); return response.ok ? response.json() : []; },
+    queryFn: async () => { const response = await apiFetch("/api/shop/items", { credentials: "same-origin" }); return response.ok ? response.json() : []; },
     staleTime: 20000,
   });
   const { data: userConfig, refetch: refetchConfig } = useQuery({
     queryKey: ['/api/auth/me'],
-    queryFn: async () => (await fetch('/api/auth/me')).json()
+    queryFn: async () => (await apiFetch('/api/auth/me')).json()
   });
   const configUser = (userConfig as any)?.user || userConfig as any;
   const currentUserId = (currentUser as any)?.id ?? (configUser as any)?.id;
@@ -800,7 +816,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
   };
 
   const updateProfile = useMutation({
-    mutationFn: async (s: any) => fetch('/api/user/settings', {
+    mutationFn: async (s: any) => apiFetch('/api/user/settings', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(s)
     }),
     onSuccess: () => refetchConfig()
@@ -808,7 +824,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
 
   const deleteMessageMutation = useMutation({
     mutationFn: async (id: number) => {
-      const res = await fetch(`/api/chat/messages/${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/chat/messages/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Delete failed');
     },
     onSuccess: () => {
@@ -818,7 +834,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
 
   const createGroupMutation = useMutation({
     mutationFn: async (payload: { name: string; icon: string }) => {
-      const res = await fetch('/api/chat/groups', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const res = await apiFetch('/api/chat/groups', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       if (!res.ok) throw new Error((await res.text()) || "Failed to create group");
       return res.json();
     },
@@ -844,7 +860,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
           code = code.replace(/^\/?invite\//i, '').replace(/^\//, '');
         }
       } catch { /* pass the raw value to the server for validation */ }
-      const res = await fetch('/api/chat/groups/join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ inviteCode: code }) });
+      const res = await apiFetch('/api/chat/groups/join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ inviteCode: code }) });
       if (!res.ok) throw new Error("Invalid or expired invite link");
       return res.json();
     },
@@ -860,7 +876,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
 
   const updateGroupMutation = useMutation({
     mutationFn: async ({ id, name, icon }: { id: number; name: string; icon: string }) => {
-      const res = await fetch(`/api/chat/groups/${id}`, {
+      const res = await apiFetch(`/api/chat/groups/${id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, icon })
       });
@@ -1001,7 +1017,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     setGifResults([]);
     try {
       const params = new URLSearchParams({ q: term, limit: "24" });
-      const response = await fetch(`/api/gifs/search?${params.toString()}`, {
+      const response = await apiFetch(`/api/gifs/search?${params.toString()}`, {
         credentials: "same-origin",
         headers: { Accept: "application/json" },
         signal: controller.signal,
@@ -1047,7 +1063,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
 
   const toggleMessageReaction = async (messageId: number, emoji: string) => {
     try {
-      const response = await fetch(`/api/chat/messages/${messageId}/reactions`, {
+      const response = await apiFetch(`/api/chat/messages/${messageId}/reactions`, {
         method: "POST", credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ emoji }),
@@ -1062,7 +1078,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
 
   const voteInPoll = async (pollId: number, optionId: number) => {
     try {
-      const response = await fetch(`/api/chat/polls/${pollId}/vote`, {
+      const response = await apiFetch(`/api/chat/polls/${pollId}/vote`, {
         method: "POST", credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ optionId }),
@@ -1082,7 +1098,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
       return;
     }
     try {
-      const response = await fetch("/api/chat/polls", {
+      const response = await apiFetch("/api/chat/polls", {
         method: "POST", credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: pollQuestion.trim(), options, recipientId: selectedRecipientId, groupId: selectedGroupId }),
@@ -1110,7 +1126,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
       return;
     }
     try {
-      const response = await fetch("/api/chat/ai", {
+      const response = await apiFetch("/api/chat/ai", {
         method: "POST", credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1170,7 +1186,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
         return;
       }
       try {
-        const response = await fetch(ADMIN_COMMANDS_CONFIG.endpoint, {
+        const response = await apiFetch(ADMIN_COMMANDS_CONFIG.endpoint, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: commandText }),
         });
@@ -1211,7 +1227,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
       setInputContent('');
       toast({ title: 'Message blocked · 5 minute mute', description: 'That message contains content prohibited by the server rules. Your message was not sent.', variant: 'destructive' });
       // Notify the server so it can enforce the timeout across devices. The server must validate this endpoint.
-      fetch('/api/chat/moderation/flag', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: 'prohibited-content', durationSeconds: 300 }) }).catch(() => {});
+      apiFetch('/api/chat/moderation/flag', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: 'prohibited-content', durationSeconds: 300 }) }).catch(() => {});
       return;
     }
     if (!isOwner && Date.now() < localMuteUntil && !commandText.startsWith('/')) {
@@ -1254,7 +1270,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     if (commandText.startsWith('/') && !uploadFile) {
       setInputContent("");
       try {
-        const response = await fetch(ADMIN_COMMANDS_CONFIG.endpoint, {
+        const response = await apiFetch(ADMIN_COMMANDS_CONFIG.endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify((commandName && MODERATION_COMMAND_NAMES.includes(commandName as any))
@@ -1316,7 +1332,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     a.play().catch(() => {});
     pushLog(`SFX_LOCAL: ${sound.name}`);
 
-    await fetch('/api/chat/soundboard/play', {
+    await apiFetch('/api/chat/soundboard/play', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1353,7 +1369,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
   // CALLING SYSTEM — WebRTC peer-to-peer audio/video
   // ============================================================
   const postVoiceSignal = async (path: string, body: any) => {
-    const response = await fetch(path, {
+    const response = await apiFetch(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -1389,9 +1405,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     if (peerSetupPromiseRef.current) return peerSetupPromiseRef.current;
     if (peerConnectionRef.current && localStreamRef.current) return peerConnectionRef.current;
     const setup = (async () => {
-      const peer = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-      });
+      const peer = new RTCPeerConnection(await getRtcConfiguration());
       // Reserve a negotiated video sender even for audio-first calls so enabling
       // the camera later does not require an unsupported renegotiation.
       if (!isVideoOn) peer.addTransceiver("video", { direction: "sendrecv" });
@@ -1399,7 +1413,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
       let stream: MediaStream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+          audio: VOICE_AUDIO_CONSTRAINTS,
           video: isVideoOn ? { facingMode: 'user' } : false,
         });
       } catch (mediaError) {
@@ -1745,7 +1759,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
       if (polling) return;
       polling = true;
       try {
-        const response = await fetch('/api/chat/voice/poll');
+        const response = await apiFetch('/api/chat/voice/poll');
         if (!response.ok) return;
         const signals: any[] = await response.json();
         for (const signal of signals) {
@@ -1830,7 +1844,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     const poll=async()=>{
       if(busy)return;busy=true;
       try{
-        const response=await fetch("/api/chat/group-voice/poll",{credentials:"same-origin"});
+        const response=await apiFetch("/api/chat/group-voice/poll",{credentials:"same-origin"});
         if(!response.ok)return;
         const events:any[]=await response.json();
         for(const event of events){
@@ -1984,7 +1998,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
         e.preventDefault();
         if (moderationUserOptions.length) insertModerationTarget(targetOption);
         else if (parameterOptions.length) insertParameter(option);
-        else insertCommand(option.name);
+        else if (matchingCommands[commandSelection]) insertCommand(matchingCommands[commandSelection].name);
       }
       return;
     }
@@ -2015,7 +2029,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
 
   const createDihhroGift = async () => {
     try {
-      const response = await fetch("/api/dihhro/gift-links", { method:"POST", credentials:"same-origin" });
+      const response = await apiFetch("/api/dihhro/gift-links", { method:"POST", credentials:"same-origin" });
       const data = await response.json().catch(()=>({}));
       if (!response.ok) throw new Error(data.message || "Could not create gift link");
       const url = `${window.location.origin}${data.url}`;

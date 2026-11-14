@@ -1,0 +1,27 @@
+name: NEXUS
+options:
+  bundleIdPrefix: com.nexusos
+  deploymentTarget:
+    iOS: "16.0"
+settings:
+  base:
+    PRODUCT_BUNDLE_IDENTIFIER: com.nexusos.app
+    PRODUCT_NAME: NEXUS
+    SWIFT_VERSION: "5.0"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    INFOPLIST_KEY_CFBundleDisplayName: NEXUS
+    INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads: NO
+    INFOPLIST_KEY_UIUserInterfaceStyle: Dark
+    GENERATE_INFOPLIST_FILE: YES
+targets:
+  NEXUS:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+    settings:
+      base:
+        INFOPLIST_KEY_NSAppTransportSecurity_NSExceptionDomains_nexus.tunnelto.me_NSIncludesSubdomains: YES
+        INFOPLIST_KEY_NSAppTransportSecurity_NSExceptionDomains_nexus.tunnelto.me_NSTemporaryExceptionAllowsInsecureHTTPLoads: NO
+    resources:
+      - path: Resources

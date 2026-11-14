@@ -1,0 +1,51 @@
+name: Neon connection test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/mobile-notifications-responsive-platforms
+    paths:
+      - ".github/workflows/neon-check.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test-neon:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PostgreSQL driver
+        run: python -m pip install "psycopg[binary]"
+
+      - name: Test Neon connection
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          python - <<'PY'
+          import os
+          import sys
+          import psycopg
+
+          database_url = os.environ.get("DATABASE_URL")
+          if not database_url:
+              print("DATABASE_URL secret is missing.")
+              sys.exit(1)
+
+          try:
+              with psycopg.connect(database_url, connect_timeout=15) as conn:
+                  with conn.cursor() as cur:
+                      cur.execute("SELECT current_database(), now()")
+                      database, checked_at = cur.fetchone()
+              print("Neon connection successful.")
+              print(f"Database: {database}")
+              print(f"Checked at: {checked_at}")
+          except Exception as error:
+              print(f"Neon connection failed: {error}")
+              sys.exit(1)
+          PY

@@ -1,3 +1,4 @@
+import { apiUrl } from "@/lib/api-url";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@shared/routes";
@@ -6,9 +7,7 @@ import { z } from "zod";
 
 type LoginRequest = z.infer<typeof api.auth.login.input>;
 
-type LoginCredentials = LoginRequest & {
-  turnstileToken: string;
-};
+type LoginCredentials = LoginRequest;
 
 export function useAuth() {
   const queryClient = useQueryClient();
@@ -17,8 +16,8 @@ export function useAuth() {
   const { data: user, isLoading, error } = useQuery({
     queryKey: [api.auth.me.path],
     queryFn: async () => {
-      const res = await fetch(api.auth.me.path, {
-        credentials: "same-origin"
+      const res = await fetch(apiUrl(api.auth.me.path), {
+        credentials: "include"
       });
 
       if (res.status === 401) return null;
@@ -32,9 +31,9 @@ export function useAuth() {
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: LoginCredentials) => {
-      const res = await fetch(api.auth.login.path, {
+      const res = await fetch(apiUrl(api.auth.login.path), {
         method: api.auth.login.method,
-        credentials: "same-origin",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json"
         },
@@ -81,9 +80,9 @@ export function useAuth() {
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      await fetch(api.auth.logout.path, {
+      await fetch(apiUrl(api.auth.logout.path), {
         method: api.auth.logout.method,
-        credentials: "same-origin"
+        credentials: "include"
       });
     },
 

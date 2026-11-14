@@ -7,6 +7,31 @@ const app = express();
 const httpServer = createServer(app);
 app.set("trust proxy", 1);
 
+// Native Capacitor shells use a local origin while the API remains hosted.
+// Allow only the app's known origins and keep session cookies enabled.
+const allowedAppOrigins = new Set([
+  "capacitor://localhost",
+  "null",
+  "ionic://localhost",
+  "http://localhost",
+  "https://localhost",
+  "https://nexus.is-a.bot",
+  "https://nexus.tunnelto.me",
+  process.env.APP_ORIGIN || "",
+]);
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && allowedAppOrigins.has(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+  }
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
+
 declare module "http" {
   interface IncomingMessage {
     rawBody: unknown;
@@ -82,11 +107,12 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || "5000", 10);
+  // Windows does not support Node's reusePort option on all socket providers.
+  // A normal bind is sufficient for this single-instance self-hosted server.
   httpServer.listen(
     {
       port,
       host: "0.0.0.0",
-      reusePort: true,
     },
     () => {
       log(`serving on port ${port}`);
