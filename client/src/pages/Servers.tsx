@@ -57,7 +57,7 @@ export default function ServersPage() {
   const addCategory=()=>run(async()=>{await request(`/api/servers/${selectedId}/categories`,"POST",{name:categoryName});setCategoryName("");}, "Category created");
   const isManager=detail?.member&&["owner","admin"].includes(detail.member.role);
   const sendChannelMessage=async(event:any)=>{event.preventDefault();const content=messageDraft.trim();if(!content||!selectedId||!selectedChannelId||!detail?.member)return;try{await request(`/api/servers/${selectedId}/channels/${selectedChannelId}/messages`,"POST",{content});setMessageDraft("");await queryClient.invalidateQueries({queryKey:["/api/servers",selectedId,"channels",selectedChannelId,"messages"]});}catch(error:any){toast({title:"Message not sent",description:error.message,variant:"destructive"});}};
-  const copyInvite=async()=>{try{await navigator.clipboard.writeText(detail.server.inviteCode);toast({title:"Invite code copied"});}catch{toast({title:"Copy failed",description:detail.server.inviteCode});}};
+  const copyInvite=async()=>{if(!detail)return;try{await navigator.clipboard.writeText(detail.server.inviteCode);toast({title:"Invite code copied"});}catch{toast({title:"Copy failed",description:detail.server.inviteCode});}};
   return <Layout>
     <div className="nexus-page nexus-page-servers mx-auto max-w-7xl space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
