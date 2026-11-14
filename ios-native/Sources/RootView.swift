@@ -7,17 +7,18 @@ private let purple = Color(red: 0.61, green: 0.39, blue: 0.98)
 
 struct RootView: View {
     @EnvironmentObject var model: NexusModel
-    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var section = "Messages"
 
     var body: some View {
-        Group {
-            if model.currentUser == nil {
-                LoginView()
-            } else if sizeClass == .regular {
-                ipadLayout
-            } else {
-                phoneLayout
+        GeometryReader { geometry in
+            Group {
+                if model.currentUser == nil {
+                    LoginView()
+                } else if geometry.size.width >= 1050 {
+                    ipadLayout
+                } else {
+                    phoneLayout
+                }
             }
         }
         .background(bg.ignoresSafeArea())
