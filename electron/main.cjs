@@ -53,15 +53,13 @@ function createWindow() {
     mainWindow?.setTitle("NEXUS");
   });
 
-  // Use the same HTTPS origin as the hosted NEXUS API. This keeps Windows
-  // desktop authentication, cookies, WebSockets and WebAuthn passkeys on one
-  // trusted origin. Fall back to the bundled UI if the server is temporarily
-  // unavailable; API features require the server to be online either way.
-  mainWindow.loadURL(API_URL).catch((error) => {
-    console.error("Unable to reach the NEXUS server; opening bundled interface:", error);
-    mainWindow?.loadFile(LOCAL_UI).catch((fallbackError) => {
-      console.error("Unable to load bundled NEXUS interface:", fallbackError);
-    });
+  // Always render the complete NEXUS interface bundled inside the Windows
+  // application. The UI is not a remote website; API calls are routed to the
+  // configured NEXUS backend by client/src/lib/api-url.ts.
+  // The server explicitly allows the file:// origin ("null") for credentialed
+  // requests, so login, profiles, messages and WebSockets use the same API.
+  mainWindow.loadFile(LOCAL_UI).catch((error) => {
+    console.error("Unable to load the bundled NEXUS application UI:", error);
   });
   mainWindow.on("closed", () => {
     mainWindow = null;
