@@ -70,3 +70,5 @@ jobs:
           path: dist-electron/*.exe
           if-no-files-found: error
           retention-days: 14
+
+# Rebuild latest NEXUS source after the WebAuthn TypeScript fix.
