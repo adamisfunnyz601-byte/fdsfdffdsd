@@ -745,6 +745,8 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const voicePreviewAudioRef = useRef<HTMLAudioElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const screenShareTrackRef = useRef<MediaStreamTrack | null>(null);
+  const cameraTrackBeforeShareRef = useRef<MediaStreamTrack | null>(null);
   const remoteStreamRef = useRef<MediaStream | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const peerSetupPromiseRef = useRef<Promise<RTCPeerConnection> | null>(null);
@@ -1392,6 +1394,9 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     peerConnectionRef.current = null;
     peerSetupPromiseRef.current = null;
     pendingIceCandidatesRef.current = [];
+    screenShareTrackRef.current?.stop();
+    screenShareTrackRef.current = null;
+    cameraTrackBeforeShareRef.current = null;
     localStreamRef.current?.getTracks().forEach(track => track.stop());
     remoteStreamRef.current?.getTracks().forEach(track => track.stop());
     localStreamRef.current = null;
@@ -1614,26 +1619,74 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     }
   };
 
+  const stopScreenShare = async () => {
+    const screenTrack = screenShareTrackRef.current;
+    const cameraTrack = cameraTrackBeforeShareRef.current;
+    const videoTransceiver = peerConnectionRef.current?.getTransceivers()
+      .find(item => item.receiver.track.kind === "video");
+    try {
+      if (videoTransceiver) {
+        await videoTransceiver.sender.replaceTrack(cameraTrack?.readyState === "live" ? cameraTrack : null);
+      }
+    } catch (error: any) {
+      pushLog(`SCREEN_SHARE_RESTORE_FAILED: ${error?.message || error}`, "warn");
+    }
+    screenTrack?.stop();
+    screenShareTrackRef.current = null;
+    cameraTrackBeforeShareRef.current = null;
+    if (cameraTrack?.readyState === "live") cameraTrack.enabled = true;
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = localStreamRef.current;
+      localVideoRef.current.play().catch(() => {});
+    }
+    setIsSharingScreen(false);
+  };
+
   const shareScreen = async () => {
     if (isSharingScreen) {
-      const screenTrack = localStreamRef.current?.getVideoTracks().find(track => track.label.toLowerCase().includes('screen'));
-      screenTrack?.stop();
-      localStreamRef.current?.removeTrack(screenTrack as MediaStreamTrack);
-      setIsSharingScreen(false);
+      await stopScreenShare();
+      return;
+    }
+    if (typeof navigator.mediaDevices?.getDisplayMedia !== "function") {
+      toast({
+        title: "Screen sharing unavailable",
+        description: "This app build does not expose native screen capture on this device yet.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const peer = peerConnectionRef.current;
+    const videoTransceiver = peer?.getTransceivers()
+      .find(item => item.receiver.track.kind === "video");
+    if (!peer || !videoTransceiver) {
+      toast({ title: "Screen sharing unavailable", description: "Connect the call again, then retry.", variant: "destructive" });
       return;
     }
     try {
-      const screen = await (navigator.mediaDevices as any).getDisplayMedia({ video: true });
+      const screen = await navigator.mediaDevices.getDisplayMedia({ video: true });
       const track = screen.getVideoTracks()[0];
-      if (!localStreamRef.current) localStreamRef.current = new MediaStream();
-      localStreamRef.current.addTrack(track);
-      const sender = peerConnectionRef.current?.getSenders().find(item => item.track?.kind === 'video');
-      if (sender) await sender.replaceTrack(track);
-      else peerConnectionRef.current?.addTrack(track, screen);
-      if (localVideoRef.current) localVideoRef.current.srcObject = localStreamRef.current;
+      if (!track) throw new Error("The screen picker did not provide a video track.");
+      const cameraTrack = localStreamRef.current?.getVideoTracks()
+        .find(item => item.readyState === "live") || null;
+      cameraTrackBeforeShareRef.current = cameraTrack;
+      if (cameraTrack) cameraTrack.enabled = false;
+      await videoTransceiver.sender.replaceTrack(track);
+      screenShareTrackRef.current = track;
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = new MediaStream([track]);
+        localVideoRef.current.play().catch(() => {});
+      }
       setIsSharingScreen(true);
-      track.onended = () => setIsSharingScreen(false);
-    } catch { toast({ title: 'SCREEN_SHARE_DENIED', variant: 'destructive' }); }
+      track.onended = () => { void stopScreenShare(); };
+    } catch (error: any) {
+      const cameraTrack = cameraTrackBeforeShareRef.current;
+      if (cameraTrack?.readyState === "live") cameraTrack.enabled = true;
+      cameraTrackBeforeShareRef.current = null;
+      screenShareTrackRef.current?.stop();
+      screenShareTrackRef.current = null;
+      if (localVideoRef.current) localVideoRef.current.srcObject = localStreamRef.current;
+      toast({ title: "SCREEN_SHARE_DENIED", description: error?.message || "Could not start screen sharing.", variant: "destructive" });
+    }
   };
 
   // The callee creates an answer when the caller's offer arrives; the caller creates the offer after acceptance.
