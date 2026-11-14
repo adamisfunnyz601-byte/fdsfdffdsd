@@ -1,6 +1,6 @@
 
 import { db, pool } from "./db";
-import { users, accessKeys, searchHistory, messages, groupChats, groupChatMembers, customEmojis, friendRequests, blocks, oauthAccounts, moderationLogs, blockBlastScores, communityServers, communityServerMembers, communityServerCategories, communityServerChannels, communityServerMessages, chatMessageReactions, chatPolls, chatPollOptions, chatPollVotes, passkeyCredentials } from "@shared/schema";
+import { users, accessKeys, searchHistory, messages, groupChats, groupChatMembers, customEmojis, friendRequests, blocks, moderationLogs, blockBlastScores, communityServers, communityServerMembers, communityServerCategories, communityServerChannels, communityServerMessages, chatMessageReactions, chatPolls, chatPollOptions, chatPollVotes, passkeyCredentials } from "@shared/schema";
 import { eq, desc, and, or, gt, sql, inArray } from "drizzle-orm";
 import type { Express, Request } from "express";
 import type { Server } from "http";
@@ -29,18 +29,8 @@ const verifyAccountPassword = (password: string, stored: string) => {
   if (!salt || !hash || !/^[a-f0-9]{32}$/.test(salt) || !/^[a-f0-9]{128}$/.test(hash)) return false;
   return timingSafeEqual(scryptSync(password, salt, 64), Buffer.from(hash, "hex"));
 };
-type OAuthProvider = "microsoft";
-
 declare module "express-session" {
   interface SessionData {
-    oauthFlow?: {
-      provider: OAuthProvider;
-      state: string;
-      nonce: string;
-      codeVerifier: string;
-      redirectUri: string;
-      returnTo: string;
-    };
     passkeyFlow?: { challenge: string; userId: number; purpose: "register" | "login"; expiresAt: number };
   }
 }
@@ -54,19 +44,10 @@ const PROFILE_IMAGE_DATA_URL = /^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/]+=
 const PROFILE_THUMBNAIL_CACHE_LIMIT = 32;
 const profileThumbnailCache = new Map<string, Buffer>();
 const profileThumbnailJobs = new Map<string, Promise<Buffer>>();
-const oauthConfigCache = new Map<OAuthProvider, Promise<import("openid-client").Configuration>>();
 
 const authRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 12,
-  standardHeaders: "draft-8",
-  legacyHeaders: false,
-  message: { message: "Too many sign-in attempts. Try again in a few minutes." },
-});
-
-const oauthStartRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 20,
   standardHeaders: "draft-8",
   legacyHeaders: false,
   message: { message: "Too many sign-in attempts. Try again in a few minutes." },
@@ -80,64 +61,9 @@ const accessRequestRateLimit = rateLimit({
   message: { message: "Too many access requests. Try again later." },
 });
 
-function isOAuthProvider(value: string): value is OAuthProvider {
-  return value === "microsoft";
-}
-
-function isOAuthProviderConfigured(provider: OAuthProvider) {
-  const prefix = "MICROSOFT";
-  return Boolean(process.env[`${prefix}_CLIENT_ID`] && process.env[`${prefix}_CLIENT_SECRET`]);
-}
-
-function getOAuthConfig(provider: OAuthProvider) {
-  const existing = oauthConfigCache.get(provider);
-  if (existing) return existing;
-
-  const prefix = provider === "google" ? "GOOGLE" : "MICROSOFT";
-  const clientId = process.env[`${prefix}_CLIENT_ID`];
-  const clientSecret = process.env[`${prefix}_CLIENT_SECRET`];
-  if (!clientId || !clientSecret) {
-    throw new Error(`${provider} sign-in is not configured`);
-  }
-
-  const issuer = "https://login.microsoftonline.com/common/v2.0";
-  const discovery = import("openid-client").then(({ discovery }) =>
-    discovery(new URL(issuer), clientId, clientSecret),
-  );
-  oauthConfigCache.set(provider, discovery);
-  discovery.catch(() => oauthConfigCache.delete(provider));
-  return discovery;
-}
-
-function getOAuthRedirectUri(provider: OAuthProvider) {
-  let baseUrl = process.env.OAUTH_REDIRECT_BASE_URL;
-  if (!baseUrl && process.env.NODE_ENV !== "production") {
-    const devDomain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(",")[0];
-    if (devDomain) baseUrl = devDomain.startsWith("http") ? devDomain : `https://${devDomain}`;
-  }
-  if (!baseUrl && process.env.NODE_ENV !== "production") {
-    baseUrl = `http://localhost:${process.env.PORT || 5000}`;
-  }
-  if (!baseUrl) {
-    throw new Error("OAUTH_REDIRECT_BASE_URL must be set for production sign-in");
-  }
-
-  const parsed = new URL(baseUrl);
-  if (parsed.protocol !== "https:" && process.env.NODE_ENV === "production") {
-    throw new Error("Production OAuth redirect URL must use HTTPS");
-  }
-  return new URL(`/api/auth/oauth/${provider}/callback`, parsed.origin).toString();
-}
-
 function saveSession(req: Request) {
   return new Promise<void>((resolve, reject) => {
     req.session.save((error) => error ? reject(error) : resolve());
-  });
-}
-
-function regenerateSession(req: Request) {
-  return new Promise<void>((resolve, reject) => {
-    req.session.regenerate((error) => error ? reject(error) : resolve());
   });
 }
 
@@ -374,91 +300,6 @@ export async function registerRoutes(
       bannerUrl: profileImageUrl(safe.id, "banner", safe.bannerUrl),
     };
   };
-
-  // Google/Microsoft OpenID Connect login with state, nonce and PKCE.
-  app.get("/api/auth/oauth/:provider", oauthStartRateLimit, async (req, res) => {
-    try {
-      const provider = String(req.params.provider);
-      if (!isOAuthProvider(provider)) return res.status(404).json({ message: "Unsupported sign-in provider." });
-      if (!isOAuthProviderConfigured(provider)) return res.status(503).json({ message: `${provider} sign-in is not configured on the NEXUS server.` });
-      const oidc = await import("openid-client");
-      const config = await getOAuthConfig(provider);
-      const state = randomBytes(32).toString("hex");
-      const nonce = randomBytes(32).toString("hex");
-      const codeVerifier = oidc.randomPKCECodeVerifier();
-      const codeChallenge = await oidc.calculatePKCECodeChallenge(codeVerifier);
-      const redirectUri = getOAuthRedirectUri(provider);
-      const requestedReturn = typeof req.query.returnTo === "string" ? req.query.returnTo : "/chat";
-      const returnTo = requestedReturn.startsWith("/") && !requestedReturn.startsWith("//") ? requestedReturn : "/chat";
-      req.session.oauthFlow = { provider, state, nonce, codeVerifier, redirectUri, returnTo };
-      await saveSession(req);
-      const authorizationUrl = oidc.buildAuthorizationUrl(config, {
-        redirect_uri: redirectUri,
-        scope: "openid email profile",
-        response_type: "code",
-        state,
-        nonce,
-        code_challenge: codeChallenge,
-        code_challenge_method: "S256",
-      });
-      return res.redirect(authorizationUrl.href);
-    } catch (error: any) {
-      console.error("[oauth] Sign-in start failed:", error?.message || error);
-      return res.status(503).json({ message: error?.message || "Microsoft sign-in is temporarily unavailable." });
-    }
-  });
-
-  app.get("/api/auth/oauth/:provider/callback", oauthStartRateLimit, async (req, res) => {
-    try {
-      const provider = String(req.params.provider);
-      const flow = req.session.oauthFlow;
-      if (!isOAuthProvider(provider) || !flow || flow.provider !== provider) {
-        return res.status(400).send("Your sign-in session expired. Return to NEXUS and try again.");
-      }
-      delete req.session.oauthFlow;
-      await saveSession(req);
-      if (typeof req.query.error === "string") return res.redirect("/?oauth=cancelled");
-      const oidc = await import("openid-client");
-      const config = await getOAuthConfig(provider);
-      const callbackUrl = new URL(req.originalUrl, `${req.protocol}://${req.get("host")}`);
-      const tokens = await oidc.authorizationCodeGrant(config, callbackUrl, {
-        pkceCodeVerifier: flow.codeVerifier,
-        expectedState: flow.state,
-        expectedNonce: flow.nonce,
-      });
-      const claims = tokens.claims();
-      const subject = claims?.sub;
-      if (typeof subject !== "string" || !subject) throw new Error("The identity provider did not return a valid account ID.");
-      const [linked] = await db.select().from(oauthAccounts)
-        .where(and(eq(oauthAccounts.provider, provider), eq(oauthAccounts.providerSubject, subject))).limit(1);
-      let accountId = linked?.userId;
-      if (!accountId) {
-        const email = typeof claims.email === "string" ? claims.email : "";
-        const displayName = typeof claims.name === "string" ? claims.name.slice(0, 80) : null;
-        const base = (email.split("@")[0] || displayName || "nexus-user").toLowerCase().replace(/[^a-z0-9_]/g, "_").replace(/^_+|_+$/g, "").slice(0, 17) || "nexus_user";
-        const username = `${base}_${randomBytes(3).toString("hex")}`;
-        const [created] = await db.insert(users).values({
-          username,
-          serialKey: `OAUTH-${randomBytes(24).toString("hex")}`,
-          passwordHash: null,
-          role: "user",
-          displayName,
-        }).returning({ id: users.id, role: users.role });
-        accountId = created.id;
-        await db.insert(oauthAccounts).values({ userId: accountId, provider, providerSubject: subject });
-      }
-      const account = await storage.getUser(accountId);
-      if (!account) throw new Error("The linked NEXUS account could not be loaded.");
-      await regenerateSession(req);
-      req.session.userId = account.id;
-      req.session.role = account.role;
-      await saveSession(req);
-      return res.redirect(flow.returnTo);
-    } catch (error: any) {
-      console.error("[oauth] Callback failed:", error?.message || error);
-      return res.redirect("/?oauth=failed");
-    }
-  });
 
   // Passkey registration and authentication use WebAuthn challenges stored in the session.
   const getWebAuthnSettings = (req: Request) => {
