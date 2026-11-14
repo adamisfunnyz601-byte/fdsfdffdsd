@@ -245,6 +245,15 @@ async function ensureCommunityServerTables() {
       position INTEGER NOT NULL DEFAULT 0,
       is_locked BOOLEAN NOT NULL DEFAULT FALSE
     )`,
+    `CREATE TABLE IF NOT EXISTS passkey_credentials (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      credential_id TEXT NOT NULL UNIQUE,
+      public_key TEXT NOT NULL,
+      counter INTEGER NOT NULL DEFAULT 0,
+      transports JSONB NOT NULL DEFAULT '[]'::jsonb,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`,
     `CREATE TABLE IF NOT EXISTS community_server_messages (
       id SERIAL PRIMARY KEY,
       server_id INTEGER NOT NULL REFERENCES community_servers(id) ON DELETE CASCADE,
