@@ -479,7 +479,8 @@ export async function registerRoutes(
     const rpID = configuredRpId && (parsed.hostname === configuredRpId || parsed.hostname.endsWith(`.${configuredRpId}`))
       ? configuredRpId
       : parsed.hostname;
-    return { expectedOrigin: parsed.origin, rpID };
+    const expectedOrigin = parsed.protocol === "capacitor:" ? configuredOrigin.replace(/\/$/, "") : parsed.origin;
+    return { expectedOrigin, rpID };
   };
 
   app.post("/api/auth/passkeys/register/options", requireAuth, async (req, res) => {
