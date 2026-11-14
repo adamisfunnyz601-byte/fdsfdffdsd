@@ -92,6 +92,11 @@ app.use((req, res, next) => {
     return res.status(status).json({ message });
   });
 
+  // Railway deployment health check. Keep this before static/Vite fallback routes.
+  app.get("/health", (_req, res) => {
+    res.status(200).json({ status: "ok", service: "nexus-api" });
+  });
+
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
@@ -101,11 +106,6 @@ app.use((req, res, next) => {
     const { setupVite } = await import("./vite");
     await setupVite(httpServer, app);
   }
-
-  // Railway deployment health check. Keep this before static/Vite fallback routes.
-  app.get("/health", (_req, res) => {
-    res.status(200).json({ status: "ok", service: "nexus-api" });
-  });
 
   // ALWAYS serve the app on the port specified in the environment variable PORT
   // Other ports are firewalled. Default to 5000 if not specified.
