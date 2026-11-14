@@ -105,7 +105,7 @@ export default function Chat() {
         setRecording(false);
         if (blob.size) {
           const extension = blob.type.includes("mp4") ? "m4a" : blob.type.includes("ogg") ? "ogg" : "webm";
-          await sendAttachment(new File([blob], `nexus-voice-message.${extension}`, { type: blob.type }), true);
+          await sendAttachment(new File([blob], `nexus-voice-message.${extension}`, { type: (blob.type.split(";")[0] || "audio/webm") }), true);
         }
       };
       recorderRef.current = recorder;
