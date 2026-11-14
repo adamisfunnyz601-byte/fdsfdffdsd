@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { enableBrowserNotifications, showTestNotification, getNotificationSupport } from "@/lib/platform-notifications";
+import { enableNativeNotifications, isNativeApp, nativePlatform, showNativeTestNotification } from "@/lib/native-notifications";
 import { Bell, BellOff, Check, Circle, Moon, Settings as SettingsIcon, Volume2 } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { CyberButton } from "@/components/CyberButton";
@@ -25,13 +26,19 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [notificationState, setNotificationState] = useState(getNotificationSupport());
   const [notificationBusy, setNotificationBusy] = useState(false);
+  const nativeApp = isNativeApp();
 
   const enableNotifications = async () => {
     setNotificationBusy(true);
     try {
-      await enableBrowserNotifications();
-      setNotificationState(getNotificationSupport());
-      toast({ title: "Notifications enabled", description: "This device can now show NEXUS notifications while the app is available." });
+      if (nativeApp) {
+        await enableNativeNotifications();
+        toast({ title: "Native notifications enabled", description: `Push registration started on ${nativePlatform()}. Configure Firebase/APNs credentials for remote delivery.` });
+      } else {
+        await enableBrowserNotifications();
+        setNotificationState(getNotificationSupport());
+        toast({ title: "Browser notifications enabled", description: "This device can now display browser notifications." });
+      }
     } catch (error: any) {
       toast({ title: "Notifications unavailable", description: error?.message || "Check your browser or device notification settings.", variant: "destructive" });
       setNotificationState(getNotificationSupport());
@@ -127,13 +134,13 @@ export default function SettingsPage() {
           <div className="rounded-xl border border-border p-3 space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0"><div className="text-sm font-medium text-foreground">Device notifications</div><div className="text-xs text-muted-foreground">{notificationState.description}</div></div>
-              <span className="text-xs text-muted-foreground">{notificationState.permission}</span>
+              <span className="text-xs text-muted-foreground">{nativeApp ? `Native · ${nativePlatform()}` : notificationState.permission}</span>
             </div>
             <div className="flex flex-wrap gap-2">
-              <CyberButton disabled={notificationBusy || notificationState.permission === "granted"} onClick={enableNotifications}>{notificationBusy ? "Enabling..." : "Enable notifications"}</CyberButton>
-              <CyberButton disabled={notificationState.permission !== "granted"} onClick={() => showTestNotification().catch((error: any) => toast({ title: "Test notification failed", description: error.message, variant: "destructive" }))}>Send test notification</CyberButton>
+              <CyberButton disabled={notificationBusy || (!nativeApp && notificationState.permission === "granted")} onClick={enableNotifications}>{notificationBusy ? "Enabling..." : "Enable notifications"}</CyberButton>
+              <CyberButton disabled={!nativeApp && notificationState.permission !== "granted"} onClick={() => (nativeApp ? showNativeTestNotification() : showTestNotification()).catch((error: any) => toast({ title: "Test notification failed", description: error.message, variant: "destructive" }))}>Send test notification</CyberButton>
             </div>
-            <p className="text-[11px] text-muted-foreground">Works with supported browsers and installed PWAs on Android, iOS 16.4+, and Windows. Remote/background message delivery still needs server push credentials.</p>
+            <p className="text-[11px] text-muted-foreground">Native Android/iOS builds use the operating-system notification APIs. Web/PWA notifications depend on browser support. Remote delivery requires Firebase Cloud Messaging, APNs configuration and a server-side sender; Windows desktop notifications are handled separately by Electron.</p>
           </div>
           <div className="flex items-end gap-3">
             <div className="flex-1">
