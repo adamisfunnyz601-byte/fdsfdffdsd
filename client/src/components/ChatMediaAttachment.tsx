@@ -22,7 +22,7 @@ export function ChatMediaAttachment({ messageId, mediaType }: Props) {
       .then(async response => {
         if (!response.ok) throw new Error("Attachment unavailable");
         const data = await response.json();
-        if (typeof data.mediaUrl !== "string" || !data.mediaUrl.startsWith("data:")) throw new Error("Unsupported attachment");
+        if (typeof data.mediaUrl !== "string" || !(data.mediaUrl.startsWith("data:") || data.mediaUrl.startsWith("https://"))) throw new Error("Unsupported attachment");
         if (active) setSrc(data.mediaUrl);
       })
       .catch(cause => { if (active) setError(cause instanceof Error ? cause.message : "Could not load attachment"); })
