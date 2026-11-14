@@ -1,3 +1,6 @@
+import { Capacitor } from "@capacitor/core";
+import { PushNotifications } from "@capacitor/push-notifications";
+import { LocalNotifications } from "@capacitor/local-notifications";
 type NativePlugin = Record<string, (...args: any[]) => Promise<any>> & {
   addListener?: (eventName: string, listener: (event: any) => void) => Promise<{ remove: () => Promise<void> }>;
 };
