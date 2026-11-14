@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, session, desktopCapturer } = require("electron");
+const { app, BrowserWindow, shell, session, desktopCapturer, dialog } = require("electron");
 const path = require("node:path");
 
 const API_URL = process.env.NEXUS_API_URL || "https://secure-web-gateway--c00le5tp3rs0n3v.replit.app";
@@ -68,7 +68,18 @@ app.whenReady().then(() => {
   session.defaultSession.setDisplayMediaRequestHandler(async (_request, callback) => {
     try {
       const sources = await desktopCapturer.getSources({ types: ["screen", "window"], thumbnailSize: { width: 320, height: 180 } });
-      callback({ video: sources[0] });
+      if (!sources.length) return callback({});
+      const choice = await dialog.showMessageBox(mainWindow, {
+        type: "question",
+        title: "Share your screen with NEXUS",
+        message: "Choose the screen or window you want to share.",
+        buttons: [...sources.map(source => source.name), "Cancel"],
+        cancelId: sources.length,
+        defaultId: 0,
+        noLink: true
+      });
+      if (choice.response < 0 || choice.response >= sources.length) return callback({});
+      callback({ video: sources[choice.response] });
     } catch (error) {
       console.error("NEXUS screen capture permission failed:", error);
       callback({});
