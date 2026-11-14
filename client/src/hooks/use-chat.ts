@@ -1,3 +1,4 @@
+import { apiUrl } from "@/lib/api-url";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@shared/routes";
 import { useAuth } from "@/hooks/use-auth";
@@ -25,7 +26,7 @@ export function useChat({ recipientId = null, groupId = null }: ChatChannel = {}
   const { data: messages, isLoading: isLoadingMessages } = useQuery({
     queryKey: messagesKey,
     queryFn: async () => {
-      const res = await fetch(messagesUrl);
+      const res = await fetch(apiUrl(messagesUrl), { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch messages");
       const incoming = await res.json();
       const cachedMessages = queryClient.getQueryData<any[]>(messagesKey);
@@ -46,7 +47,7 @@ export function useChat({ recipientId = null, groupId = null }: ChatChannel = {}
   const { data: users, isLoading: isLoadingUsers } = useQuery({
     queryKey: [api.chat.users.path],
     queryFn: async () => {
-      const res = await fetch(api.chat.users.path);
+      const res = await fetch(apiUrl(api.chat.users.path), { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch users");
       return res.json();
     },
@@ -65,7 +66,7 @@ export function useChat({ recipientId = null, groupId = null }: ChatChannel = {}
       mediaType?: string | null;
       replyToId?: number | null;
     }) => {
-      const res = await fetch(api.chat.send.path, {
+      const res = await fetch(apiUrl(api.chat.send.path), {
         method: api.chat.send.method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -137,7 +138,7 @@ export function useChat({ recipientId = null, groupId = null }: ChatChannel = {}
 
   const deleteMessage = useMutation({
     mutationFn: async (id: number) => {
-      const res = await fetch(`/api/chat/messages/${id}`, { method: 'DELETE' });
+      const res = await fetch(apiUrl(`/api/chat/messages/${id}`), { method: 'DELETE' });
       if (!res.ok) throw new Error("Delete failed");
     },
     onSuccess: () => {
