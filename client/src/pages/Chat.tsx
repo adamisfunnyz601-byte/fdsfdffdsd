@@ -26,10 +26,15 @@ import { UserProfileTag } from "@/components/UserProfileTag";
 import { EmojiButton } from "@/components/EmojiPicker";
 import { getRtcConfiguration } from "@/lib/webrtc";
 
-// Route API requests to the configured backend while keeping external media URLs intact.
+// Route API requests to the configured backend and always include the Neon-backed
+// server session cookie. "same-origin" silently drops the cookie in the native
+// Capacitor app because its local WebView origin differs from the hosted API.
 const apiFetch: typeof fetch = (input, init) => {
-  const target = typeof input === "string" && input.startsWith("/") ? apiUrl(input) : input;
-  return fetch(target, init);
+  const isApiRequest = typeof input === "string" && input.startsWith("/");
+  const target = isApiRequest ? apiUrl(input) : input;
+  return fetch(target, isApiRequest
+    ? { ...init, credentials: "include" }
+    : init);
 };
 
 // ============================================================
