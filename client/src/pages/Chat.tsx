@@ -23,6 +23,7 @@ import { ProfileModal, Avatar } from "@/components/ProfileModal";
 import { getFontClass, getUsernameGradientStyle } from "@/components/ProfileTextStyle";
 import { UserProfileTag } from "@/components/UserProfileTag";
 import { EmojiButton } from "@/components/EmojiPicker";
+import { getRtcConfiguration } from "@/lib/webrtc";
 
 // ============================================================
 // CONSTANTS
@@ -633,7 +634,7 @@ export default function Chat() {
       stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:groupCallWithVideo?{facingMode:"user"}:false});
       groupLocalStreamRef.current=stream;
     }
-    const peer=new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
+    const peer=new RTCPeerConnection(await getRtcConfiguration());
     stream.getTracks().forEach(track=>peer.addTrack(track,stream!));
     peer.onicecandidate=event=>{if(event.candidate)sendGroupPeerSignal(peerId,{type:"ice",candidate:event.candidate.toJSON()});};
     peer.ontrack=event=>{
