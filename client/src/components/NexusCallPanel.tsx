@@ -21,7 +21,7 @@ function AudioMeter({stream}:{stream:MediaStream|null}) {
     if(!stream)return;
     let context:AudioContext|undefined;let frame=0;let source:MediaStreamAudioSourceNode|undefined;let analyser:AnalyserNode|undefined;
     try{
-      context=new AudioContext();analyser=context.createAnalyser();analyser.fftSize=128;
+      context=new AudioContext();void context.resume();analyser=context.createAnalyser();analyser.fftSize=128;
       source=context.createMediaStreamSource(stream);source.connect(analyser);
       const data=new Uint8Array(analyser.frequencyBinCount);
       const draw=()=>{if(!analyser)return;analyser.getByteFrequencyData(data);let sum=0;for(const value of data)sum+=value;setLevel(Math.min(1,sum/(data.length*255)));frame=requestAnimationFrame(draw);};
