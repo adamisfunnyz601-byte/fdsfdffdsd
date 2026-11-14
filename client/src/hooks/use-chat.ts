@@ -53,10 +53,13 @@ export function useChat({ recipientId = null, groupId = null }: ChatChannel = {}
   const { data: users, isLoading: isLoadingUsers } = useQuery({
     queryKey: [api.chat.users.path],
     queryFn: async () => {
-      const res = await fetch(apiUrl(api.chat.users.path), { credentials: "include" });
+      const res = await fetch(apiUrl(api.chat.users.path), { credentials: "include", cache: "no-store" });
       if (!res.ok) throw new Error("Failed to fetch users");
       return res.json();
     },
+    // This endpoint is protected too. Wait until login has populated the
+    // authenticated user query, then fetch the directory with the session.
+    enabled: Boolean(user?.id),
     refetchInterval: 10000,
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
