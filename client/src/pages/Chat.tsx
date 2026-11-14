@@ -714,7 +714,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
   // --- SOUNDBOARD STATE ---
   const [customSounds, setCustomSounds] = useState<SoundEntry[]>([]);
   const [sounds, setSounds] = useState<SoundEntry[]>(DEFAULT_SOUNDS);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => typeof window === "undefined" || window.matchMedia("(min-width: 1024px)").matches);
   const [searchTerm, setSearchTerm] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [isRecordingPaused, setIsRecordingPaused] = useState(false);
