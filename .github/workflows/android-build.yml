@@ -79,7 +79,7 @@ jobs:
           ]
           for permission in permissions:
               if permission not in xml:
-                  xml = xml.replace("<application", f'  <uses-permission android:name="{permission}" />\\n  <application', 1)
+                  xml = xml.replace("<application", f'  <uses-permission android:name="{permission}" />\n  <application', 1)
           path.write_text(xml)
           PY
       - name: Configure Firebase Cloud Messaging (optional)
