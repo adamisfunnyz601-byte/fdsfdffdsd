@@ -61,6 +61,12 @@ jobs:
         run: npm run check
       - name: Build web application
         run: npm run build
+
+      - name: Verify the complete local NEXUS UI bundle
+        run: |
+          test -s dist/public/index.html
+          find dist/public/assets -maxdepth 1 -type f -name '*.js' | grep -q .
+          grep -Eq '/assets/[^"]+\\.js' dist/public/index.html
       - name: Generate Xcode project with bundled local website
         run: |
           npx cap add ios
