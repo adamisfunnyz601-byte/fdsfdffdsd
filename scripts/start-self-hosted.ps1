@@ -13,7 +13,6 @@ if ($databaseUrl -notmatch '^postgres(ql)?://') {
 }
 
 $env:DATABASE_URL = $databaseUrl
-$env:NODE_ENV = "production"
 $env:PORT = "5000"
 
 # Compatible with Windows PowerShell 5.1 and PowerShell 7.
@@ -27,14 +26,18 @@ finally {
   $randomGenerator.Dispose()
 }
 
-Write-Host "Installing dependencies..." -ForegroundColor Yellow
-npm install
+# tsx, TypeScript, Vite, and other build tools are devDependencies.
+# Explicitly include them even if this shell previously had NODE_ENV=production.
+$env:NODE_ENV = "development"
+Write-Host "Installing dependencies (including build tools)..." -ForegroundColor Yellow
+npm install --include=dev --registry=https://registry.npmjs.org
 if ($LASTEXITCODE -ne 0) { throw "npm install failed." }
 
 Write-Host "Building NEXUS..." -ForegroundColor Yellow
 npm run build
 if ($LASTEXITCODE -ne 0) { throw "NEXUS build failed." }
 
+$env:NODE_ENV = "production"
 Write-Host "Starting NEXUS on http://localhost:5000" -ForegroundColor Green
 Write-Host "Keep this window open. Press Ctrl+C to stop the server."
 npm start
