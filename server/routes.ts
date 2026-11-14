@@ -137,6 +137,23 @@ declare module "express-session" {
   }
 }
 
+async function ensureSessionStoreTable() {
+  // Create the connect-pg-simple schema directly through Drizzle before the
+  // session middleware is registered. This avoids relying on table.sql being
+  // present beside a bundled dist/index.cjs on Windows/self-hosted installs.
+  await db.execute(sql.raw(`
+    CREATE TABLE IF NOT EXISTS user_sessions (
+      sid VARCHAR NOT NULL PRIMARY KEY,
+      sess JSON NOT NULL,
+      expire TIMESTAMP(6) NOT NULL
+    )
+  `));
+  await db.execute(sql.raw(`
+    CREATE INDEX IF NOT EXISTS IDX_user_sessions_expire
+    ON user_sessions (expire)
+  `));
+}
+
 async function ensureCommunityServerTables() {
   // These idempotent DDL statements keep fresh deployments from exposing
   // server screens whose backing tables were never created by a manual db:push.
@@ -202,6 +219,7 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   await ensureCommunityServerTables();
+  await ensureSessionStoreTable();
   // Session middleware. Store sessions in Neon so logins survive server restarts.
   // The table is created automatically on first boot by connect-pg-simple.
   const sessionSecret = process.env.SESSION_SECRET;
@@ -214,7 +232,7 @@ export async function registerRoutes(
       store: new PgSessionStore({
         pool,
         tableName: "user_sessions",
-        createTableIfMissing: true,
+        createTableIfMissing: false,
         pruneSessionInterval: 15 * 60,
       }),
       secret: sessionSecret,
