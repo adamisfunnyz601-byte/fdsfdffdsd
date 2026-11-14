@@ -12,6 +12,7 @@ on:
       - "package.json"
       - "package-lock.json"
       - "script/**"
+      - "server/routes.ts"
 
 permissions:
   contents: read
