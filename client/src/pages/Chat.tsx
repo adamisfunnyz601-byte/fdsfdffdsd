@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { Layout } from "@/components/Layout";
 import { apiUrl } from "@/lib/api-url";
 import { CyberInput } from "@/components/CyberInput";
@@ -2104,19 +2105,20 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
         </AnimatePresence>
 
         {/* ======================================================
-            ACTIVE CALL OVERLAY
+            ACTIVE CALL OVERLAY — rendered at document root so fixed positioning
+            is not trapped by transformed app/layout containers.
             ====================================================== */}
-        <AnimatePresence>
+        {createPortal(<AnimatePresence>
           {(callState === 'requesting' || callState === 'connected') && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 !visible pointer-events-auto bg-black z-[800] flex flex-col"
+              className="fixed inset-0 !visible pointer-events-auto bg-black z-[1200] flex h-[100dvh] min-h-0 w-screen flex-col overflow-hidden"
             >
-              <div className="flex-1 flex">
+              <div className="relative flex min-h-0 flex-1">
                 {/* Remote participant is the main video; your own camera stays picture-in-picture. */}
-                <div className="flex-1 relative bg-black flex items-center justify-center overflow-hidden">
+                <div className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden bg-black">
                   <video ref={remoteVideoRef} autoPlay muted playsInline className="absolute inset-0 w-full h-full object-cover" />
                   <audio ref={remoteAudioRef} autoPlay playsInline muted={false} />
                   <AnimatePresence>{remoteCallEmote?.gifUrl && <motion.div initial={{opacity:0,scale:.75,y:12}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:.9,y:8}} transition={{type:"spring",stiffness:360,damping:24}} className="absolute bottom-24 left-1/2 z-30 -translate-x-1/2 rounded-2xl border border-violet-300/50 bg-[#111827]/95 p-3 shadow-2xl"><div className="mb-1 text-center text-xs font-bold text-violet-100">{remoteCallEmote.name}</div><img src={remoteCallEmote.gifUrl} alt={remoteCallEmote.name} className="h-28 w-28 rounded-xl object-contain"/></motion.div>}</AnimatePresence>
@@ -2131,7 +2133,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
                       </div>
                     </div>
                   </div>}
-                  <div className="nexus-local-call-preview fixed z-[850] aspect-video overflow-hidden rounded-xl border-2 border-violet-400/60 bg-[#10091b] shadow-2xl" style={{ position: "fixed", right: "max(12px, env(safe-area-inset-right))", bottom: "calc(6.75rem + env(safe-area-inset-bottom))", width: "clamp(104px, 22vw, 208px)" }}>
+                  <div className="nexus-local-call-preview absolute z-40 aspect-video overflow-hidden rounded-xl border-2 border-violet-400/60 bg-[#10091b] shadow-2xl">
                     <video ref={localVideoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
                     {!isVideoOn && <div className="absolute inset-0 flex items-center justify-center text-[9px] font-mono text-violet-200/50">CAMERA OFF</div>}
                     <span className="absolute bottom-1 left-2 text-[8px] font-mono text-white bg-black/50 px-1.5 py-0.5">YOU</span>
@@ -2145,7 +2147,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
                   </div>
                 </div>
               </div>
-              <div className="h-9 shrink-0 border-t border-violet-500/15 bg-[#09050f]"><LiveAudioVisualizer stream={visualizerStream} bars={44} className="h-full" /></div>
+              <div className="h-6 shrink-0 border-t border-violet-500/15 bg-[#09050f] sm:h-9"><LiveAudioVisualizer stream={visualizerStream} bars={44} className="h-full" /></div>
 
               {/* Soundboard in call (collapsible) */}
               <AnimatePresence>
@@ -2169,52 +2171,52 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
 
               <AnimatePresence>{callEmoteOpen && <motion.div initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} exit={{opacity:0,y:12}} className="absolute bottom-36 left-1/2 z-40 w-[min(92vw,520px)] -translate-x-1/2 rounded-2xl border border-violet-400/30 bg-[#10091b]/95 p-3 shadow-2xl"><div className="mb-2 text-xs font-bold uppercase tracking-widest text-violet-200">Your emotes</div><div className="grid max-h-40 grid-cols-4 gap-2 overflow-y-auto">{callEmoteInventory.filter((item:any)=>item.type==="emote").map((item:any)=><button key={item.id} onClick={()=>sendCallEmote(item)} className="rounded-xl border border-violet-400/20 bg-violet-500/10 p-2 text-center hover:bg-violet-500/25"><img src={item.imageUrl} alt={item.name} className="mx-auto h-12 w-12 object-contain"/><span className="mt-1 block truncate text-[10px] text-violet-100">{item.name}</span></button>)}</div>{!callEmoteInventory.some((item:any)=>item.type==="emote")&&<p className="text-xs text-violet-100/60">Buy emotes in the DihCoins Shop first.</p>}</motion.div>}</AnimatePresence>
               {/* Call controls */}
-              <div className="h-32 bg-black border-t border-violet-500/20 flex items-center justify-center gap-6">
+              <div className="flex min-h-0 shrink-0 flex-wrap items-center justify-center gap-2 border-t border-violet-500/20 bg-black px-2 pb-[max(.65rem,env(safe-area-inset-bottom))] pt-2 sm:gap-4 sm:px-4 sm:py-4">
                 <button
                   onClick={toggleMute}
-                  className={cn("w-14 h-14 rounded-full flex items-center justify-center border-2 transition-all", isMuted ? "bg-red-600 border-red-400" : "border-white/20 hover:border-violet-500")}
+                  className={cn("h-11 w-11 rounded-full flex shrink-0 items-center justify-center border-2 transition-all sm:h-14 sm:w-14", isMuted ? "bg-red-600 border-red-400" : "border-white/20 hover:border-violet-500")}
                   title={isMuted ? "Unmute" : "Mute"}
                 >
                   {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
                 </button>
                 <button
                   onClick={toggleCamera}
-                  className={cn("w-14 h-14 rounded-full flex items-center justify-center border-2 transition-all", isVideoOn ? "bg-violet-500 border-violet-500 text-black" : "border-white/20 hover:border-violet-500")}
+                  className={cn("h-11 w-11 rounded-full flex shrink-0 items-center justify-center border-2 transition-all sm:h-14 sm:w-14", isVideoOn ? "bg-violet-500 border-violet-500 text-black" : "border-white/20 hover:border-violet-500")}
                   title={isVideoOn ? "Turn off camera" : "Turn on camera"}
                 >
                   {isVideoOn ? <Video className="w-6 h-6" /> : <VideoOff className="w-6 h-6" />}
                 </button>
                 <button
                   onClick={shareScreen}
-                  className={cn("w-14 h-14 rounded-full flex items-center justify-center border-2 transition-all", isSharingScreen ? "bg-fuchsia-600 border-fuchsia-400 text-black" : "border-white/20 hover:border-fuchsia-400")}
+                  className={cn("h-11 w-11 rounded-full flex shrink-0 items-center justify-center border-2 transition-all sm:h-14 sm:w-14", isSharingScreen ? "bg-fuchsia-600 border-fuchsia-400 text-black" : "border-white/20 hover:border-fuchsia-400")}
                   title="Share screen"
                 >
                   <MonitorUp className="w-6 h-6" />
                 </button>
                 <button
                   onClick={() => setCallEmoteOpen(v => !v)}
-                  className={cn("w-14 h-14 rounded-full flex items-center justify-center border-2 transition-all", callEmoteOpen ? "bg-fuchsia-500/20 border-fuchsia-400" : "border-white/20 hover:border-fuchsia-400")}
+                  className={cn("h-11 w-11 rounded-full flex shrink-0 items-center justify-center border-2 transition-all sm:h-14 sm:w-14", callEmoteOpen ? "bg-fuchsia-500/20 border-fuchsia-400" : "border-white/20 hover:border-fuchsia-400")}
                   title="Emotes"
                 >
                   <Sparkles className="w-6 h-6" />
                 </button>
                 <button
                   onClick={() => setCallSoundboardOpen(v => !v)}
-                  className={cn("w-14 h-14 rounded-full flex items-center justify-center border-2 transition-all", callSoundboardOpen ? "bg-violet-500/20 border-violet-500" : "border-white/20 hover:border-violet-500")}
+                  className={cn("h-11 w-11 rounded-full flex shrink-0 items-center justify-center border-2 transition-all sm:h-14 sm:w-14", callSoundboardOpen ? "bg-violet-500/20 border-violet-500" : "border-white/20 hover:border-violet-500")}
                   title="Soundboard"
                 >
                   <Volume2 className="w-6 h-6" />
                 </button>
                 <button
                   onClick={() => endCall()}
-                  className="px-10 h-14 bg-red-700 border-2 border-red-500 flex items-center gap-3 font-display tracking-widest uppercase hover:bg-red-600 transition-colors"
+                  className="flex h-11 shrink-0 items-center gap-2 border-2 border-red-500 bg-red-700 px-5 font-display text-xs tracking-widest uppercase transition-colors hover:bg-red-600 sm:h-14 sm:gap-3 sm:px-10 sm:text-sm"
                 >
                   <PhoneOff className="w-6 h-6" /> End
                 </button>
               </div>
             </motion.div>
           )}
-        </AnimatePresence>
+        </AnimatePresence>, document.body)}
 
         {/* ======================================================
             MODALS
