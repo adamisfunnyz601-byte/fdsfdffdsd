@@ -6,7 +6,9 @@ import { z } from "zod";
 
 type LoginRequest = z.infer<typeof api.auth.login.input>;
 
-type LoginCredentials = LoginRequest;
+type LoginCredentials = Omit<LoginRequest, "turnstileToken"> & {
+  turnstileToken?: string;
+};
 
 export function useAuth() {
   const queryClient = useQueryClient();
