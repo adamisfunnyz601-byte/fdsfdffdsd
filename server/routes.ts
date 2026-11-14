@@ -1,6 +1,6 @@
 
 import { db } from "./db";
-import { users, accessKeys, searchHistory, messages, groupChats, groupChatMembers, customEmojis, friendRequests, blocks, oauthAccounts, moderationLogs, blockBlastScores, communityServers, communityServerMembers, communityServerCategories, communityServerChannels, communityServerMessages, chatMessageReactions, chatPolls, chatPollOptions, chatPollVotes } from "@shared/schema";
+import { users, accessKeys, searchHistory, messages, groupChats, groupChatMembers, customEmojis, friendRequests, blocks, oauthAccounts, moderationLogs, blockBlastScores, communityServers, communityServerMembers, communityServerCategories, communityServerChannels, communityServerMessages, chatMessageReactions, chatPolls, chatPollOptions, chatPollVotes, passkeyCredentials } from "@shared/schema";
 import { eq, desc, and, or, gt, sql, inArray } from "drizzle-orm";
 import type { Express, Request } from "express";
 import type { Server } from "http";
@@ -41,6 +41,7 @@ declare module "express-session" {
       redirectUri: string;
       returnTo: string;
     };
+    passkeyFlow?: { challenge: string; userId: number; purpose: "register" | "login"; expiresAt: number };
   }
 }
 
@@ -432,6 +433,137 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("[oauth] Callback failed:", error?.message || error);
       return res.redirect("/?oauth=failed");
+    }
+  });
+
+  // Passkey registration and authentication use WebAuthn challenges stored in the session.
+  const getWebAuthnSettings = () => {
+    const configuredOrigin = process.env.WEBAUTHN_ORIGIN || (process.env.NODE_ENV !== "production" ? "http://localhost:5000" : "");
+    if (!configuredOrigin) throw new Error("Set WEBAUTHN_ORIGIN to the public HTTPS NEXUS website origin before enabling passkeys.");
+    const parsedOrigin = new URL(configuredOrigin);
+    if (process.env.NODE_ENV === "production" && parsedOrigin.protocol !== "https:") throw new Error("WEBAUTHN_ORIGIN must use HTTPS in production.");
+    return { expectedOrigin: parsedOrigin.origin, rpID: process.env.WEBAUTHN_RP_ID || parsedOrigin.hostname };
+  };
+
+  app.post("/api/auth/passkeys/register/options", requireAuth, async (req, res) => {
+    try {
+      const { generateRegistrationOptions } = await import("@simplewebauthn/server");
+      const { expectedOrigin, rpID } = getWebAuthnSettings();
+      const account = await storage.getUser(Number(req.session.userId!));
+      if (!account) return res.status(404).json({ message: "NEXUS account not found." });
+      const existing = await db.select().from(passkeyCredentials).where(eq(passkeyCredentials.userId, account.id));
+      const options = await generateRegistrationOptions({
+        rpName: "NEXUS",
+        rpID,
+        userID: Buffer.from(String(account.id)),
+        userName: account.username,
+        userDisplayName: account.displayName || account.username,
+        attestationType: "none",
+        authenticatorSelection: { residentKey: "required", userVerification: "preferred" },
+        excludeCredentials: existing.map(item => ({ id: item.credentialId, transports: item.transports })),
+      });
+      req.session.passkeyFlow = { challenge: options.challenge, userId: account.id, purpose: "register", expiresAt: Date.now() + 120000 };
+      await saveSession(req);
+      return res.json(options);
+    } catch (error: any) {
+      console.error("[passkey] Registration options failed:", error?.message || error);
+      return res.status(503).json({ message: error?.message || "Could not prepare passkey registration." });
+    }
+  });
+
+  app.post("/api/auth/passkeys/register/verify", requireAuth, async (req, res) => {
+    try {
+      const flow = req.session.passkeyFlow;
+      if (!flow || flow.purpose !== "register" || flow.userId !== Number(req.session.userId!) || flow.expiresAt < Date.now()) {
+        return res.status(400).json({ message: "Passkey registration expired. Try again." });
+      }
+      const { verifyRegistrationResponse } = await import("@simplewebauthn/server");
+      const { expectedOrigin, rpID } = getWebAuthnSettings();
+      const verification = await verifyRegistrationResponse({
+        response: req.body?.response,
+        expectedChallenge: flow.challenge,
+        expectedOrigin,
+        expectedRPID: rpID,
+        requireUserVerification: false,
+      });
+      if (!verification.verified || !verification.registrationInfo) return res.status(400).json({ message: "Passkey verification failed." });
+      const credential = verification.registrationInfo.credential;
+      await db.insert(passkeyCredentials).values({
+        userId: flow.userId,
+        credentialId: credential.id,
+        publicKey: Buffer.from(credential.publicKey).toString("base64url"),
+        counter: credential.counter,
+        transports: credential.transports || [],
+      }).onConflictDoNothing();
+      delete req.session.passkeyFlow;
+      await saveSession(req);
+      return res.json({ verified: true });
+    } catch (error: any) {
+      console.error("[passkey] Registration verification failed:", error?.message || error);
+      return res.status(400).json({ message: error?.message || "Could not verify this passkey." });
+    }
+  });
+
+  app.post("/api/auth/passkeys/login/options", authRateLimit, async (req, res) => {
+    try {
+      const username = String(req.body?.username || "").trim();
+      if (!username) return res.status(400).json({ message: "Enter your NEXUS username first." });
+      const [account] = await db.select().from(users).where(eq(users.username, username)).limit(1);
+      if (!account) return res.status(404).json({ message: "No passkey-enabled account was found." });
+      const credentials = await db.select().from(passkeyCredentials).where(eq(passkeyCredentials.userId, account.id));
+      if (!credentials.length) return res.status(404).json({ message: "This account has no registered passkeys yet." });
+      const { generateAuthenticationOptions } = await import("@simplewebauthn/server");
+      const { rpID } = getWebAuthnSettings();
+      const options = await generateAuthenticationOptions({
+        rpID,
+        userVerification: "preferred",
+        allowCredentials: credentials.map(item => ({ id: item.credentialId, transports: item.transports })),
+      });
+      req.session.passkeyFlow = { challenge: options.challenge, userId: account.id, purpose: "login", expiresAt: Date.now() + 120000 };
+      await saveSession(req);
+      return res.json(options);
+    } catch (error: any) {
+      console.error("[passkey] Authentication options failed:", error?.message || error);
+      return res.status(503).json({ message: error?.message || "Could not prepare passkey sign-in." });
+    }
+  });
+
+  app.post("/api/auth/passkeys/login/verify", authRateLimit, async (req, res) => {
+    try {
+      const flow = req.session.passkeyFlow;
+      if (!flow || flow.purpose !== "login" || flow.expiresAt < Date.now()) return res.status(400).json({ message: "Passkey sign-in expired. Try again." });
+      const credentialId = String(req.body?.response?.id || "");
+      const [credential] = await db.select().from(passkeyCredentials)
+        .where(and(eq(passkeyCredentials.credentialId, credentialId), eq(passkeyCredentials.userId, flow.userId))).limit(1);
+      if (!credential) return res.status(401).json({ message: "This passkey is not registered to that account." });
+      const { verifyAuthenticationResponse } = await import("@simplewebauthn/server");
+      const { expectedOrigin, rpID } = getWebAuthnSettings();
+      const verification = await verifyAuthenticationResponse({
+        response: req.body?.response,
+        expectedChallenge: flow.challenge,
+        expectedOrigin,
+        expectedRPID: rpID,
+        credential: {
+          id: credential.credentialId,
+          publicKey: new Uint8Array(Buffer.from(credential.publicKey, "base64url")),
+          counter: credential.counter,
+          transports: credential.transports,
+        },
+        requireUserVerification: false,
+      });
+      if (!verification.verified) return res.status(401).json({ message: "Passkey verification failed." });
+      await db.update(passkeyCredentials).set({ counter: verification.authenticationInfo.newCounter }).where(eq(passkeyCredentials.id, credential.id));
+      const account = await storage.getUser(flow.userId);
+      if (!account) return res.status(404).json({ message: "NEXUS account not found." });
+      delete req.session.passkeyFlow;
+      await regenerateSession(req);
+      req.session.userId = account.id;
+      req.session.role = account.role;
+      await saveSession(req);
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("[passkey] Authentication verification failed:", error?.message || error);
+      return res.status(401).json({ message: error?.message || "Passkey sign-in failed." });
     }
   });
 
