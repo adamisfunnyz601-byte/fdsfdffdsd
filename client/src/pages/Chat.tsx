@@ -2131,7 +2131,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
                       </div>
                     </div>
                   </div>}
-                  <div className="absolute bottom-4 right-4 z-10 w-36 sm:w-48 aspect-video overflow-hidden rounded-xl border-2 border-violet-400/60 bg-[#10091b] shadow-2xl">
+                  <div className="nexus-local-call-preview fixed z-[850] aspect-video overflow-hidden rounded-xl border-2 border-violet-400/60 bg-[#10091b] shadow-2xl" style={{ position: "fixed", right: "max(12px, env(safe-area-inset-right))", bottom: "calc(6.75rem + env(safe-area-inset-bottom))", width: "clamp(104px, 22vw, 208px)" }}>
                     <video ref={localVideoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
                     {!isVideoOn && <div className="absolute inset-0 flex items-center justify-center text-[9px] font-mono text-violet-200/50">CAMERA OFF</div>}
                     <span className="absolute bottom-1 left-2 text-[8px] font-mono text-white bg-black/50 px-1.5 py-0.5">YOU</span>
