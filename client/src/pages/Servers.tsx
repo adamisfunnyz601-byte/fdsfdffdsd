@@ -1,3 +1,4 @@
+import { apiUrl } from "@/lib/api-url";
 import { useEffect, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { useToast } from "@/hooks/use-toast";
@@ -7,7 +8,7 @@ import { Hash, Plus, Compass, Users, Settings, Copy, Send, ChevronDown, Loader2,
 type ServerSummary={id:number;name:string;description:string;visibility:string;inviteCode:string;ownerId:number;role:string|null};
 type ServerDetail={server:any;member:any;categories:any[];channels:any[];members:any[]};
 const request=async(url:string,method="GET",body?:unknown)=>{
- const response=await fetch(url,{method,credentials:"include",headers:body?{"Content-Type":"application/json"}:undefined,body:body?JSON.stringify(body):undefined});
+ const response=await fetch(apiUrl(url),{method,credentials:"include",headers:body?{"Content-Type":"application/json"}:undefined,body:body?JSON.stringify(body):undefined});
  const data=await response.json().catch(()=>({}));
  if(!response.ok)throw new Error(data.message||`Request failed (${response.status})`);
  return data;
