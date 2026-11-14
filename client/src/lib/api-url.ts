@@ -1,6 +1,6 @@
 import { Capacitor } from "@capacitor/core";
 
-const NEXUS_API_ORIGIN = "https://secure-web-gateway--c00le5tp3rs0n3v.replit.app";
+const NEXUS_API_ORIGIN = "https://nexus.is-a.bot";
 
 export function apiUrl(path: string): string {
   if (/^https?:\/\//i.test(path)) return path;
