@@ -58,6 +58,15 @@ export function NexusCallPanel({targetId,targetName}:Props) {
   },[]);
 
   useEffect(()=>{
+    if(!call || status==="Connected")return;
+    const timer=window.setTimeout(()=>{
+      const active=callRef.current;
+      if(active){void post("/api/chat/voice/end",{callId:active.callId}).catch(()=>{});cleanup();setError("No answer — the call was ended.");}
+    },45000);
+    return()=>window.clearTimeout(timer);
+  },[call?.callId,status,cleanup]);
+
+  useEffect(()=>{
     const video=remoteVideoRef.current;
     if(video)video.srcObject=remoteStream;
   },[remoteStream,call]);
@@ -183,7 +192,7 @@ export function NexusCallPanel({targetId,targetName}:Props) {
       <button type="button" disabled={!targetId||!!call} onClick={()=>void startCall(true)} title="Start video call" aria-label="Start video call" className="grid h-9 w-9 place-items-center rounded-xl border border-white/10 bg-white/5 text-white/70 hover:bg-violet-500/20 disabled:opacity-30"><Video size={16}/></button>
     </div>
     {incoming&&<div className="fixed bottom-5 right-5 z-[90] w-[min(360px,calc(100vw-2rem))] rounded-2xl border border-violet-300/25 bg-[#151321]/95 p-4 text-white shadow-2xl backdrop-blur-2xl">
-      <div className="flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-full bg-violet-500/20"><Phone size={18}/></span><div className="min-w-0 flex-1"><p className="font-semibold">{incoming.fromName}</p><p className="text-xs text-white/55">Incoming {incoming.withVideo?"video":"voice"} call</p></div><button type="button" onClick={()=>setIncoming(null)} aria-label="Dismiss" className="text-white/45"><X size={16}/></button></div>
+      <div className="flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-full bg-violet-500/20"><Phone size={18}/></span><div className="min-w-0 flex-1"><p className="font-semibold">{incoming.fromName}</p><p className="text-xs text-white/55">Incoming {incoming.withVideo?"video":"voice"} call</p></div><button type="button" onClick={()=>{void post("/api/chat/voice/decline",{callId:incoming.callId}).catch(()=>{});setIncoming(null);}} aria-label="Decline call" className="text-white/45"><X size={16}/></button></div>
       <div className="mt-4 flex gap-2"><button type="button" onClick={()=>void acceptCall()} className="nexus-btn nexus-btn--glow flex flex-1 items-center justify-center gap-2 rounded-xl py-2 text-sm"><Phone size={15}/> Accept</button><button type="button" onClick={()=>{void post("/api/chat/voice/decline",{callId:incoming.callId}).catch(()=>{});setIncoming(null);}} className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-rose-400/25 bg-rose-500/15 py-2 text-sm text-rose-200"><PhoneOff size={15}/> Decline</button></div>
     </div>}
     {call&&<div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/70 p-3 backdrop-blur-lg">
