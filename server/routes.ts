@@ -67,6 +67,12 @@ function saveSession(req: Request) {
   });
 }
 
+function regenerateSession(req: Request) {
+  return new Promise<void>((resolve, reject) => {
+    req.session.regenerate((error) => error ? reject(error) : resolve());
+  });
+}
+
 function profileImageUrl(
   userId: number,
   kind: ProfileImageKind,
