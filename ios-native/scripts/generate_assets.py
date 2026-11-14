@@ -16,6 +16,11 @@ themes = [
     ("NexusWallpaperAmethyst", (20, 7, 26), (100, 30, 105), (235, 105, 190)),
     ("NexusWallpaperAurora", (4, 18, 25), (20, 95, 100), (100, 220, 190)),
     ("NexusWallpaperEmber", (24, 9, 12), (105, 35, 62), (240, 130, 90)),
+    ("NexusWallpaperIce", (5, 15, 30), (30, 75, 120), (135, 215, 255)),
+    ("NexusWallpaperRose", (24, 7, 22), (115, 35, 78), (255, 145, 190)),
+    ("NexusWallpaperCarbon", (8, 10, 15), (42, 48, 62), (145, 160, 190)),
+    ("NexusWallpaperLime", (8, 19, 13), (35, 95, 55), (175, 235, 120)),
+    ("NexusWallpaperSolar", (24, 16, 6), (120, 82, 25), (255, 205, 100)),
 ]
 for name, c0, c1, c2 in themes:
     y, x = np.mgrid[0:H, 0:W].astype(np.float32)
@@ -79,6 +84,24 @@ for name, freqs, duration, kind in sounds:
         frames.extend(struct.pack("<h", value))
     with wave.open(str(ROOT / f"{name}.wav"), "wb") as out:
         out.setnchannels(1); out.setsampwidth(2); out.setframerate(sample_rate); out.writeframes(frames)
+
+# Native app icon and Xcode asset catalog.
+icon_dir = ROOT / "Assets.xcassets" / "AppIcon.appiconset"
+icon_dir.mkdir(parents=True, exist_ok=True)
+icon = Image.new("RGB", (1024, 1024), (10, 8, 24))
+icon_draw = ImageDraw.Draw(icon, "RGBA")
+for radius, alpha in [(430, 24), (350, 30), (270, 38)]:
+    icon_draw.ellipse((512-radius, 512-radius, 512+radius, 512+radius), fill=(135, 80, 240, alpha))
+icon_draw.rounded_rectangle((250, 250, 774, 774), radius=120, outline=(178, 125, 255, 255), width=26, fill=(35, 20, 70))
+icon_draw.rounded_rectangle((390, 390, 634, 634), radius=55, outline=(220, 195, 255, 255), width=24)
+for x in range(420, 605, 46):
+    icon_draw.line((x, 330, x, 390), fill=(190, 145, 255, 255), width=15)
+    icon_draw.line((x, 634, x, 694), fill=(190, 145, 255, 255), width=15)
+for y in range(420, 605, 46):
+    icon_draw.line((330, y, 390, y), fill=(190, 145, 255, 255), width=15)
+    icon_draw.line((634, y, 694, y), fill=(190, 145, 255, 255), width=15)
+icon.save(icon_dir / "AppIcon.png", "PNG", optimize=True)
+(icon_dir / "Contents.json").write_text('{"images":[{"filename":"AppIcon.png","idiom":"universal","platform":"ios","size":"1024x1024"}],"info":{"author":"xcode","version":1}}', encoding="utf-8")
 
 # Xcode asset catalog for selectable bundled wallpapers.
 assets = ROOT / "Assets.xcassets"

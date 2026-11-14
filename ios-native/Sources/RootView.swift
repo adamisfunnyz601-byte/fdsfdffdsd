@@ -203,7 +203,7 @@ struct RootView: View {
             }
             Label("WALLPAPER STUDIO", systemImage: "photo.on.rectangle.angled").font(.system(size: 10, weight: .bold, design: .monospaced)).tracking(2).padding(.top, 8)
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                ForEach(["NexusWallpaperViolet", "NexusWallpaperMidnight", "NexusWallpaperAmethyst", "NexusWallpaperAurora", "NexusWallpaperEmber"], id: \.self) { name in
+                ForEach(["NexusWallpaperViolet", "NexusWallpaperMidnight", "NexusWallpaperAmethyst", "NexusWallpaperAurora", "NexusWallpaperEmber", "NexusWallpaperIce", "NexusWallpaperRose", "NexusWallpaperCarbon", "NexusWallpaperLime", "NexusWallpaperSolar"], id: \.self) { name in
                     Button { wallpaper = name } label: {
                         ZStack(alignment: .bottomLeading) {
                             Image(name).resizable().scaledToFill().frame(height: 58).clipped()
