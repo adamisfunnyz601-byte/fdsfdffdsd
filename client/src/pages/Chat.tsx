@@ -38,7 +38,6 @@ const VOICE_AUDIO_CONSTRAINTS: MediaTrackConstraints = {
   autoGainControl: { ideal: true },
   channelCount: { ideal: 1 },
   sampleRate: { ideal: 48000 },
-  latency: { ideal: 0.02 },
 };
 
 const DEFAULT_SOUNDS = [
@@ -1992,7 +1991,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
         e.preventDefault();
         if (moderationUserOptions.length) insertModerationTarget(targetOption);
         else if (parameterOptions.length) insertParameter(option);
-        else insertCommand(option.name);
+        else if (matchingCommands[commandSelection]) insertCommand(matchingCommands[commandSelection].name);
       }
       return;
     }
