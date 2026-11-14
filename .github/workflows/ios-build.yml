@@ -46,9 +46,10 @@ jobs:
           test -d ios/App/App/public/assets
           echo "iOS-bundled frontend:"
           du -sh ios/App/App/public
+          test -d ios/App/App.xcodeproj
       - name: Build unsigned iOS archive
         run: |
-          xcodebuild -workspace ios/App/App.xcworkspace -scheme App -configuration Release -sdk iphoneos -archivePath "$PWD/NEXUS.xcarchive" archive CODE_SIGNING_ALLOWED=NO
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -sdk iphoneos -archivePath "$PWD/NEXUS.xcarchive" archive CODE_SIGNING_ALLOWED=NO
       - name: Package unsigned IPA
         run: |
           APP_PATH="$PWD/NEXUS.xcarchive/Products/Applications/App.app"
