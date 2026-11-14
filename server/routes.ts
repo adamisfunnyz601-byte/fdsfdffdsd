@@ -2,7 +2,7 @@
 import { db } from "./db";
 import { users, accessKeys, searchHistory, messages, groupChats, groupChatMembers, customEmojis, friendRequests, blocks, oauthAccounts, moderationLogs, blockBlastScores, communityServers, communityServerMembers, communityServerCategories, communityServerChannels, communityServerMessages, chatMessageReactions, chatPolls, chatPollOptions, chatPollVotes } from "@shared/schema";
 import { eq, desc, and, or, gt, sql, inArray } from "drizzle-orm";
-import type { Express, Request, RequestHandler } from "express";
+import type { Express, Request } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
@@ -1376,7 +1376,6 @@ export async function registerRoutes(
         if (!fonts.includes(rawFont) && !customText && !customFont) return res.status(400).json({message:"Unsupported font or text gradient."});
         const current = await storage.getUser(req.session.userId!);
         const fontName = customText ? rawFont.split("|")[1] : rawFont;
-        const usesCustomFont = customText || customFont || fontName === "comic-sans";
 
         update.usernameFont = rawFont || null;
       }
