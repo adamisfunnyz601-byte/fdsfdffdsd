@@ -469,7 +469,7 @@ export async function registerRoutes(
         userDisplayName: account.displayName || account.username,
         attestationType: "none",
         authenticatorSelection: { residentKey: "required", userVerification: "preferred" },
-        excludeCredentials: existing.map(item => ({ id: item.credentialId, transports: item.transports })),
+        excludeCredentials: existing.map(item => ({ id: item.credentialId, transports: item.transports as any })),
       });
       req.session.passkeyFlow = { challenge: options.challenge, userId: account.id, purpose: "register", expiresAt: Date.now() + 120000 };
       await saveSession(req);
@@ -526,7 +526,7 @@ export async function registerRoutes(
       const options = await generateAuthenticationOptions({
         rpID,
         userVerification: "preferred",
-        allowCredentials: credentials.map(item => ({ id: item.credentialId, transports: item.transports })),
+        allowCredentials: credentials.map(item => ({ id: item.credentialId, transports: item.transports as any })),
       });
       req.session.passkeyFlow = { challenge: options.challenge, userId: account.id, purpose: "login", expiresAt: Date.now() + 120000 };
       await saveSession(req);
@@ -556,7 +556,7 @@ export async function registerRoutes(
           id: credential.credentialId,
           publicKey: new Uint8Array(Buffer.from(credential.publicKey, "base64url")),
           counter: credential.counter,
-          transports: credential.transports,
+          transports: credential.transports as any,
         },
         requireUserVerification: false,
       });
