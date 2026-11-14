@@ -1,6 +1,6 @@
 import { Capacitor } from "@capacitor/core";
 
-const NEXUS_API_ORIGIN = "https://nexus.is-a.bot";
+const NEXUS_API_ORIGIN = "https://nexus.tunnelto.me";
 
 export function apiUrl(path: string): string {
   if (/^https?:\/\//i.test(path)) return path;
