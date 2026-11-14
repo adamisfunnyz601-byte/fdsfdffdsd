@@ -5,6 +5,7 @@ import { CyberInput } from "@/components/CyberInput";
 import { CyberButton } from "@/components/CyberButton";
 import { Lock, UserRoundPlus, Eye, EyeOff } from "lucide-react";
 import { useLocation } from "wouter";
+import { startAuthentication } from "@simplewebauthn/browser";
 
 export default function Login() {
   const [mode, setMode] = useState<"login" | "register">(
@@ -14,6 +15,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [registering, setRegistering] = useState(false);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
   const [error, setError] = useState("");
   const { login, isLoggingIn, user } = useAuth();
   const [, setLocation] = useLocation();
@@ -23,6 +25,30 @@ export default function Login() {
   }, [user, setLocation]);
 
   if (user) return null;
+
+  const signInWithPasskey = async () => {
+    const cleanUsername = username.trim();
+    if (!cleanUsername) { setError("Enter your NEXUS username before using your passkey."); return; }
+    setPasskeyBusy(true); setError("");
+    try {
+      const optionsResponse = await fetch(apiUrl("/api/auth/passkeys/login/options"), {
+        method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: cleanUsername }),
+      });
+      const options = await optionsResponse.json().catch(() => ({}));
+      if (!optionsResponse.ok) throw new Error(options.message || "Could not start passkey sign-in.");
+      const response = await startAuthentication({ optionsJSON: options });
+      const verifyResponse = await fetch(apiUrl("/api/auth/passkeys/login/verify"), {
+        method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ response }),
+      });
+      const verified = await verifyResponse.json().catch(() => ({}));
+      if (!verifyResponse.ok || !verified.success) throw new Error(verified.message || "Passkey sign-in failed.");
+      window.location.assign("/chat");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Passkey sign-in failed.");
+    } finally { setPasskeyBusy(false); }
+  };
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -84,6 +110,7 @@ export default function Login() {
             </CyberButton>
           </form>
           <a href={apiUrl("/api/auth/oauth/google?returnTo=%2Fchat")} className="mt-4 flex w-full items-center justify-center gap-3 rounded-lg border border-white/15 bg-white/[0.06] px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/[0.12]"><span className="grid h-5 w-5 place-items-center rounded-full bg-white text-xs font-black text-[#4285f4]">G</span> Continue with Google</a>
+          {mode === "login" && <button type="button" disabled={passkeyBusy || !username.trim()} onClick={() => void signInWithPasskey()} className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-violet-300/20 bg-violet-500/10 px-4 py-3 text-sm font-semibold text-violet-100 transition hover:bg-violet-500/20 disabled:opacity-40">{passkeyBusy ? "Waiting for passkey…" : "Sign in with a passkey"}</button>}
         </div>
       </section>
     </main>
