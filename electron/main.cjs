@@ -1,7 +1,7 @@
-const { app, BrowserWindow, shell } = require("electron");
+const { app, BrowserWindow, shell, session } = require("electron");
 const path = require("node:path");
 
-const APP_URL = "https://secure-web-gateway--c00le5tp3rs0n3v.replit.app";
+const APP_URL = process.env.NEXUS_APP_URL || "https://secure-web-gateway--c00le5tp3rs0n3v.replit.app";
 const APP_ORIGIN = new URL(APP_URL).origin;
 
 let mainWindow;
@@ -21,8 +21,8 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 920,
-    minWidth: 900,
-    minHeight: 620,
+    minWidth: 360,
+    minHeight: 480,
     show: false,
     autoHideMenuBar: true,
     backgroundColor: "#09090b",
@@ -69,7 +69,12 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  app.setAppUserModelId("com.securewebgateway.desktop");
+  app.setAppUserModelId("com.nexusos.app");
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    let trustedOrigin = false;
+    try { trustedOrigin = new URL(webContents.getURL()).origin === APP_ORIGIN; } catch {}
+    callback(trustedOrigin && ["notifications", "media"].includes(permission));
+  });
   createWindow();
 
   app.on("activate", () => {
