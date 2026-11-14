@@ -106,7 +106,7 @@ jobs:
           from pathlib import Path
           path = Path("ios/App/App.xcodeproj/project.pbxproj")
           text = path.read_text()
-          text = text.replace("PRODUCT_BUNDLE_IDENTIFIER = com.nexusos.app;", "CODE_SIGN_ENTITLEMENTS = App/App.entitlements;\n\\t\\t\\t\\tPRODUCT_BUNDLE_IDENTIFIER = com.nexusos.app;")
+          text = text.replace("PRODUCT_BUNDLE_IDENTIFIER = com.nexusos.app;", "CODE_SIGN_ENTITLEMENTS = App/App.entitlements;\n                PRODUCT_BUNDLE_IDENTIFIER = com.nexusos.app;")
           path.write_text(text)
           PY
       - name: Archive signed iOS app
