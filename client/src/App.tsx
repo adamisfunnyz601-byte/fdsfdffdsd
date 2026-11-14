@@ -7,7 +7,6 @@ import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
 
 import Login from "@/pages/Login";
-import SignUp from "@/pages/SignUp";
 import Proxy from "@/pages/Proxy";
 import History from "@/pages/History";
 import Admin from "@/pages/Admin";
@@ -52,7 +51,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Login} />
-      <Route path="/signup" component={SignUp} />
+      <Route path="/signup" component={Login} />
       <Route path="/invite/:code">{params => <Invite code={params.code} />}</Route>
       <Route path="/gift/:code">{params => <DihhroGift code={params.code} />}</Route>
       <Route path="/proxy">
