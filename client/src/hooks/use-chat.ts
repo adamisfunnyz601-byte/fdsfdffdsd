@@ -21,7 +21,7 @@ export function useChat({ recipientId = null, groupId = null }: ChatChannel = {}
   const messagesUrl = channelParams.toString()
     ? `${api.chat.list.path}?${channelParams.toString()}`
     : api.chat.list.path;
-  const messagesKey = [api.chat.list.path, recipientId ?? null, groupId ?? null] as const;
+  const messagesKey = [api.chat.list.path, user?.id ?? null, recipientId ?? null, groupId ?? null] as const;
 
   const { data: messages, isLoading: isLoadingMessages } = useQuery({
     queryKey: messagesKey,
@@ -39,9 +39,13 @@ export function useChat({ recipientId = null, groupId = null }: ChatChannel = {}
           : message;
       });
     },
-    enabled: Boolean(recipientId || groupId),
-    refetchInterval: 2500,
-    refetchIntervalInBackground: true,
+    enabled: Boolean(user?.id),
+    // Global chat has no recipient/group ID; it must still poll so every device
+    // reads the same Neon-backed conversation. Pause background polling to avoid
+    // unnecessary requests through mobile webviews and reverse proxies.
+    refetchInterval: 4000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
     staleTime: 250,
   });
 
