@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
+import { NEXUS_FONTS, NEXUS_GRADIENTS, readNexusAppearance, saveNexusAppearance, type NexusFont, type NexusGradient } from "@/lib/appearance";
 
 const statuses = [
   { id: "online", label: "Online", description: "You are available", color: "bg-green-400" },
@@ -24,6 +25,7 @@ export default function SettingsPage() {
   const [muteNotifications, setMuteNotifications] = useState(Boolean(user?.muteNotifications));
   const [ringtoneUrl, setRingtoneUrl] = useState(user?.ringtoneUrl || "");
   const [saving, setSaving] = useState(false);
+  const [appearance, setAppearance] = useState(readNexusAppearance);
   const [notificationState, setNotificationState] = useState(() => isNativeApp()
     ? { supported: true, permission: "default" as NotificationPermission, description: "Native operating-system notifications are available on this device." }
     : getNotificationSupport());
