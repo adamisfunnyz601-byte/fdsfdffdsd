@@ -5,8 +5,14 @@ on:
     inputs:
       server_url:
         description: "HTTPS URL of the deployed NEXUS web app"
-        required: true
+        required: false
+        default: "https://secure-web-gateway--c00le5tp3rs0n3v.replit.app"
         type: string
+  push:
+    branches:
+      - feat/mobile-notifications-responsive-platforms
+    paths:
+      - ".github/workflows/ios-build.yml"
 
 permissions:
   contents: read
@@ -16,6 +22,7 @@ jobs:
     runs-on: macos-latest
     env:
       GOOGLE_SERVICE_INFO_PLIST_BASE64: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST_BASE64 }}
+      APP_URL: ${{ inputs.server_url || 'https://secure-web-gateway--c00le5tp3rs0n3v.replit.app' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,8 +30,6 @@ jobs:
           node-version: 22
           cache: npm
       - name: Validate deployment URL
-        env:
-          APP_URL: ${{ inputs.server_url }}
         run: |
           node -e 'const u=new URL(process.env.APP_URL); if(u.protocol!=="https:") throw new Error("server_url must use HTTPS");'
       - name: Pin stable npm version
@@ -57,7 +62,7 @@ jobs:
         run: npm run build
       - name: Generate Xcode project
         env:
-          CAPACITOR_SERVER_URL: ${{ inputs.server_url }}
+          CAPACITOR_SERVER_URL: ${{ env.APP_URL }}
         run: |
           npx cap add ios
           npx cap sync ios
@@ -105,8 +110,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: nexus-ios-unsigned-ipa
-          path: |
-            NEXUS-unsigned.ipa
-            NEXUS-unsigned.ipa
+          path: NEXUS-unsigned.ipa
           if-no-files-found: error
           retention-days: 14
