@@ -767,7 +767,7 @@ export async function registerRoutes(
       if (name === "me") return res.json({ message: args.join(" ").slice(0, 200) ? `* ${actor.username} ${args.join(" ").slice(0,200)}` : "Usage: /me <action>" });
       if (name === "shrug") return res.json({ message: "¯\\_(ツ)_/¯" });
       if (name === "8ball") return res.json({ message: ["Absolutely.","Probably.","Ask again later.","Unlikely.","No."][Math.floor(Math.random()*5)] });
-      if (name === "choose") return res.json({ message: args.join(" ").split("|").map(x=>x.trim()).filter(Boolean).sort(()=>Math.random()-.5)[0] || "Usage: /choose option A | option B" });
+      if (name === "choose") return res.json({ message: args.join(" ").split("|").map((x:string)=>x.trim()).filter(Boolean).sort(()=>Math.random()-.5)[0] || "Usage: /choose option A | option B" });
       if (name === "rules") return res.json({ message: "Be respectful, do not harass others, and follow the community rules." });
       if (name === "serverinfo") return res.json({ message: "Secure Web Gateway community chat." });
       if (name === "userinfo" || name === "profile" || name === "avatar") {
@@ -783,7 +783,7 @@ export async function registerRoutes(
     if (!target && args[0]) {
       const all = await storage.getAllUsers();
       target = all.find((u:any) => u.username.toLowerCase() === args[0].replace(/^@/,"").toLowerCase());
-      targetId = target?.id;
+      targetId = target?.id ?? 0;
     }
     if (needsTarget && (!target || !targetId)) return res.status(400).json({ message: "Specify a valid target username or user ID." });
     if (target) {
