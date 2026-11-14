@@ -36,7 +36,7 @@ export default function Login() {
     try {
       const response = await fetch(apiUrl("/api/auth/register"), {
         method: "POST",
-        credentials: "same-origin",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: cleanUsername, password }),
       });
