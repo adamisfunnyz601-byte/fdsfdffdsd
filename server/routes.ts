@@ -1,6 +1,6 @@
 
 import { db } from "./db";
-import { users, accessKeys, searchHistory, messages, groupChats, groupChatMembers, customEmojis, friendRequests, blocks, oauthAccounts, moderationLogs, blockBlastScores, dihhroAwards, communityServers, communityServerMembers, communityServerCategories, communityServerChannels, communityServerMessages, chatMessageReactions, chatPolls, chatPollOptions, chatPollVotes } from "@shared/schema";
+import { users, accessKeys, searchHistory, messages, groupChats, groupChatMembers, customEmojis, friendRequests, blocks, oauthAccounts, moderationLogs, blockBlastScores, communityServers, communityServerMembers, communityServerCategories, communityServerChannels, communityServerMessages, chatMessageReactions, chatPolls, chatPollOptions, chatPollVotes } from "@shared/schema";
 import { eq, desc, and, or, gt, sql, inArray } from "drizzle-orm";
 import type { Express, Request, RequestHandler } from "express";
 import type { Server } from "http";
@@ -784,16 +784,6 @@ export async function registerRoutes(
   const monthKeyFor = (d = new Date()) => d.getUTCFullYear() + "-" + String(d.getUTCMonth()+1).padStart(2,"0");
   app.get("/api/blockblast/leaderboard", requireAuth, async (req,res) => {
     const month = typeof req.query.month === "string" && /^\d{4}-\d{2}$/.test(req.query.month) ? req.query.month : monthKeyFor();
-    const now = new Date(); const previousDate = new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()-1,1)); const previousMonth = monthKeyFor(previousDate);
-    if (monthKeyFor() !== previousMonth) {
-      const [alreadyAwarded] = await db.select().from(dihhroAwards).where(eq(dihhroAwards.monthKey,previousMonth)).limit(1);
-      if (!alreadyAwarded) {
-        const previousRows = await db.select({userId:blockBlastScores.userId,score:blockBlastScores.score}).from(blockBlastScores).where(eq(blockBlastScores.monthKey,previousMonth)).orderBy(desc(blockBlastScores.score)).limit(100);
-        const monthlyBest = new Map<number,number>(); previousRows.forEach(row=>monthlyBest.set(row.userId,Math.max(monthlyBest.get(row.userId)||0,row.score)));
-        const winner = Array.from(monthlyBest.entries()).sort((a,b)=>b[1]-a[1])[0];
-        if (winner) { const winnerUser=await storage.getUser(winner[0]); const base=winnerUser?.dihhroUntil&&winnerUser.dihhroUntil>new Date()?winnerUser.dihhroUntil:new Date(); const expiry=new Date(base.getTime()+30*86400000); await db.update(users).set({dihhroUntil:expiry}).where(eq(users.id,winner[0])); await db.insert(dihhroAwards).values({userId:winner[0],monthKey:previousMonth,score:winner[1],expiresAt:expiry}); }
-      }
-    }
     const rows = await db.select({userId:blockBlastScores.userId,score:blockBlastScores.score,username:users.username,displayName:users.displayName}).from(blockBlastScores).innerJoin(users,eq(users.id,blockBlastScores.userId)).where(eq(blockBlastScores.monthKey,month)).orderBy(desc(blockBlastScores.score)).limit(100);
     const best = new Map<number,typeof rows[number]>(); rows.forEach(row=>{const old=best.get(row.userId);if(!old||row.score>old.score)best.set(row.userId,row);});
     res.json({month,entries:Array.from(best.values()).sort((a,b)=>b.score-a.score).map((row,index)=>({...row,rank:index+1}))});
@@ -1386,7 +1376,7 @@ export async function registerRoutes(
         if (!fonts.includes(rawFont) && !customText && !customFont) return res.status(400).json({message:"Unsupported font or text gradient."});
         const current = await storage.getUser(req.session.userId!);
         const fontName = customText ? rawFont.split("|")[1] : rawFont;
-        const usesDihhroFont = customText || customFont || fontName === "comic-sans";
+        const usesCustomFont = customText || customFont || fontName === "comic-sans";
 
         update.usernameFont = rawFont || null;
       }
@@ -2148,7 +2138,7 @@ export async function registerRoutes(
         <h2 style="color:#f55">[PROXY_ERROR]</h2>
         <p><b>TARGET:</b> ${req.query.url}</p>
         <p><b>REASON:</b> ${err.message || 'Connection refused or timeout'}</p>
-        <p style="color:#888">Some sites (Roblox, Google, etc.) block server-side requests with Cloudflare protection. Try: wikipedia.org, github.com, reddit.com</p>
+        <p style="color:#888">Some sites (Roblox, Google, etc.) block server-side requests. Try: wikipedia.org, github.com, reddit.com</p>
       </body></html>`);
     }
   });
