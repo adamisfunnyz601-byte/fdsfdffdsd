@@ -79,7 +79,7 @@ export function NexusAudioPlayer({ src, title = "Audio message", nexusFormat = f
     if (!audio) return;
     if (audio.paused) {
       try {
-        if (!audioContextRef.current && typeof AudioContext !== "undefined") {
+        if (!audioContextRef.current && typeof AudioContext !== "undefined" && (src.startsWith("data:") || src.startsWith("/"))) {
           const context = new AudioContext();
           const analyser = context.createAnalyser();
           analyser.fftSize = 256;
@@ -117,7 +117,7 @@ export function NexusAudioPlayer({ src, title = "Audio message", nexusFormat = f
 
   return (
     <div className="nexus-audio-player app-glass w-full max-w-xl rounded-2xl border border-white/10 p-3">
-      <audio ref={audioRef} src={src} preload="metadata" crossOrigin="anonymous" />
+      <audio ref={audioRef} src={src} preload="metadata" />
       <div className="flex items-center gap-3">
         <button type="button" onClick={toggle} aria-label={playing ? "Pause audio" : "Play audio"} className="nexus-btn nexus-btn--glow grid h-11 w-11 shrink-0 place-items-center rounded-xl text-white">
           {playing ? <Pause size={18} /> : <Play size={18} />}
