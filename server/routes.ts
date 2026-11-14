@@ -905,6 +905,19 @@ export async function registerRoutes(
 
   app.post(api.chat.send.path, requireAuth, async (req, res) => {
     const input = api.chat.send.input.parse(req.body);
+    if (input.mediaUrl) {
+      const mediaUrl = input.mediaUrl;
+      const dataMatch = /^data:(image\\/(?:png|jpeg|gif|webp)|video\\/(?:mp4|webm|quicktime)|audio\\/(?:mpeg|mp4|webm|ogg|wav|x-wav|flac|aac));base64,([A-Za-z0-9+/]*={0,2})$/i.exec(mediaUrl);
+      const isHttpUrl = /^https:\\/\\//i.test(mediaUrl) && mediaUrl.length <= 2048;
+      if (!dataMatch && !isHttpUrl) return res.status(400).json({ message: "Unsupported attachment format." });
+      if (dataMatch && Math.floor(dataMatch[2].length * 3 / 4) > 8 * 1024 * 1024) {
+        return res.status(413).json({ message: "Attachments must be 8 MB or smaller." });
+      }
+      const actualKind = dataMatch?.[1].split("/")[0];
+      if (actualKind && input.mediaType && !(input.mediaType === actualKind || (actualKind === "audio" && input.mediaType === "audio/namaf1"))) {
+        return res.status(400).json({ message: "Attachment type does not match its audio, image or video data." });
+      }
+    }
     const chatEmoteMatch = typeof input.content === "string" ? input.content.match(/^\[CHAT_EMOTE:(\d+)\]$/) : null;
     if (typeof input.content === "string" && input.content.startsWith("[CHAT_EMOTE:") && !chatEmoteMatch) return res.status(400).json({ message: "Invalid chat emote." });
     if (chatEmoteMatch) {
