@@ -71,7 +71,7 @@ jobs:
           from pathlib import Path
           path = Path("android/app/src/main/AndroidManifest.xml")
           xml = path.read_text()
-          permissions = '  <uses-permission android:name="android.permission.RECORD_AUDIO" />\n  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n'
+          permissions = '  <uses-permission android:name="android.permission.RECORD_AUDIO" />\n  <uses-permission android:name="android.permission.CAMERA" />\n  <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />\n  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n'
           if "android.permission.RECORD_AUDIO" not in xml:
               xml = xml.replace("<application", permissions + "  <application", 1)
               path.write_text(xml)
