@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, session } = require("electron");
+const { app, BrowserWindow, shell, session, desktopCapturer } = require("electron");
 const path = require("node:path");
 
 const API_URL = process.env.NEXUS_API_URL || "https://secure-web-gateway--c00le5tp3rs0n3v.replit.app";
@@ -63,6 +63,17 @@ function createWindow() {
 
 app.whenReady().then(() => {
   app.setAppUserModelId("com.nexusos.app");
+  // Let Chromium's getDisplayMedia() use the native OS picker for desktop sharing.
+  // The user chooses a screen/window; NEXUS never silently captures a display.
+  session.defaultSession.setDisplayMediaRequestHandler(async (_request, callback) => {
+    try {
+      const sources = await desktopCapturer.getSources({ types: ["screen", "window"], thumbnailSize: { width: 320, height: 180 } });
+      callback({ video: sources[0] });
+    } catch (error) {
+      console.error("NEXUS screen capture permission failed:", error);
+      callback({});
+    }
+  }, { useSystemPicker: true });
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
     let trustedOrigin = false;
     try {
