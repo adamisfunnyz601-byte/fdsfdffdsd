@@ -1,4 +1,4 @@
-name: Build iOS archive
+name: Build unsigned iOS IPA
 
 on:
   workflow_dispatch:
@@ -16,10 +16,6 @@ jobs:
     runs-on: macos-latest
     env:
       GOOGLE_SERVICE_INFO_PLIST_BASE64: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST_BASE64 }}
-      APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
-      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      APPLE_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -83,14 +79,12 @@ jobs:
           cp -R "$APP_PATH" "$RUNNER_TEMP/unsigned-ipa/Payload/App.app"
           (cd "$RUNNER_TEMP/unsigned-ipa" && /usr/bin/zip -qry "$GITHUB_WORKSPACE/NEXUS-unsigned.ipa" Payload)
           test -s "$GITHUB_WORKSPACE/NEXUS-unsigned.ipa"
-      - name: Upload Xcode project, unsigned IPA and archive
-
+      - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
-          name: nexus-ios-build
+          name: nexus-ios-unsigned-ipa
           path: |
-            NEXUS.xcarchive
-            ios/
+            NEXUS-unsigned.ipa
             NEXUS-unsigned.ipa
           if-no-files-found: error
           retention-days: 14
