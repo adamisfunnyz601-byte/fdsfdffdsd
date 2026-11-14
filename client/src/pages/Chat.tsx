@@ -102,10 +102,10 @@ const isValidModerationDuration = (value: string) =>
   value === 'null' || /^[1-9]\d*(m|min|mins|h|hr|hrs|d|day|days|w|wk|wks|mo|y)$/i.test(value.trim());
 
 // Slash-command help and autocomplete. The server still validates and executes commands.
-const MEMBER_COMMAND_NAMES = ["help","commands","poll","ai","me","shrug","roll","flip","nick","sfx","capsI","avatar","profile","serverinfo","userinfo","ping","whoami","rules","invite","coinflip","8ball","choose","quote","uptime"] as const;
+const MEMBER_COMMAND_NAMES = ["help","commands","poll","me","shrug","roll","flip","nick","sfx","capsI","avatar","profile","serverinfo","userinfo","ping","whoami","rules","invite","coinflip","8ball","choose","quote","uptime"] as const;
 const MODERATION_COMMAND_NAMES = ["ban","unban","kick","mute","unmute","timeout","untimeout","warn","warnings","clearwarnings","softban","tempban","permban","shadowban","unshadowban","jail","unjail","deafen","undeafen","freeze","unfreeze","slowmode","slowmodeoff","lock","unlock","lockdown","unlockdown","purge","purgeuser","purgebots","clear","slowchat","unslowchat","note","notes","clearnotes","strike","strikes","clearstrikes","report","reports","resolve","role","promote","demote","nickreset","restrict","unrestrict","unkick"] as const;
 const CHAT_COMMANDS = [
-  ...MEMBER_COMMAND_NAMES.map(name => ({ name, usage: name === "poll" ? "/poll [question]" : `/${name}`, description: name === "poll" ? "Create a live poll in this chat." : name === "ai" ? "Ask the shared Ollama-powered NEXUS AI." : name === "commands" ? "Browse all available chat commands." : "Member utility command." })),
+  ...MEMBER_COMMAND_NAMES.map(name => ({ name, usage: name === "poll" ? "/poll [question]" : `/${name}`, description: name === "poll" ? "Create a live poll in this chat." : name === "commands" ? "Browse all available chat commands." : "Member utility command." })),
   ...MODERATION_COMMAND_NAMES.map(name => ({ name, usage: `/${name} <@user> [duration] [reason]`, description: "Staff moderation command.", ownerOnly: true, options: MODERATION_DURATIONS })),
 ] as const;
 
@@ -1125,36 +1125,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     }
   };
 
-  const requestNexusAI = async (prompt: string) => {
-    if (!prompt.trim()) {
-      toast({ title: "Ask NEXUS AI something", description: "Usage: /ai your question" });
-      return;
-    }
-    const selectedUser = selectedRecipientId ? usersMap.get(selectedRecipientId) : null;
-    const isNexusDm = Boolean(selectedUser && selectedUser.role === "bot" && selectedUser.username === "nexus_ai_system");
-    if (selectedRecipientId && !isNexusDm) {
-      toast({ title: "NEXUS AI isn't in this DM", description: "Open the NEXUS AI conversation or ask it in Global Chat / a group.", variant: "destructive" });
-      return;
-    }
-    try {
-      const response = await apiFetch("/api/chat/ai", {
-        method: "POST", credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: prompt.trim(),
-          recipientId: isNexusDm ? selectedRecipientId : undefined,
-          groupId: selectedGroupId ?? undefined,
-        }),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.message || "NEXUS AI could not answer.");
-      queryClient.invalidateQueries({ queryKey: [api.chat.list.path] });
-      queryClient.invalidateQueries({ queryKey: chatInteractionsKey });
-      toast({ title: "NEXUS AI replied ✨", description: "Your conversation has been updated." });
-    } catch (error: any) {
-      toast({ title: "NEXUS AI unavailable", description: error.message || "Check that the local Ollama server and model are running.", variant: "destructive" });
-    }
-  };
+
 
   // ============================================================
   // SEND MESSAGE
@@ -1171,11 +1142,6 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     const commandArgs = (commandParts?.[2] || '').trim();
     if (commandName && MODERATION_COMMAND_NAMES.includes(commandName as any) && !canUseAdminCommand(commandName as keyof typeof ADMIN_COMMANDS_CONFIG.commands)) {
       toast({ title: 'OWNER ONLY', description: 'Only staff members can use this command.', variant: 'destructive' });
-      return;
-    }
-    if (commandName === "ai") {
-      setInputContent("");
-      await requestNexusAI(commandArgs);
       return;
     }
     if (commandName === "poll") {
@@ -1264,19 +1230,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
       return;
     }
 
-    // In NEXUS AI DMs, ordinary messages go directly to the bot.
-    // In Global Chat and groups, NEXUS AI only responds when explicitly pinged.
-    const selectedChatUser = selectedRecipientId ? usersMap.get(selectedRecipientId) : null;
-    const isNexusAiDm = Boolean(selectedChatUser?.role === "bot" && selectedChatUser?.username === "nexus_ai_system");
-    const aiMention = messageContent.match(/@nexus(?:[ _-]?ai(?:[_-]?system)?)(?=$|[\s,:!?])/i);
-    if (!uploadFile && (isNexusAiDm || aiMention)) {
-      const aiPrompt = isNexusAiDm
-        ? messageContent.trim()
-        : messageContent.replace(/@nexus(?:[ _-]?ai(?:[_-]?system)?)(?=$|[\s,:!?])/i, "").trim();
-      setInputContent("");
-      await requestNexusAI(aiPrompt);
-      return;
-    }
+
 
     if (commandText.startsWith('/') && !uploadFile) {
       setInputContent("");
@@ -1974,10 +1928,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
   const filteredUsers = users?.filter((u: any) => {
     const searchable = `${u.displayName || ""} ${u.nickname || ""} ${u.username}`.toLowerCase();
     return u.id !== currentUser?.id && searchable.includes(searchTerm.toLowerCase());
-  }).sort((a: any, b: any) => {
-    const aIsAi = a.role === "bot" && a.username === "nexus_ai_system";
-    const bIsAi = b.role === "bot" && b.username === "nexus_ai_system";
-    return Number(bIsAi) - Number(aIsAi);
+
   });
   const filteredGroups = (groups as any[]).filter((g: any) => g.name.toLowerCase().includes(searchTerm.toLowerCase()));
   const mentionMatch = inputContent.match(/(?:^|\s)@([^\s@]*)$/);
