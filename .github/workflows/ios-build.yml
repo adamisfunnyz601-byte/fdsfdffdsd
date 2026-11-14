@@ -7,6 +7,11 @@ on:
       - feat/mobile-notifications-responsive-platforms
     paths:
       - ".github/workflows/ios-build.yml"
+      - "capacitor.config.ts"
+      - "client/**"
+      - "package.json"
+      - "package-lock.json"
+      - "script/**"
 
 permissions:
   contents: read
