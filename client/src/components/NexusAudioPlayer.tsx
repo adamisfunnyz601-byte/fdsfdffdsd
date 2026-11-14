@@ -42,7 +42,7 @@ export function NexusAudioPlayer({ src, title = "Audio message", nexusFormat = f
     if (!audio) return;
     const update = () => setCurrent(audio.currentTime || 0);
     const metadata = () => setDuration(audio.duration || 0);
-    const ended = () => setPlaying(false);
+    const ended = () => { setPlaying(false); cancelAnimationFrame(animationRef.current); setLiveBars(null); };
     audio.addEventListener("timeupdate", update);
     audio.addEventListener("loadedmetadata", metadata);
     audio.addEventListener("durationchange", metadata);
@@ -78,8 +78,36 @@ export function NexusAudioPlayer({ src, title = "Audio message", nexusFormat = f
     const audio = audioRef.current;
     if (!audio) return;
     if (audio.paused) {
-      try { await audio.play(); setPlaying(true); } catch { setPlaying(false); }
-    } else { audio.pause(); setPlaying(false); cancelAnimationFrame(animationRef.current); setLiveBars(null); }
+      try {
+        if (!audioContextRef.current && typeof AudioContext !== "undefined") {
+          const context = new AudioContext();
+          const analyser = context.createAnalyser();
+          analyser.fftSize = 256;
+          analyser.smoothingTimeConstant = 0.78;
+          const source = context.createMediaElementSource(audio);
+          source.connect(analyser);
+          analyser.connect(context.destination);
+          audioContextRef.current = context;
+          analyserRef.current = analyser;
+          sourceRef.current = source;
+        }
+        await audioContextRef.current?.resume();
+        await audio.play();
+        setPlaying(true);
+        if (analyserRef.current) {
+          cancelAnimationFrame(animationRef.current);
+          animateSpectrum();
+        }
+      } catch {
+        setPlaying(false);
+        setLiveBars(null);
+      }
+    } else {
+      audio.pause();
+      setPlaying(false);
+      cancelAnimationFrame(animationRef.current);
+      setLiveBars(null);
+    }
   };
 
   const seek = (value: number) => {
