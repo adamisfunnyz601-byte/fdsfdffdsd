@@ -1160,3 +1160,114 @@ body {
     max-height: calc(var(--nexus-visual-height) - 3.5rem);
   }
 }
+
+
+/* Responsive workspace refinement: keep the full three-column desktop UI,
+   prioritize chat on tablets, and use an overlay conversation drawer on phones. */
+@media (min-width: 1181px) and (max-width: 1535px) {
+  .nexus-sidebar { width: 236px; }
+  .nexus-page-chat .chat-conversation-sidebar { width: 252px; }
+  .nexus-page-chat .chat-utility-panel { display: none !important; }
+  .nexus-page-chat > .chat-main-panel { min-width: 0; }
+}
+@media (max-width: 1180px) {
+  .nexus-sidebar { width: 220px; }
+  .nexus-page-chat .chat-conversation-sidebar { width: 244px; }
+  .nexus-page-chat .chat-utility-panel { display: none !important; }
+  .nexus-page-chat > .chat-main-panel { min-width: 0; }
+}
+@media (max-width: 900px) {
+  .nexus-page-chat {
+    position: relative;
+    height: calc(var(--nexus-visual-height) - 5.5rem - var(--app-safe-top)) !important;
+    max-height: calc(var(--nexus-visual-height) - 5.5rem - var(--app-safe-top));
+    min-height: 0 !important;
+    width: 100%;
+    overflow: hidden;
+  }
+  .nexus-page-chat .chat-conversation-sidebar {
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 80;
+    width: min(88vw, 330px);
+    max-width: calc(100% - 2.5rem);
+    height: 100%;
+    min-height: 0;
+    box-shadow: 24px 0 60px rgba(0,0,0,.58);
+  }
+  .nexus-page-chat .chat-main-panel {
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    min-height: 0;
+  }
+  .nexus-page-chat .chat-channel-header {
+    gap: .5rem;
+    padding: .65rem .75rem;
+  }
+  .nexus-page-chat .chat-channel-header > div:first-child {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+  }
+  .nexus-page-chat .chat-channel-header > div:last-child { flex: 0 0 auto; }
+  .nexus-page-chat .chat-channel-header h2 {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .nexus-page-chat .chat-message-list {
+    min-height: 0;
+    padding: .75rem;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .nexus-page-chat .chat-composer {
+    flex: 0 0 auto;
+    padding: .5rem !important;
+    padding-bottom: max(.5rem, env(safe-area-inset-bottom)) !important;
+  }
+  .nexus-page-chat .chat-composer form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .375rem;
+  }
+  .nexus-page-chat .chat-composer form > .flex-1 {
+    order: -1;
+    flex: 1 0 100%;
+    width: 100%;
+    min-width: 0;
+  }
+  .nexus-page-chat .chat-composer form > .flex-1 input {
+    width: 100%;
+    height: 44px;
+    min-width: 0;
+    font-size: 16px !important;
+  }
+  .nexus-page-chat .chat-composer form > button,
+  .nexus-page-chat .chat-composer form > div:not(.flex-1) { flex: 0 0 auto; }
+}
+@media (max-width: 520px) {
+  .nexus-page-chat {
+    height: calc(var(--nexus-visual-height) - 5.25rem - var(--app-safe-top)) !important;
+    max-height: calc(var(--nexus-visual-height) - 5.25rem - var(--app-safe-top));
+    border-radius: .65rem !important;
+    padding: .25rem !important;
+  }
+  .nexus-page-chat .chat-channel-header { min-height: 46px; }
+  .nexus-page-chat .chat-channel-header h2 {
+    max-width: 40vw;
+    font-size: 10px;
+    letter-spacing: .04em;
+  }
+  .nexus-page-chat .chat-composer form { gap: .25rem; }
+  .nexus-page-chat .chat-composer form > button { min-width: 36px; min-height: 40px; }
+}
+@media (orientation: landscape) and (max-height: 520px) and (max-width: 900px) {
+  .nexus-page-chat {
+    height: calc(var(--nexus-visual-height) - 3.75rem - var(--app-safe-top)) !important;
+    max-height: calc(var(--nexus-visual-height) - 3.75rem - var(--app-safe-top));
+  }
+}

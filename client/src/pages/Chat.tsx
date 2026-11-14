@@ -719,7 +719,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
   // --- SOUNDBOARD STATE ---
   const [customSounds, setCustomSounds] = useState<SoundEntry[]>([]);
   const [sounds, setSounds] = useState<SoundEntry[]>(DEFAULT_SOUNDS);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(() => typeof window === "undefined" || window.matchMedia("(min-width: 1024px)").matches);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => typeof window !== "undefined" && window.matchMedia("(min-width: 1181px)").matches);
   const [searchTerm, setSearchTerm] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [isRecordingPaused, setIsRecordingPaused] = useState(false);
@@ -2351,7 +2351,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
         <AnimatePresence>
           {isSidebarOpen && (
             <motion.div initial={{ x: -320 }} animate={{ x: 0 }} exit={{ x: -320 }}
-              className="w-72 flex-shrink-0 flex flex-col bg-black border border-violet-500/20 overflow-hidden">
+              className="chat-conversation-sidebar w-72 flex-shrink-0 flex flex-col bg-black border border-violet-500/20 overflow-hidden">
               <div className="p-4 border-b border-violet-500/20 bg-violet-500/5">
                 <div className="flex items-center justify-between">
                   <h2 className="font-display text-[11px] tracking-[0.4em] uppercase text-violet-200">NEXUS SERVER</h2>
@@ -2704,7 +2704,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
         {/* ======================================================
             RIGHT PANEL - DIAGNOSTICS + SOUNDBOARD
             ====================================================== */}
-        <div className="hidden xl:flex w-72 flex-col gap-4 flex-shrink-0">
+        <div className="chat-utility-panel hidden 2xl:flex w-72 flex-col gap-4 flex-shrink-0">
           {/* Diagnostic log */}
           <CyberCard className="p-4 border-violet-500/20 bg-[#0c0615]/80 backdrop-blur-xl flex flex-col" style={{ height: '45%' }}>
             <h3 className="text-[9px] font-display text-violet-200 tracking-[0.4em] mb-3 flex items-center gap-2">
