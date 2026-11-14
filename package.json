@@ -119,8 +119,8 @@
   },
   "main": "electron/main.cjs",
   "build": {
-    "appId": "com.securewebgateway.desktop",
-    "productName": "Secure Web Gateway",
+    "appId": "com.nexusos.app",
+    "productName": "NEXUS",
     "directories": {
       "output": "dist-electron"
     },
