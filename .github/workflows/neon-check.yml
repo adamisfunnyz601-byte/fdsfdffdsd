@@ -1,0 +1,61 @@
+name: Neon connection test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/mobile-notifications-responsive-platforms
+    paths:
+      - ".github/workflows/neon-check.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test-neon:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test Neon connection
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          node --input-type=module <<'NODE'
+          import pg from "pg";
+
+          if (!process.env.DATABASE_URL) {
+            console.error("DATABASE_URL secret is missing.");
+            process.exit(1);
+          }
+
+          const pool = new pg.Pool({
+            connectionString: process.env.DATABASE_URL,
+            connectionTimeoutMillis: 15000,
+            ssl: { rejectUnauthorized: false },
+          });
+
+          try {
+            const result = await pool.query(
+              "SELECT current_database() AS database, now() AS checked_at"
+            );
+            console.log("Neon connection successful.");
+            console.log("Database:", result.rows[0].database);
+            console.log("Checked at:", result.rows[0].checked_at);
+          } catch (error) {
+            console.error("Neon connection failed:", error.message);
+            process.exitCode = 1;
+          } finally {
+            await pool.end();
+          }
+          NODE
