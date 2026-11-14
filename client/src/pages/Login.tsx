@@ -5,6 +5,7 @@ import { CyberInput } from "@/components/CyberInput";
 import { CyberButton } from "@/components/CyberButton";
 import { Lock, UserRoundPlus, Eye, EyeOff } from "lucide-react";
 import { useLocation } from "wouter";
+import { queryClient } from "@/lib/queryClient";
 import { startAuthentication } from "@simplewebauthn/browser";
 
 export default function Login() {
@@ -44,7 +45,8 @@ export default function Login() {
       });
       const verified = await verifyResponse.json().catch(() => ({}));
       if (!verifyResponse.ok || !verified.success) throw new Error(verified.message || "Passkey sign-in failed.");
-      window.location.assign("/chat");
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      setLocation("/chat");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Passkey sign-in failed.");
     } finally { setPasskeyBusy(false); }
