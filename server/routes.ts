@@ -275,7 +275,6 @@ export async function registerRoutes(
     }
     next();
   };
-  const chatAiRateLimit = rateLimit({ windowMs: 60_000, limit: 5, keyGenerator: (req: Request) => String(req.session.userId), standardHeaders: true, legacyHeaders: false, message: { message: "The chat AI is busy. Please wait a minute before asking again." } });
   let nexusAiBotPromise: Promise<any> | null = null;
   const getNexusAiBot = async () => {
     if (!nexusAiBotPromise) {
@@ -1128,7 +1127,7 @@ export async function registerRoutes(
   });
 
   // NEXUS AI behaves as a friendly chat participant in Global Chat, groups, and its own DM.
-  app.post("/api/chat/ai", requireAuth, chatAiRateLimit, async (req, res) => {
+  app.post("/api/chat/ai", requireAuth, async (req, res) => {
     const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim().slice(0, 1200) : "";
     const requestedRecipientId = req.body?.recipientId == null ? undefined : Number(req.body.recipientId);
     const groupId = req.body?.groupId == null ? undefined : Number(req.body.groupId);
