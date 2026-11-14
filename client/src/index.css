@@ -1005,3 +1005,85 @@ html, body {
     transition-duration: .01ms !important;
   }
 }
+
+
+/* Responsive chat layout: preserve usable width and keep the composer visible
+   when the iOS/Android software keyboard changes the visual viewport. */
+html, body, #root {
+  min-width: 0;
+  width: 100%;
+}
+body {
+  min-height: 100%;
+  overflow-x: hidden;
+}
+.nexus-page-chat {
+  min-width: 0;
+  max-width: 100%;
+}
+.nexus-page-chat > * {
+  min-width: 0;
+}
+.chat-composer {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+.chat-composer form {
+  min-width: 0;
+}
+.chat-composer form > * {
+  min-width: 0;
+}
+.chat-composer input {
+  min-width: 0;
+  font-size: 16px;
+}
+@media (max-width: 900px) {
+  .nexus-page-chat {
+    height: calc(100dvh - 104px) !important;
+    max-height: calc(100dvh - 104px);
+    gap: 0.5rem !important;
+    padding: 0.375rem !important;
+    border-radius: 0.875rem !important;
+  }
+  .chat-composer {
+    padding: 0.5rem !important;
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom)) !important;
+  }
+  .chat-composer form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+  }
+  .chat-composer form > .flex-1 {
+    flex: 1 1 100%;
+    order: -1;
+    width: 100%;
+  }
+  .chat-composer form > .flex-1 input {
+    height: 44px;
+    padding-left: 0.875rem;
+    padding-right: 0.875rem;
+    font-size: 16px;
+  }
+}
+@media (max-width: 520px) {
+  .nexus-page-chat {
+    height: calc(100dvh - 84px) !important;
+    max-height: calc(100dvh - 84px);
+    border-radius: 0.5rem !important;
+    padding: 0.25rem !important;
+  }
+  .chat-composer form {
+    justify-content: flex-start;
+  }
+  .chat-composer form > button,
+  .chat-composer form > div:not(.flex-1) {
+    flex: 0 0 auto;
+  }
+}
+@supports (-webkit-touch-callout: none) {
+  .chat-composer input,
+  .chat-composer textarea {
+    font-size: 16px !important;
+  }
+}
