@@ -35,6 +35,8 @@ export default function SettingsPage() {
   const [notificationBusy, setNotificationBusy] = useState(false);
   const nativeApp = isNativeApp();
 
+  useEffect(() => { saveNexusAppearance(appearance); }, []);
+
   const registerPasskey = async () => {
     setPasskeyBusy(true);
     try {
@@ -175,6 +177,21 @@ export default function SettingsPage() {
             <CyberButton disabled={saving} onClick={() => save({ ringtoneUrl })}>
               <Volume2 className="w-4 h-4" /> Save
             </CyberButton>
+          </div>
+        </section>
+
+        <section className="discord-card app-glass space-y-4 p-5">
+          <div><h2 className="font-semibold text-foreground mb-1">Appearance</h2><p className="text-xs text-muted-foreground">Choose a built-in font and a free NEXUS background gradient. Changes apply instantly on this device.</p></div>
+          <label className="block space-y-2"><span className="text-sm font-medium text-foreground">Interface font</span>
+            <select value={appearance.font} onChange={event => { const next = { ...appearance, font: event.target.value as NexusFont }; setAppearance(next); saveNexusAppearance(next); }} className="w-full rounded-lg border border-white/15 bg-black/25 px-3 py-2 text-sm text-foreground">
+              {Object.entries(NEXUS_FONTS).map(([key, value]) => <option key={key} value={key}>{key === "system" ? "System / Inter-style" : key.charAt(0).toUpperCase() + key.slice(1)}</option>)}
+            </select>
+          </label>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {Object.entries(NEXUS_GRADIENTS).map(([key, value]) => <button key={key} type="button" onClick={() => { const next = { ...appearance, gradient: key as NexusGradient }; setAppearance(next); saveNexusAppearance(next); }} aria-pressed={appearance.gradient === key} className={cn("overflow-hidden rounded-xl border p-2 text-left transition", appearance.gradient === key ? "border-violet-300 ring-2 ring-violet-400/40" : "border-white/10 hover:border-white/25")}>
+              <span className="mb-2 block h-12 rounded-lg" style={{ backgroundImage: value }} />
+              <span className="text-xs font-medium capitalize text-foreground">{key}</span>
+            </button>)}
           </div>
         </section>
 
