@@ -1,6 +1,6 @@
 
 import { db } from "./db";
-import { users, accessKeys, searchHistory, messages, groupChats, groupChatMembers, customEmojis, friendRequests, blocks, oauthAccounts, moderationLogs, blockBlastScores, dihhroAwards, communityServers, communityServerMembers, communityServerCategories, communityServerChannels, chatMessageReactions, chatPolls, chatPollOptions, chatPollVotes } from "@shared/schema";
+import { users, accessKeys, searchHistory, messages, groupChats, groupChatMembers, customEmojis, friendRequests, blocks, oauthAccounts, moderationLogs, blockBlastScores, dihhroAwards, communityServers, communityServerMembers, communityServerCategories, communityServerChannels, communityServerMessages, chatMessageReactions, chatPolls, chatPollOptions, chatPollVotes } from "@shared/schema";
 import { eq, desc, and, or, gt, sql, inArray } from "drizzle-orm";
 import type { Express, Request, RequestHandler } from "express";
 import type { Server } from "http";
@@ -2526,6 +2526,51 @@ export async function registerRoutes(
     if (!name) return res.status(400).json({ message: "Category name is required." });
     const [category] = await db.insert(communityServerCategories).values({ serverId, name, position: Date.now() % 100000000 }).returning();
     res.status(201).json(category);
+  });
+
+  app.get("/api/servers/:id/channels/:channelId/messages", requireAuth, async (req, res) => {
+    const serverId = Number(req.params.id), channelId = Number(req.params.channelId);
+    if (!Number.isInteger(serverId) || serverId < 1 || !Number.isInteger(channelId) || channelId < 1) {
+      return res.status(400).json({ message: "Invalid server or channel." });
+    }
+    const { server, member } = await serverAccess(serverId, Number(req.session.userId));
+    if (!server) return res.status(404).json({ message: "Server not found." });
+    if (server.visibility !== "public" && !member) return res.status(403).json({ message: "Join this private server to view messages." });
+    const [channel] = await db.select({ id: communityServerChannels.id }).from(communityServerChannels)
+      .where(and(eq(communityServerChannels.id, channelId), eq(communityServerChannels.serverId, serverId))).limit(1);
+    if (!channel) return res.status(404).json({ message: "Channel not found." });
+    const rows = await db.select({
+      id: communityServerMessages.id, channelId: communityServerMessages.channelId,
+      authorId: communityServerMessages.authorId, content: communityServerMessages.content,
+      createdAt: communityServerMessages.createdAt, editedAt: communityServerMessages.editedAt,
+      username: users.username, displayName: users.displayName, avatarUrl: users.avatarUrl,
+    }).from(communityServerMessages)
+      .innerJoin(users, eq(users.id, communityServerMessages.authorId))
+      .where(and(eq(communityServerMessages.serverId, serverId), eq(communityServerMessages.channelId, channelId)))
+      .orderBy(desc(communityServerMessages.createdAt)).limit(100);
+    res.set("Cache-Control", "private, no-store").json(rows.reverse());
+  });
+
+  app.post("/api/servers/:id/channels/:channelId/messages", requireAuth, async (req, res) => {
+    const serverId = Number(req.params.id), channelId = Number(req.params.channelId);
+    const userId = Number(req.session.userId);
+    if (!Number.isInteger(serverId) || serverId < 1 || !Number.isInteger(channelId) || channelId < 1) {
+      return res.status(400).json({ message: "Invalid server or channel." });
+    }
+    const { server, member } = await serverAccess(serverId, userId);
+    if (!server) return res.status(404).json({ message: "Server not found." });
+    if (!member) return res.status(403).json({ message: "Join this server before sending messages." });
+    const [channel] = await db.select().from(communityServerChannels)
+      .where(and(eq(communityServerChannels.id, channelId), eq(communityServerChannels.serverId, serverId))).limit(1);
+    if (!channel) return res.status(404).json({ message: "Channel not found." });
+    if (channel.type === "voice") return res.status(400).json({ message: "Voice channels do not accept text messages." });
+    if (channel.isLocked && !canManageServer(server, member)) return res.status(403).json({ message: "This channel is locked." });
+    const content = typeof req.body?.content === "string" ? req.body.content.trim() : "";
+    if (!content || content.length > 2000) return res.status(400).json({ message: "Messages must be between 1 and 2,000 characters." });
+    const [message] = await db.insert(communityServerMessages).values({ serverId, channelId, authorId: userId, content }).returning();
+    const [author] = await db.select({ username: users.username, displayName: users.displayName, avatarUrl: users.avatarUrl })
+      .from(users).where(eq(users.id, userId)).limit(1);
+    res.status(201).json({ ...message, ...author });
   });
 
   app.post("/api/servers/:id/channels", requireAuth, async (req, res) => {
