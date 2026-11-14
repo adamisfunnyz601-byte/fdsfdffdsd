@@ -1,98 +1,63 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { motion } from "framer-motion";
-import { Plus, Server, Hash, Volume2, Users, Copy, LogIn, Settings2, Trash2, ChevronDown } from "lucide-react";
+import { Hash, Plus, Compass, Users, Settings, Copy, Send, ChevronDown, Loader2, Server as ServerIcon } from "lucide-react";
 
-type ServerSummary = { id:number; name:string; description:string; visibility:string; inviteCode:string; ownerId:number; role:string|null };
-type ServerDetail = { server:any; member:any; categories:any[]; channels:any[]; members:any[] };
-
-export default function ServersPage() {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const [selectedId, setSelectedId] = useState<number|null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [serverName, setServerName] = useState("");
-  const [description, setDescription] = useState("");
-  const [visibility, setVisibility] = useState("private");
-  const [inviteCode, setInviteCode] = useState("");
-  const [channelName, setChannelName] = useState("");
-  const [channelType, setChannelType] = useState("text");
-  const [categoryName, setCategoryName] = useState("");
-  const [showManage, setShowManage] = useState(false);
-  const [selectedChannelId, setSelectedChannelId] = useState<number|null>(null);
-  const [messageDraft, setMessageDraft] = useState("");
-
-  const serversQuery = useQuery<ServerSummary[]>({
-    queryKey:["/api/servers"],
-    queryFn:async()=>{const r=await fetch("/api/servers",{credentials:"include"});if(!r.ok)throw new Error("Could not load servers");return r.json();},
-  });
-  const servers=serversQuery.data||[];
-  useEffect(()=>{if(selectedId===null&&servers.length)setSelectedId(servers[0].id);if(selectedId!==null&&!servers.some(s=>s.id===selectedId))setSelectedId(servers[0]?.id??null);},[servers,selectedId]);
-  const detailQuery=useQuery<ServerDetail>({
-    queryKey:["/api/servers",selectedId],
-    enabled:selectedId!==null,
-    queryFn:async()=>{const r=await fetch(`/api/servers/${selectedId}`,{credentials:"include"});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||"Could not load server");return d;},
-  });
-  const detail=detailQuery.data;
-  useEffect(()=>{if(!detail?.channels?.length){setSelectedChannelId(null);return;}if(selectedChannelId===null||!detail.channels.some((channel:any)=>channel.id===selectedChannelId))setSelectedChannelId(detail.channels[0].id);},[detail,selectedChannelId]);
-  const messagesQuery=useQuery<any[]>({
-    queryKey:["/api/servers",selectedId,"channels",selectedChannelId,"messages"],
-    enabled:selectedId!==null&&selectedChannelId!==null,
-    refetchInterval:5000,
-    queryFn:async()=>{const r=await fetch(`/api/servers/${selectedId}/channels/${selectedChannelId}/messages`,{credentials:"include"});const d=await r.json().catch(()=>[]);if(!r.ok)throw new Error(d.message||"Could not load channel messages");return d;},
-  });
-  const refresh=async()=>{await queryClient.invalidateQueries({queryKey:["/api/servers"]});if(selectedId)await queryClient.invalidateQueries({queryKey:["/api/servers",selectedId]});};
-  const request=async(url:string,method:string,body?:any)=>{
-    const r=await fetch(url,{method,credentials:"include",headers:body?{"Content-Type":"application/json"}:{},body:body?JSON.stringify(body):undefined});
-    const d=await r.json().catch(()=>({}));
-    if(!r.ok)throw new Error(d.message||"Request failed");
-    return d;
-  };
-  const run=async(fn:()=>Promise<any>,success:string)=>{try{await fn();toast({title:success});await refresh();}catch(e:any){toast({title:"Couldn't complete that",description:e.message,variant:"destructive"});}};
-  const createServer=()=>run(async()=>{const d=await request("/api/servers","POST",{name:serverName,description,visibility});setServerName("");setDescription("");setCreateOpen(false);setSelectedId(d.id);}, "Server created");
-  const joinServer=()=>run(async()=>{const d=await request("/api/servers/join","POST",{inviteCode});setInviteCode("");setSelectedId(d.serverId);}, "Joined server");
-  const addChannel=()=>run(async()=>{await request(`/api/servers/${selectedId}/channels`,"POST",{name:channelName,type:channelType,categoryId:detail?.categories?.[0]?.id??null});setChannelName("");}, "Channel created");
-  const addCategory=()=>run(async()=>{await request(`/api/servers/${selectedId}/categories`,"POST",{name:categoryName});setCategoryName("");}, "Category created");
-  const isManager=detail?.member&&["owner","admin"].includes(detail.member.role);
-  const sendChannelMessage=async(event:any)=>{event.preventDefault();const content=messageDraft.trim();if(!content||!selectedId||!selectedChannelId||!detail?.member)return;try{await request(`/api/servers/${selectedId}/channels/${selectedChannelId}/messages`,"POST",{content});setMessageDraft("");await queryClient.invalidateQueries({queryKey:["/api/servers",selectedId,"channels",selectedChannelId,"messages"]});}catch(error:any){toast({title:"Message not sent",description:error.message,variant:"destructive"});}};
-  const copyInvite=async()=>{if(!detail)return;try{await navigator.clipboard.writeText(detail.server.inviteCode);toast({title:"Invite code copied"});}catch{toast({title:"Copy failed",description:detail.server.inviteCode});}};
-  return <Layout>
-    <div className="nexus-page nexus-page-servers mx-auto max-w-7xl space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div><div className="text-xs uppercase tracking-[.22em] text-primary font-semibold">Community network</div><h1 className="mt-1 text-3xl font-bold">Servers</h1><p className="mt-1 text-sm text-muted-foreground">Your communities, organised in one place.</p></div>
-        <div className="flex gap-2"><button onClick={()=>setCreateOpen(v=>!v)} className="app-interactive inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white"><Plus size={16}/> Create server</button></div>
-      </div>
-      {createOpen&&<motion.section initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} className="app-surface rounded-2xl p-4 md:p-5 space-y-3">
-        <h2 className="font-semibold">Create a community</h2><div className="grid gap-3 md:grid-cols-2">
-          <input value={serverName} onChange={e=>setServerName(e.target.value)} maxLength={48} placeholder="Server name" className="rounded-xl border border-border bg-background/70 px-3 py-2.5 text-sm"/>
-          <select value={visibility} onChange={e=>setVisibility(e.target.value)} className="rounded-xl border border-border bg-background/70 px-3 py-2.5 text-sm"><option value="private">Private — invite only</option><option value="public">Public — discoverable</option></select>
-        </div><input value={description} onChange={e=>setDescription(e.target.value)} maxLength={500} placeholder="What is this community about?" className="w-full rounded-xl border border-border bg-background/70 px-3 py-2.5 text-sm"/><button onClick={createServer} disabled={serverName.trim().length<2} className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">Create server</button>
-      </motion.section>}
-      <section className="app-surface rounded-2xl p-4 md:p-5">
-        <div className="mb-3 flex items-center gap-2 text-sm font-semibold"><LogIn size={16} className="text-primary"/> Join with an invite code</div>
-        <div className="flex gap-2"><input value={inviteCode} onChange={e=>setInviteCode(e.target.value.toUpperCase())} maxLength={10} placeholder="10-character invite code" className="min-w-0 flex-1 rounded-xl border border-border bg-background/70 px-3 py-2.5 text-sm font-mono tracking-wider"/><button onClick={joinServer} disabled={inviteCode.trim().length!==10} className="rounded-xl border border-primary/40 px-4 text-sm font-semibold text-primary disabled:opacity-40">Join</button></div>
-      </section>
-      <div className="grid min-h-[460px] gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="app-surface rounded-2xl p-3">
-          <div className="mb-3 flex items-center justify-between px-2"><span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Your servers</span><span className="text-xs text-muted-foreground">{servers.length}</span></div>
-          {serversQuery.isLoading?<p className="p-3 text-sm text-muted-foreground">Loading communities…</p>:servers.length===0?<p className="p-3 text-sm text-muted-foreground">No servers yet. Create one or join with an invite.</p>:<div className="space-y-1">{servers.map(s=><button key={s.id} onClick={()=>setSelectedId(s.id)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${selectedId===s.id?"bg-primary/15 text-primary":"hover:bg-white/5"}`}><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/15"><Server size={17}/></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{s.name}</span><span className="block text-xs text-muted-foreground">{s.role||"Public"} · {s.visibility}</span></span></button>)}</div>}
-        </aside>
-        <main className="app-surface min-w-0 rounded-2xl p-4 md:p-6">
-          {!selectedId||!detail?<div className="grid min-h-[360px] place-items-center text-center text-muted-foreground"><div><Server size={34} className="mx-auto mb-3 opacity-40"/><p>Select a server to open its channels</p></div></div>:<>
-            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-4">
-              <div className="min-w-0"><div className="flex items-center gap-2"><h2 className="truncate text-2xl font-bold">{detail.server.name}</h2><span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] uppercase tracking-wider text-primary">{detail.server.visibility}</span></div><p className="mt-1 text-sm text-muted-foreground">{detail.server.description||"A new community starts here."}</p></div>
-              <div className="flex gap-2"><button onClick={copyInvite} className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs hover:bg-white/5"><Copy size={14}/> Invite code</button>{!detail.member&&detail.server.visibility==="public"&&<button onClick={()=>run(async()=>{await request(`/api/servers/${selectedId}/join`,"POST");}, "Joined server")} className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white">Join server</button>}{isManager&&<button onClick={()=>setShowManage(v=>!v)} className="rounded-lg border border-border p-2 hover:bg-white/5" title="Manage server"><Settings2 size={16}/></button>}</div>
-            </div>
-            {showManage&&isManager&&<div className="my-4 grid gap-3 rounded-xl border border-primary/20 bg-primary/5 p-3 md:grid-cols-2"><div className="space-y-2"><p className="text-xs font-semibold">Add category</p><div className="flex gap-2"><input value={categoryName} onChange={e=>setCategoryName(e.target.value)} placeholder="Category name" className="min-w-0 flex-1 rounded-lg border border-border bg-background px-2 py-2 text-sm"/><button onClick={addCategory} className="rounded-lg bg-primary px-3 text-xs text-white">Add</button></div></div><div className="space-y-2"><p className="text-xs font-semibold">Add channel</p><div className="flex gap-2"><input value={channelName} onChange={e=>setChannelName(e.target.value)} placeholder="channel-name" className="min-w-0 flex-1 rounded-lg border border-border bg-background px-2 py-2 text-sm"/><select value={channelType} onChange={e=>setChannelType(e.target.value)} className="max-w-28 rounded-lg border border-border bg-background px-2 text-xs"><option value="text">Text</option><option value="voice">Voice</option><option value="announcement">Announcement</option><option value="forum">Forum</option><option value="media">Media</option></select><button onClick={addChannel} className="rounded-lg bg-primary px-3 text-xs text-white">Add</button></div></div></div>}
-            <div className="mt-5 grid gap-5 md:grid-cols-[minmax(0,1fr)_220px]">
-              <div className="space-y-5">{detail.categories.map(category=><section key={category.id}><h3 className="mb-2 text-[11px] font-bold uppercase tracking-[.18em] text-muted-foreground">{category.name}</h3><div className="space-y-1">{detail.channels.filter(c=>c.categoryId===category.id).map(channel=><button key={channel.id} onClick={()=>setSelectedChannelId(channel.id)} className={`flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left hover:bg-white/5 ${selectedChannelId===channel.id?"bg-primary/10 text-primary":""}`}><span className="text-primary/80">{channel.type==="voice"?<Volume2 size={16}/>:<Hash size={16}/>}</span><span className="text-sm">{channel.name}</span><span className="ml-auto text-[10px] uppercase tracking-wider text-muted-foreground">{channel.type}</span></button>)}</div></section>)}{detail.channels.filter(c=>!c.categoryId).map(channel=><button key={channel.id} onClick={()=>setSelectedChannelId(channel.id)} className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left ${selectedChannelId===channel.id?"bg-primary/10 text-primary":"hover:bg-white/5"}`}><Hash size={15}/>{channel.name}</button>)}{selectedChannelId&&<section className="mt-5 overflow-hidden rounded-xl border border-border bg-background/35"><div className="flex items-center justify-between border-b border-border px-3 py-3"><div className="min-w-0"><div className="text-xs uppercase tracking-widest text-muted-foreground">{detail.channels.find(c=>c.id===selectedChannelId)?.type==="voice"?"Voice channel":"Text channel"}</div><div className="font-semibold"># {detail.channels.find(c=>c.id===selectedChannelId)?.name||"channel"}</div></div><span className="text-[10px] text-muted-foreground">Live · refreshes every 5s</span></div><div className="max-h-[360px] min-h-[180px] space-y-3 overflow-y-auto p-3">{messagesQuery.isLoading?<p className="text-xs text-muted-foreground">Loading messages…</p>:messagesQuery.isError?<p className="text-xs text-destructive">{(messagesQuery.error as Error).message}</p>:messagesQuery.data?.length?messagesQuery.data.map(message=><article key={message.id} className="min-w-0"><div className="flex flex-wrap items-baseline gap-2"><span className="text-sm font-semibold">{message.displayName||message.username}</span><time className="text-[10px] text-muted-foreground">{message.createdAt?new Date(message.createdAt).toLocaleString():""}</time></div><p className="whitespace-pre-wrap break-words text-sm text-foreground/90">{message.content}</p></article>):<p className="text-xs text-muted-foreground">No messages yet. Start the conversation.</p>}</div>{detail.channels.find(c=>c.id===selectedChannelId)?.type==="voice"?<div className="border-t border-border p-3 text-xs text-muted-foreground">Voice channel selected. Voice-room calling is not connected yet; use the existing one-to-one or group call controls in Messages.</div>:detail.member?<form onSubmit={sendChannelMessage} className="flex gap-2 border-t border-border p-3"><input value={messageDraft} onChange={e=>setMessageDraft(e.target.value)} maxLength={2000} placeholder="Message this channel…" className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm"/><button type="submit" disabled={!messageDraft.trim()} className="rounded-lg bg-primary px-4 text-sm font-semibold text-white disabled:opacity-40">Send</button></form>:<div className="border-t border-border p-3 text-xs text-muted-foreground">Join this server to send messages.</div>}</section>}</div>
-              <aside className="rounded-xl bg-background/40 p-3"><div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground"><Users size={14}/> Members · {detail.members.length}</div><div className="space-y-2">{detail.members.slice(0,30).map(m=><div key={m.userId} className="flex items-center gap-2 text-sm"><span className={`h-2 w-2 rounded-full ${m.presenceStatus==="online"?"bg-emerald-400":m.presenceStatus==="idle"?"bg-amber-300":"bg-slate-500"}`}/><span className="min-w-0 flex-1 truncate">{m.username}</span><span className="text-[9px] uppercase text-muted-foreground">{m.role}</span></div>)}</div></aside>
-            </div>
-          </>}
-        </main>
-      </div>
-    </div>
-  </Layout>;
+type ServerSummary={id:number;name:string;description:string;visibility:string;inviteCode:string;ownerId:number;role:string|null};
+type ServerDetail={server:any;member:any;categories:any[];channels:any[];members:any[]};
+const request=async(url:string,method="GET",body?:unknown)=>{
+ const response=await fetch(url,{method,credentials:"include",headers:body?{"Content-Type":"application/json"}:undefined,body:body?JSON.stringify(body):undefined});
+ const data=await response.json().catch(()=>({}));
+ if(!response.ok)throw new Error(data.message||`Request failed (${response.status})`);
+ return data;
+};
+export default function ServersPage(){
+ const {toast}=useToast();const qc=useQueryClient();
+ const [serverId,setServerId]=useState<number|null>(null);const [channelId,setChannelId]=useState<number|null>(null);
+ const [createOpen,setCreateOpen]=useState(false);const [serverName,setServerName]=useState("");const [description,setDescription]=useState("");const [visibility,setVisibility]=useState("private");
+ const [inviteCode,setInviteCode]=useState("");const [draft,setDraft]=useState("");const [manage,setManage]=useState(false);const [newChannel,setNewChannel]=useState("");
+ const serversQuery=useQuery<ServerSummary[]>({queryKey:["/api/servers"],queryFn:()=>request("/api/servers"),refetchOnWindowFocus:true});
+ const servers=serversQuery.data||[];
+ useEffect(()=>{if(serverId===null&&servers.length)setServerId(servers[0].id);else if(serverId!==null&&!servers.some(s=>s.id===serverId))setServerId(servers[0]?.id??null);},[servers,serverId]);
+ const detailQuery=useQuery<ServerDetail>({queryKey:["/api/servers",serverId],enabled:serverId!==null,queryFn:()=>request(`/api/servers/${serverId}`)});
+ const detail=detailQuery.data;
+ useEffect(()=>{if(!detail?.channels?.length)setChannelId(null);else if(channelId===null||!detail.channels.some(c=>c.id===channelId))setChannelId(detail.channels[0].id);},[detail,channelId]);
+ const messagesQuery=useQuery<any[]>({queryKey:["/api/servers",serverId,"channels",channelId,"messages"],enabled:serverId!==null&&channelId!==null&&Boolean(detail?.member),queryFn:()=>request(`/api/servers/${serverId}/channels/${channelId}/messages`),refetchInterval:2500});
+ const refresh=async()=>{await qc.invalidateQueries({queryKey:["/api/servers"]});if(serverId)await qc.invalidateQueries({queryKey:["/api/servers",serverId]});};
+ const act=async(fn:()=>Promise<any>,success:string)=>{try{await fn();toast({title:success});await refresh();}catch(e){toast({title:"Something went wrong",description:e instanceof Error?e.message:"Please try again.",variant:"destructive"});}};
+ const create=()=>act(async()=>{const created=await request("/api/servers","POST",{name:serverName,description,visibility});setServerName("");setDescription("");setCreateOpen(false);setServerId(created.id);},"Server created");
+ const join=()=>act(async()=>{const joined=await request("/api/servers/join","POST",{inviteCode});setInviteCode("");setServerId(joined.serverId);},"Joined server");
+ const send=async(e:React.FormEvent)=>{e.preventDefault();if(!draft.trim()||!serverId||!channelId)return;try{await request(`/api/servers/${serverId}/channels/${channelId}/messages`,"POST",{content:draft.trim()});setDraft("");await qc.invalidateQueries({queryKey:["/api/servers",serverId,"channels",channelId,"messages"]});}catch(error){toast({title:"Message not sent",description:error instanceof Error?error.message:"Try again.",variant:"destructive"});}};
+ const selectedChannel=detail?.channels?.find(c=>c.id===channelId);
+ const manager=Boolean(detail?.member&&["owner","admin"].includes(detail.member.role));
+ const copyInvite=async()=>{if(!detail)return;try{await navigator.clipboard.writeText(detail.server.inviteCode);toast({title:"Invite code copied"});}catch{toast({title:"Invite code",description:detail.server.inviteCode});}};
+ return <Layout><div className="mx-auto flex h-[calc(100dvh-7.5rem)] min-h-[500px] max-w-7xl overflow-hidden rounded-2xl border border-white/10 bg-[#313440] text-white shadow-2xl">
+  <aside className="flex w-[76px] shrink-0 flex-col items-center gap-3 overflow-y-auto border-r border-black/20 bg-[#20222d] py-4">
+   <button title="Create server" onClick={()=>setCreateOpen(v=>!v)} className="grid h-12 w-12 place-items-center rounded-2xl bg-[#343744] text-emerald-300 transition hover:rounded-xl hover:bg-emerald-600 hover:text-white"><Plus/></button>
+   <div className="h-px w-8 bg-white/10"/>
+   {servers.map(s=><button key={s.id} title={s.name} onClick={()=>setServerId(s.id)} className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl text-sm font-bold transition hover:rounded-xl ${serverId===s.id?"rounded-xl bg-violet-600 text-white":"bg-[#343744] text-white/65"}`}>{s.name.slice(0,2).toUpperCase()}</button>)}
+   {servers.length===0&&!serversQuery.isLoading&&<span className="px-2 text-center text-[9px] text-white/35">No servers</span>}
+  </aside>
+  <aside className="flex w-[250px] shrink-0 flex-col border-r border-black/10 bg-[#292b36] max-md:w-[190px] max-sm:hidden">
+   <header className="flex h-[60px] items-center justify-between border-b border-black/10 px-4"><span className="truncate text-sm font-bold">{detail?.server?.name||"Your servers"}</span>{detail&&<button onClick={()=>setManage(v=>!v)} title="Server settings" className="rounded-md p-2 text-white/55 hover:bg-white/10"><Settings size={16}/></button>}</header>
+   <div className="flex-1 overflow-y-auto p-3">
+    {detail?.member&&<div className="mb-4"><div className="mb-2 px-2 text-[10px] font-bold uppercase tracking-wider text-white/35">Text channels</div>{detail.channels.filter(c=>c.type!=="voice").map(c=><button key={c.id} onClick={()=>setChannelId(c.id)} className={`mb-1 flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm ${channelId===c.id?"bg-white/10 text-white":"text-white/55 hover:bg-white/5 hover:text-white"}`}><Hash size={15}/><span className="truncate">{c.name}</span></button>)}</div>}
+    {!detail?.member&&detail&&<button onClick={()=>act(()=>request(`/api/servers/${serverId}/join`,"POST"),"Joined server")} className="w-full rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold">Join server</button>}
+    {manager&&<div className="mt-3 border-t border-white/10 pt-3"><div className="mb-2 px-2 text-[10px] font-bold uppercase tracking-wider text-white/35">Create channel</div><div className="flex gap-1"><input value={newChannel} onChange={e=>setNewChannel(e.target.value)} placeholder="channel-name" className="min-w-0 flex-1 rounded-md bg-black/20 px-2 py-2 text-xs outline-none"/><button onClick={()=>act(async()=>{await request(`/api/servers/${serverId}/channels`,"POST",{name:newChannel,type:"text"});setNewChannel("");},"Channel created")} className="rounded-md bg-violet-600 px-2"><Plus size={14}/></button></div></div>}
+   </div>
+   <button onClick={copyInvite} disabled={!detail} className="flex items-center gap-2 border-t border-black/10 px-4 py-3 text-xs text-white/55 hover:bg-white/5 disabled:opacity-30"><Copy size={14}/> Copy invite code</button>
+  </aside>
+  <main className="flex min-w-0 flex-1 flex-col">
+   {createOpen&&<div className="border-b border-black/10 bg-[#292b36] p-4"><div className="mb-3 font-bold">Create a server</div><div className="grid gap-2 sm:grid-cols-2"><input value={serverName} onChange={e=>setServerName(e.target.value)} placeholder="Server name" maxLength={48} className="rounded-lg bg-black/20 px-3 py-2 text-sm outline-none"/><select value={visibility} onChange={e=>setVisibility(e.target.value)} className="rounded-lg bg-[#20222d] px-3 py-2 text-sm"><option value="private">Invite only</option><option value="public">Public</option></select></div><input value={description} onChange={e=>setDescription(e.target.value)} placeholder="Description (optional)" className="mt-2 w-full rounded-lg bg-black/20 px-3 py-2 text-sm outline-none"/><button disabled={serverName.trim().length<2} onClick={create} className="mt-2 rounded-lg bg-violet-600 px-4 py-2 text-xs font-bold disabled:opacity-40">Create server</button></div>}
+   {!serverId?<div className="flex flex-1 flex-col items-center justify-center p-6 text-center"><ServerIcon size={42} className="mb-4 text-white/25"/><h2 className="font-bold">Welcome to servers</h2><p className="mt-2 max-w-sm text-sm text-white/45">Create a server or join one with an invite code.</p><div className="mt-5 flex w-full max-w-sm gap-2"><input value={inviteCode} onChange={e=>setInviteCode(e.target.value.toUpperCase())} placeholder="Invite code" className="min-w-0 flex-1 rounded-lg bg-black/20 px-3 py-2 text-sm outline-none"/><button onClick={join} disabled={inviteCode.length!==10} className="rounded-lg bg-violet-600 px-4 text-sm font-semibold disabled:opacity-40">Join</button></div></div>
+   :detailQuery.isLoading?<div className="flex flex-1 items-center justify-center text-white/45"><Loader2 className="animate-spin"/></div>
+   :detailQuery.isError?<div className="flex flex-1 flex-col items-center justify-center p-6 text-center"><p className="text-sm text-rose-300">{(detailQuery.error as Error).message}</p><button onClick={()=>detailQuery.refetch()} className="mt-3 text-xs text-violet-300">Try again</button></div>
+   :detail?<><header className="flex h-[60px] shrink-0 items-center justify-between border-b border-black/10 px-5"><div className="min-w-0"><div className="truncate font-bold">{selectedChannel?<><Hash className="mr-2 inline" size={16}/>{selectedChannel.name}</>:detail.server.name}</div><div className="text-[10px] text-white/40">{detail.server.description||"Community server"}</div></div><div className="flex items-center gap-2 text-xs text-white/45"><Users size={15}/>{detail.members.length}</div></header>
+    {manage&&manager&&<div className="border-b border-white/10 bg-[#292b36] p-3 text-xs text-white/70">Invite code: <b>{detail.server.inviteCode}</b> · Manage your server from this panel.</div>}
+    {detail.member?<><div className="flex-1 space-y-4 overflow-y-auto p-5">{messagesQuery.isLoading?<div className="text-sm text-white/40">Loading messages…</div>:messagesQuery.isError?<div className="text-sm text-rose-300">{(messagesQuery.error as Error).message}</div>:messagesQuery.data?.length?messagesQuery.data.map(m=><article key={m.id} className="flex gap-3"><div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-violet-500/25 text-xs font-bold">{String(m.displayName||m.username||"?").slice(0,1).toUpperCase()}</div><div className="min-w-0"><div className="flex flex-wrap items-baseline gap-2"><b className="text-sm">{m.displayName||m.username}</b><time className="text-[10px] text-white/35">{m.createdAt?new Date(m.createdAt).toLocaleString():""}</time></div><p className="whitespace-pre-wrap break-words text-sm text-white/80">{m.content}</p></div></article>):<div className="flex h-full flex-col items-center justify-center text-center text-white/40"><Hash size={36} className="mb-3 opacity-40"/><p className="font-semibold text-white/70">Welcome to #{selectedChannel?.name||"general"}</p><p className="mt-1 text-xs">This is the beginning of the channel.</p></div>}</div>
+    <form onSubmit={send} className="m-4 flex items-center gap-2 rounded-xl bg-[#242631] p-2"><input value={draft} onChange={e=>setDraft(e.target.value)} maxLength={2000} placeholder={`Message #${selectedChannel?.name||"channel"}`} className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm outline-none placeholder:text-white/35"/><button disabled={!draft.trim()} className="grid h-10 w-10 place-items-center rounded-lg bg-violet-600 disabled:opacity-40"><Send size={17}/></button></form></>:<div className="flex flex-1 flex-col items-center justify-center p-6 text-center"><p className="font-semibold">Join this server to chat</p><button onClick={()=>act(()=>request(`/api/servers/${serverId}/join`,"POST"),"Joined server")} className="mt-3 rounded-lg bg-violet-600 px-4 py-2 text-xs font-bold">Join server</button></div>}</>:null}
+   <div className="flex items-center gap-2 border-t border-black/10 bg-[#292b36] px-4 py-2 sm:hidden"><select value={channelId??""} onChange={e=>setChannelId(Number(e.target.value))} className="min-w-0 flex-1 rounded-md bg-black/20 p-2 text-xs">{detail?.channels?.map(c=><option key={c.id} value={c.id}># {c.name}</option>)}</select><button onClick={()=>setCreateOpen(true)} className="rounded-md bg-violet-600 p-2"><Plus size={15}/></button></div>
+  </main>
+ </div></Layout>;
 }
