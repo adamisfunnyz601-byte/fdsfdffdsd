@@ -1,6 +1,6 @@
 import { Capacitor } from "@capacitor/core";
 
-const NEXUS_API_ORIGIN = "https://nexus.tunnelto.me";
+const NEXUS_API_ORIGIN = "https://nexus-api-rcmi.onrender.com";
 
 export function apiUrl(path: string): string {
   if (/^https?:\/\//i.test(path)) return path;
