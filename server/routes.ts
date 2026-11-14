@@ -142,79 +142,6 @@ function regenerateSession(req: Request) {
   });
 }
 
-function turnstileGuard(): RequestHandler {
-  return async (req, res, next) => {
-    const secret = process.env.CLOUDFLARE_TURNSTILE_SECRET_KEY;
-
-    if (!secret) {
-      return res.status(503).json({
-        message: "Cloudflare Turnstile secret is missing. Add CLOUDFLARE_TURNSTILE_SECRET_KEY to Replit Secrets."
-      });
-    }
-
-    const token = req.body?.turnstileToken;
-    if (typeof token !== "string" || token.length === 0 || token.length > 2048) {
-      return res.status(400).json({
-        message: "Complete the Cloudflare verification first."
-      });
-    }
-
-    try {
-      const form = new URLSearchParams({
-        secret,
-        response: token
-      });
-
-      if (req.ip) form.set("remoteip", req.ip);
-
-      const verificationResponse = await fetch(
-        "https://challenges.cloudflare.com/turnstile/v0/siteverify",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: form
-        }
-      );
-
-      if (!verificationResponse.ok) {
-        return res.status(503).json({
-          message: "Cloudflare verification is temporarily unavailable. Try again."
-        });
-      }
-
-      const result = await verificationResponse.json() as {
-        success?: boolean;
-        hostname?: string;
-        "error-codes"?: string[];
-      };
-
-      const requestHost = req.hostname.toLowerCase();
-      const verifiedHost = result.hostname?.toLowerCase();
-
-      if (result.success !== true) {
-        console.warn("Turnstile verification rejected:", result["error-codes"] || []);
-        return res.status(403).json({
-          message: "Cloudflare verification failed or expired. Please complete it again."
-        });
-      }
-
-      if (verifiedHost && verifiedHost !== requestHost) {
-        console.warn("Turnstile hostname mismatch:", { verifiedHost, requestHost });
-        return res.status(403).json({
-          message: "Cloudflare hostname mismatch. Check the hostname in your Turnstile widget."
-        });
-      }
-
-      return next();
-    } catch (error) {
-      console.error("Turnstile Siteverify request failed:", error);
-      return res.status(503).json({
-        message: "Could not contact Cloudflare verification. Try again."
-      });
-    }
-  };
-}
-
 function profileImageUrl(
   userId: number,
   kind: ProfileImageKind,
@@ -853,47 +780,8 @@ export async function registerRoutes(
     res.json({ message: `/${name} recorded for ${target?.username || "the current chat"}.` });
   });
 
-  // DIHHRO membership and Block Blast monthly leaderboard
+  // Block Blast monthly leaderboard.
   const monthKeyFor = (d = new Date()) => d.getUTCFullYear() + "-" + String(d.getUTCMonth()+1).padStart(2,"0");
-  app.post("/api/admin/dihhro/grant", requireAuth, async (req,res) => {
-    const actor = await storage.getUser(req.session.userId!);
-    if (!actor || !["owner","admin"].includes(String(actor.role).toLowerCase())) return res.status(403).json({message:"Only owners and admins can gift Dihhro."});
-    const targetId = Number(req.body?.userId), months = Math.max(1,Math.min(12,Number(req.body?.months)||1));
-    if (!Number.isInteger(targetId) || targetId < 1) return res.status(400).json({message:"Enter a valid user ID."});
-    const target = await storage.getUser(targetId); if (!target) return res.status(404).json({message:"User not found."});
-    const start = target.dihhroUntil && target.dihhroUntil > new Date() ? target.dihhroUntil : new Date();
-    const expires = new Date(start.getTime()+months*30*86400000);
-    await db.update(users).set({dihhroUntil:expires}).where(eq(users.id,targetId));
-    await db.insert(moderationLogs).values({actorId:req.session.userId!,targetId,action:"dihhro-gift",reason:"Gifted "+months+" month(s) of Dihhro",expiresAt:expires});
-    res.json({success:true,userId:targetId,dihhroUntil:expires});
-  });
-  app.get("/api/dihhro/me", requireAuth, async (req,res) => { const u=await storage.getUser(req.session.userId!); res.json({active:Boolean(u?.dihhroUntil&&u.dihhroUntil>new Date()),expiresAt:u?.dihhroUntil||null}); });
-  app.post("/api/dihhro/gift-links", requireAuth, async (req,res) => {
-    const actor = await storage.getUser(req.session.userId!);
-    if (!actor || !["owner","admin"].includes(String(actor.role).toLowerCase())) return res.status(403).json({message:"Only owners and admins can create Dihhro gift links."});
-    const code = "DH-" + randomBytes(18).toString("hex");
-    await storage.createAccessKey({key:code,type:"dihhro-gift",createdBy:actor.id});
-    return res.status(201).json({url:"/gift/"+code,code});
-  });
-  app.get("/api/dihhro/gift-links/:code", async (req,res) => {
-    const key = await storage.getAccessKey(String(req.params.code||""));
-    if (!key || key.type !== "dihhro-gift" || key.isUsed) return res.status(410).json({valid:false,message:"This Dihhro gift link is invalid, revoked, or already claimed."});
-    return res.json({valid:true,months:1});
-  });
-  app.post("/api/dihhro/gift-links/:code/claim", requireAuth, async (req,res) => {
-    const key = await storage.getAccessKey(String(req.params.code||""));
-    if (!key || key.type !== "dihhro-gift" || key.isUsed) return res.status(410).json({message:"This Dihhro gift link is invalid, revoked, or already claimed."});
-    const [claimed] = await db.update(accessKeys).set({isUsed:true}).where(and(eq(accessKeys.id,key.id),eq(accessKeys.isUsed,false))).returning({id:accessKeys.id});
-    if (!claimed) return res.status(410).json({message:"This gift has already been claimed."});
-    const target = await storage.getUser(req.session.userId!);
-    if (!target) return res.status(401).json({message:"Sign in to claim this gift."});
-    const start = target.dihhroUntil && target.dihhroUntil > new Date() ? target.dihhroUntil : new Date();
-    const expires = new Date(start.getTime()+30*86400000);
-    await db.update(users).set({dihhroUntil:expires}).where(eq(users.id,target.id));
-    await db.insert(moderationLogs).values({actorId:key.createdBy || target.id,targetId:target.id,action:"dihhro-gift-claimed",reason:"Claimed one month of Dihhro",expiresAt:expires});
-    return res.json({success:true,dihhroUntil:expires});
-  });
-
   app.get("/api/blockblast/leaderboard", requireAuth, async (req,res) => {
     const month = typeof req.query.month === "string" && /^\d{4}-\d{2}$/.test(req.query.month) ? req.query.month : monthKeyFor();
     const now = new Date(); const previousDate = new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()-1,1)); const previousMonth = monthKeyFor(previousDate);
@@ -1499,7 +1387,7 @@ export async function registerRoutes(
         const current = await storage.getUser(req.session.userId!);
         const fontName = customText ? rawFont.split("|")[1] : rawFont;
         const usesDihhroFont = customText || customFont || fontName === "comic-sans";
-        if (usesDihhroFont && !["owner","admin"].includes(current?.role || "") && !(current?.dihhroUntil && current.dihhroUntil > new Date())) return res.status(403).json({message:"Custom fonts and text gradients are DIHTRO perks."});
+
         update.usernameFont = rawFont || null;
       }
       if (profileGradient !== undefined) {
@@ -1517,7 +1405,7 @@ export async function registerRoutes(
         );
         if ((!gradients.includes(selectedGradient) && !customProfile) || !validStyle2) return res.status(400).json({message:"Invalid profile gradient settings."});
         const current = await storage.getUser(req.session.userId!);
-        if (selectedGradient !== "none" && !["owner","admin"].includes(current?.role || "") && !(current?.dihhroUntil && current.dihhroUntil > new Date())) return res.status(403).json({message:"Profile gradients are a DIHTRO perk."});
+
         update.profileGradient = selectedGradient === "none" && !isStyle2 ? null : rawGradient;
       }
       if (tagSymbol !== undefined || tagText !== undefined || tagColor !== undefined) {
@@ -2054,7 +1942,7 @@ export async function registerRoutes(
   });
 
   // === ACCESS REQUESTS (public - no auth required) ===
-  app.post('/api/access-requests', accessRequestRateLimit, turnstileGuard(), async (req, res) => {
+  app.post('/api/access-requests', accessRequestRateLimit, async (req, res) => {
     try {
       const { username, name, password, message } = req.body;
       const requestedUsername = String(username || name || "").trim();
