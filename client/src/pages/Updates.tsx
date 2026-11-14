@@ -892,14 +892,14 @@ export default function UpdatesPage() {
     return matchesQuery && matchesRange;
   }), [query, range]);
 
-  const grouped = useMemo(() => {
+  const grouped = useMemo<Array<[string, UpdateEntry[]]>>(() => {
     const groups = new Map<string, UpdateEntry[]>();
     filtered.forEach((item) => {
       const key = formatDate(item.date);
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(item);
     });
-    return [...groups.entries()];
+    return Array.from(groups.entries());
   }, [filtered]);
 
   return (
