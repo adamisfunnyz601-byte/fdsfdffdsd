@@ -32,6 +32,15 @@ const SESSION_CRYPT = "X-256-CHA-CHA-POLY";
 
 // GIF search is proxied through the server so the GIPHY API key stays private.
 
+const VOICE_AUDIO_CONSTRAINTS: MediaTrackConstraints = {
+  echoCancellation: { ideal: true },
+  noiseSuppression: { ideal: true },
+  autoGainControl: { ideal: true },
+  channelCount: { ideal: 1 },
+  sampleRate: { ideal: 48000 },
+  latency: { ideal: 0.02 },
+};
+
 const DEFAULT_SOUNDS = [
   { id: 'S1', name: 'Neural ping', url: 'https://www.soundjay.com/buttons/sounds/button-20.mp3' },
   { id: 'S2', name: 'Glitch pulse', url: 'https://www.soundjay.com/buttons/sounds/button-3.mp3' },
@@ -631,7 +640,7 @@ export default function Chat() {
     if(existing)return existing;
     let stream=groupLocalStreamRef.current;
     if(!stream){
-      stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:groupCallWithVideo?{facingMode:"user"}:false});
+      stream=await navigator.mediaDevices.getUserMedia({audio:VOICE_AUDIO_CONSTRAINTS,video:groupCallWithVideo?{facingMode:"user"}:false});
       groupLocalStreamRef.current=stream;
     }
     const peer=new RTCPeerConnection(await getRtcConfiguration());
@@ -1398,7 +1407,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
       let stream: MediaStream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+          audio: VOICE_AUDIO_CONSTRAINTS,
           video: isVideoOn ? { facingMode: 'user' } : false,
         });
       } catch (mediaError) {
