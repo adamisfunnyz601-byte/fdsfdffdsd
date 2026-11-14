@@ -2,12 +2,6 @@ name: Build unsigned iOS IPA
 
 on:
   workflow_dispatch:
-    inputs:
-      server_url:
-        description: "HTTPS URL of the deployed NEXUS app (Windows desktop uses the /chat interface)"
-        required: false
-        default: "https://secure-web-gateway--c00le5tp3rs0n3v.replit.app/chat"
-        type: string
   push:
     branches:
       - feat/mobile-notifications-responsive-platforms
@@ -22,17 +16,14 @@ jobs:
     runs-on: macos-latest
     env:
       GOOGLE_SERVICE_INFO_PLIST_BASE64: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST_BASE64 }}
-      APP_URL: ${{ inputs.server_url || 'https://secure-web-gateway--c00le5tp3rs0n3v.replit.app/chat' }}
-    steps:
+      steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - name: Validate deployment URL and app identifier
-        run: |
-          node -e 'const u=new URL(process.env.APP_URL); if(u.protocol!=="https:") throw new Error("server_url must use HTTPS");'
-          node -e 'const c=require("./package.json"); if(c.build?.appId!=="com.nexusos.app") throw new Error("Unexpected NEXUS app identifier"); console.log("NEXUS bundle identifier: com.nexusos.app");'
+      - name: Validate native app identifier
+        run: node -e 'const c=require("./package.json"); if(c.build?.appId!=="com.nexusos.app") throw new Error("Unexpected NEXUS app identifier"); console.log("NEXUS bundle identifier: com.nexusos.app");'
       - name: Pin stable npm version
         run: |
           npm install --global npm@10.9.4
@@ -61,9 +52,7 @@ jobs:
           exit 1
       - name: Build web application
         run: npm run build
-      - name: Generate Xcode project
-        env:
-          CAPACITOR_SERVER_URL: ${{ env.APP_URL }}
+      - name: Generate Xcode project with bundled local website
         run: |
           npx cap add ios
           npx cap sync ios
