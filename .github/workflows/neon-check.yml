@@ -15,47 +15,37 @@ jobs:
   test-neon:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          node-version: 22
-          cache: npm
+          python-version: "3.12"
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install PostgreSQL driver
+        run: python -m pip install "psycopg[binary]"
 
       - name: Test Neon connection
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          node --input-type=module <<'NODE'
-          import pg from "pg";
+          python - <<'PY'
+          import os
+          import sys
+          import psycopg
 
-          if (!process.env.DATABASE_URL) {
-            console.error("DATABASE_URL secret is missing.");
-            process.exit(1);
-          }
+          database_url = os.environ.get("DATABASE_URL")
+          if not database_url:
+              print("DATABASE_URL secret is missing.")
+              sys.exit(1)
 
-          const pool = new pg.Pool({
-            connectionString: process.env.DATABASE_URL,
-            connectionTimeoutMillis: 15000,
-            ssl: { rejectUnauthorized: false },
-          });
-
-          try {
-            const result = await pool.query(
-              "SELECT current_database() AS database, now() AS checked_at"
-            );
-            console.log("Neon connection successful.");
-            console.log("Database:", result.rows[0].database);
-            console.log("Checked at:", result.rows[0].checked_at);
-          } catch (error) {
-            console.error("Neon connection failed:", error.message);
-            process.exitCode = 1;
-          } finally {
-            await pool.end();
-          }
-          NODE
+          try:
+              with psycopg.connect(database_url, connect_timeout=15) as conn:
+                  with conn.cursor() as cur:
+                      cur.execute("SELECT current_database(), now()")
+                      database, checked_at = cur.fetchone()
+              print("Neon connection successful.")
+              print(f"Database: {database}")
+              print(f"Checked at: {checked_at}")
+          except Exception as error:
+              print(f"Neon connection failed: {error}")
+              sys.exit(1)
+          PY
