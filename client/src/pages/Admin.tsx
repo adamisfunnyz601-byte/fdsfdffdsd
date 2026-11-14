@@ -37,15 +37,6 @@ export default function Admin() {
     },
   });
 
-  const { data: accessRequests = [], refetch: refetchRequests } = useQuery<any[]>({
-    queryKey: ["/api/admin/requests"],
-    queryFn: async () => {
-      const r = await fetch("/api/admin/requests");
-      if (!r.ok) return [];
-      return r.json();
-    },
-  });
-
   const createEmojiMut = useMutation({
     mutationFn: async () => {
       if (!emojiFile || !emojiName.trim()) throw new Error("Name and image required");
@@ -72,20 +63,6 @@ export default function Admin() {
       await fetch(`/api/admin/emojis/${id}`, { method: "DELETE" });
     },
     onSuccess: () => { toast({ title: "Emoji deleted" }); refetchEmojis(); },
-  });
-
-  const updateRequestMut = useMutation({
-    mutationFn: async ({ id, status }: { id: number; status: string }) => {
-      const res = await fetch(`/api/admin/requests/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.message || "Failed to review request");
-      return data;
-    },
-    onSuccess: (data: any) => { toast({ title: data.accountCreated ? "Account created" : "Request updated", description: data.accountCreated ? "The applicant can now sign in with their chosen username and password." : "The request status was updated." }); refetchRequests(); },
   });
 
   const createShopItem = useMutation({
@@ -143,7 +120,6 @@ export default function Admin() {
     reader.readAsDataURL(file);
   };
 
-  const pendingRequests = accessRequests.filter((r: any) => r.status === "pending");
 
   return (
     <Layout>
@@ -151,11 +127,7 @@ export default function Admin() {
         <div className="flex items-center gap-3 mb-6">
           <ShieldAlert className="w-6 h-6 text-primary" />
           <h1 className="text-xl font-bold text-foreground">Admin Console</h1>
-          {pendingRequests.length > 0 && (
-            <span className="bg-rose-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-              {pendingRequests.length} pending
-            </span>
-          )}
+
         </div>
 
         <Tabs defaultValue="emojis" className="w-full">
