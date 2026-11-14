@@ -1,4 +1,4 @@
-name: Build unsigned iOS IPA
+name: Build native SwiftUI iOS IPA
 
 on:
   workflow_dispatch:
@@ -7,137 +7,41 @@ on:
       - feat/mobile-notifications-responsive-platforms
     paths:
       - ".github/workflows/ios-build.yml"
-      - "capacitor.config.ts"
-      - "client/**"
-      - "package.json"
-      - "package-lock.json"
-      - "script/**"
-      - "server/routes.ts"
+      - "ios-native/**"
 
 permissions:
   contents: read
 
 jobs:
-  ios:
-    runs-on: macos-latest
-    env:
-      GOOGLE_SERVICE_INFO_PLIST_BASE64: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST_BASE64 }}
+  ios-native:
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - name: Validate native app identifier
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate native Xcode project
+        run: xcodegen generate --spec ios-native/project.yml --project ios-native/NEXUS.xcodeproj
+      - name: Verify native Swift sources
         run: |
-          node -e 'const c=require("./package.json"); if(c.build?.appId!=="com.nexusos.app") throw new Error("Unexpected NEXUS app identifier"); console.log("NEXUS bundle identifier: com.nexusos.app");'
-      - name: Pin stable npm version
+          test -s ios-native/Sources/NEXUSApp.swift
+          test -s ios-native/Sources/NexusModel.swift
+          test -s ios-native/Sources/RootView.swift
+      - name: Build native SwiftUI archive
         run: |
-          npm install --global npm@10.9.4
-          npm --version
-      - name: Install app dependencies (resilient)
-        shell: bash
+          xcodebuild -project ios-native/NEXUS.xcodeproj -scheme NEXUS -configuration Release -sdk iphoneos -archivePath "$PWD/NEXUS.xcarchive" archive CODE_SIGNING_ALLOWED=NO
+      - name: Package unsigned native IPA
         run: |
-          set -euo pipefail
-          npm config set registry https://registry.npmjs.org/
-          npm config set fetch-retries 5
-          npm config set fetch-retry-mintimeout 20000
-          npm config set fetch-retry-maxtimeout 120000
-          npm config set fetch-timeout 300000
-          # The checked-in lockfile contains Replit-only mirror URLs and predates
-          # the Capacitor dependencies. Ignore it in CI rather than fetching from
-          # a private mirror or failing on an out-of-sync lockfile.
-          for attempt in 1 2 3; do
-            if npm install --package-lock=false --no-audit --no-fund --prefer-online --maxsockets=5; then
-              exit 0
-            fi
-            echo "npm install failed (attempt $attempt/3); clearing npm's cache and retrying..."
-            npm cache clean --force || true
-            sleep 5
-          done
-          echo "Dependency installation failed after 3 attempts."
-          exit 1
-      - name: Type-check all TypeScript and TSX sources
-        run: npm run check
-      - name: Build web application
-        run: npm run build
-      - name: Verify the complete NEXUS UI bundle
-        run: |
-          test -s dist/public/index.html
-          find dist/public/assets -maxdepth 1 -type f -name '*.js' | grep -q .
-          grep -Eq '/assets/[^"]+\.js' dist/public/index.html
-      - name: Generate Xcode project with same-origin NEXUS web app
-        env:
-          # Load the production site inside WKWebView. API requests then share
-          # the site's first-party origin and its Neon-backed session cookie.
-          CAPACITOR_SERVER_URL: https://nexus.tunnelto.me
-        run: |
-          npx cap add ios
-          npx cap sync ios
-      - name: Set increasing iOS build number
-        env:
-          IOS_BUILD_NUMBER: ${{ github.run_number }}
-        run: |
-          python3 - <<'PY'
-          import os
-          import plistlib
-          from pathlib import Path
-          path = Path("ios/App/App/Info.plist")
-          data = plistlib.loads(path.read_bytes())
-          data["CFBundleIdentifier"] = "com.nexusos.app"
-          data["CFBundleVersion"] = os.environ["IOS_BUILD_NUMBER"]
-          data["CFBundleDisplayName"] = "NEXUS"
-          path.write_bytes(plistlib.dumps(data))
-          print("Bundle ID:", data["CFBundleIdentifier"])
-          print("Build number:", data["CFBundleVersion"])
-          PY
-      - name: Add iOS microphone usage description and audio background mode
-        run: |
-          python3 - <<'PY'
-          import plistlib
-          from pathlib import Path
-          path = Path("ios/App/App/Info.plist")
-          data = plistlib.loads(path.read_bytes())
-          data["NSMicrophoneUsageDescription"] = "NEXUS uses your microphone for voice calls and voice messages."
-          data["NSCameraUsageDescription"] = "NEXUS uses your camera for video calls."
-          modes = set(data.get("UIBackgroundModes", []))
-          modes.add("audio")
-          data["UIBackgroundModes"] = sorted(modes)
-          path.write_bytes(plistlib.dumps(data))
-          PY
-      - name: Configure Firebase and remote notification background mode (optional)
-        if: ${{ env.GOOGLE_SERVICE_INFO_PLIST_BASE64 != '' }}
-        env:
-          GOOGLE_SERVICE_INFO_PLIST_BASE64: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST_BASE64 }}
-        run: |
-          echo "$GOOGLE_SERVICE_INFO_PLIST_BASE64" | base64 --decode > ios/App/App/GoogleService-Info.plist
-          python3 - <<'PY'
-          import plistlib
-          from pathlib import Path
-          path = Path("ios/App/App/Info.plist")
-          data = plistlib.loads(path.read_bytes())
-          modes = set(data.get("UIBackgroundModes", []))
-          modes.add("remote-notification")
-          data["UIBackgroundModes"] = sorted(modes)
-          path.write_bytes(plistlib.dumps(data))
-          PY
-      - name: Build unsigned iOS archive
-        run: |
-          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -sdk iphoneos -archivePath "$PWD/NEXUS.xcarchive" archive CODE_SIGNING_ALLOWED=NO
-      - name: Package unsigned IPA
-        run: |
-          APP_PATH="$PWD/NEXUS.xcarchive/Products/Applications/App.app"
+          APP_PATH="$PWD/NEXUS.xcarchive/Products/Applications/NEXUS.app"
           test -d "$APP_PATH"
           mkdir -p "$RUNNER_TEMP/unsigned-ipa/Payload"
-          cp -R "$APP_PATH" "$RUNNER_TEMP/unsigned-ipa/Payload/App.app"
-          (cd "$RUNNER_TEMP/unsigned-ipa" && /usr/bin/zip -qry "$GITHUB_WORKSPACE/NEXUS-unsigned.ipa" Payload)
-          test -s "$GITHUB_WORKSPACE/NEXUS-unsigned.ipa"
-      - name: Upload unsigned IPA
+          cp -R "$APP_PATH" "$RUNNER_TEMP/unsigned-ipa/Payload/NEXUS.app"
+          (cd "$RUNNER_TEMP/unsigned-ipa" && /usr/bin/zip -qry "$GITHUB_WORKSPACE/NEXUS-native-unsigned.ipa" Payload)
+          test -s "$GITHUB_WORKSPACE/NEXUS-native-unsigned.ipa"
+          echo "Native IPA size: $(du -h "$GITHUB_WORKSPACE/NEXUS-native-unsigned.ipa" | cut -f1)"
+      - name: Upload native IPA
         uses: actions/upload-artifact@v4
         with:
-          name: nexus-ios-unsigned-ipa
-          path: NEXUS-unsigned.ipa
+          name: nexus-native-ios-unsigned-ipa
+          path: NEXUS-native-unsigned.ipa
           if-no-files-found: error
           retention-days: 14
-
-# iOS uses the production origin to preserve first-party session storage in WKWebView.
