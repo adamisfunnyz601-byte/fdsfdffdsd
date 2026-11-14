@@ -589,14 +589,20 @@ export async function registerRoutes(
         return res.status(403).json({ message: "This account is currently banned." });
       }
 
-      // Set session
+      // Rotate the session ID at login to prevent session fixation, then
+      // explicitly persist the authenticated identity before returning success.
+      // This avoids a fast follow-up profile/chat request arriving before the
+      // PostgreSQL session store has committed the new userId.
+      await regenerateSession(req);
       req.session.userId = user.id;
       req.session.role = user.role;
       await db.update(users).set({
         presenceStatus: "online",
         lastSeen: new Date(),
       }).where(eq(users.id, user.id));
+      await saveSession(req);
 
+      res.setHeader("Cache-Control", "no-store");
       res.json(safeUser({ ...user, presenceStatus: "online", lastSeen: new Date() }));
     } catch (err) {
       if (err instanceof z.ZodError) {
