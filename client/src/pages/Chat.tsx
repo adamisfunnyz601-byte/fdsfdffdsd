@@ -32,7 +32,7 @@ export default function Chat() {
   };
 
   return <Layout>
-    <div className="mx-auto flex h-[calc(100dvh-7.5rem)] min-h-[480px] max-w-7xl overflow-hidden rounded-2xl border border-white/10 bg-[#171923] shadow-2xl">
+    <div className="mx-auto flex h-full min-h-[480px] max-w-7xl overflow-hidden rounded-2xl border border-white/10 bg-[#171923] shadow-2xl">
       <aside className="flex w-full max-w-[280px] shrink-0 flex-col border-r border-white/10 bg-[#1e202b] max-sm:max-w-[92px]">
         <div className="border-b border-white/10 p-4 max-sm:px-2">
           <div className="flex items-center gap-2 text-sm font-bold text-white"><MessageCircle size={18}/> <span className="max-sm:hidden">Direct messages</span></div>
