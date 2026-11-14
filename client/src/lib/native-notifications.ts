@@ -4,6 +4,7 @@ import { LocalNotifications } from "@capacitor/local-notifications";
 
 export const isNativeApp = () => Capacitor.isNativePlatform();
 export const nativePlatform = () => Capacitor.getPlatform();
+let pushListenersRegistered = false;
 
 export async function enableNativeNotifications() {
   if (!isNativeApp()) return false;
@@ -13,6 +14,7 @@ export async function enableNativeNotifications() {
     throw new Error("Notification permission was not granted by the device.");
   }
 
+  if (!pushListenersRegistered) {
   await PushNotifications.addListener("registration", (token) => {
     window.dispatchEvent(new CustomEvent("nexus:push-token", {
       detail: { token: token.value, platform: nativePlatform() },
@@ -27,6 +29,8 @@ export async function enableNativeNotifications() {
   await PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
     window.dispatchEvent(new CustomEvent("nexus:push-opened", { detail: action }));
   });
+  pushListenersRegistered = true;
+  }
   await PushNotifications.register();
   return true;
 }
