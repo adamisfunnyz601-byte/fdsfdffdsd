@@ -455,7 +455,9 @@ export async function registerRoutes(
       await regenerateSession(req);
       req.session.userId = account.id;
       req.session.role = account.role;
+      await db.update(users).set({ presenceStatus: "online", lastSeen: new Date() }).where(eq(users.id, account.id));
       await saveSession(req);
+      res.setHeader("Cache-Control", "no-store");
       return res.json({ success: true });
     } catch (error: any) {
       console.error("[passkey] Authentication verification failed:", error?.message || error);
