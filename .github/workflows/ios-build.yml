@@ -30,7 +30,7 @@ jobs:
           node-version: 22
           cache: npm
       - name: Install project dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
       - name: Build the exact NEXUS website frontend
         run: |
           npm run build
@@ -53,7 +53,7 @@ jobs:
         run: |
           APP_PATH="$PWD/NEXUS.xcarchive/Products/Applications/App.app"
           test -d "$APP_PATH"
-          test -s "$APP_PATH/index.html"
+          test -s "$APP_PATH/public/index.html"
           test -d "$APP_PATH/public/assets"
           mkdir -p "$RUNNER_TEMP/unsigned-ipa/Payload"
           cp -R "$APP_PATH" "$RUNNER_TEMP/unsigned-ipa/Payload/NEXUS.app"
