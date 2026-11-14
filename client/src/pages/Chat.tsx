@@ -1390,9 +1390,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     if (peerSetupPromiseRef.current) return peerSetupPromiseRef.current;
     if (peerConnectionRef.current && localStreamRef.current) return peerConnectionRef.current;
     const setup = (async () => {
-      const peer = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-      });
+      const peer = new RTCPeerConnection(await getRtcConfiguration());
       // Reserve a negotiated video sender even for audio-first calls so enabling
       // the camera later does not require an unsupported renegotiation.
       if (!isVideoOn) peer.addTransceiver("video", { direction: "sendrecv" });
