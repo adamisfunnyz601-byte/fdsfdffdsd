@@ -641,3 +641,139 @@ input:not([type="checkbox"]):not([type="radio"]):focus,select:focus,textarea:foc
 .nexus-page-chat .chat-command-menu{max-height:min(64vh,520px);overflow:hidden}
 .nexus-page-chat .chat-command-menu kbd{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 @media(prefers-reduced-motion:reduce){.nexus-page-chat .chat-poll-card{animation:none!important}}
+
+
+/* Cross-device layout and touch support */
+:root {
+  color-scheme: dark;
+  --app-safe-top: env(safe-area-inset-top, 0px);
+  --app-safe-right: env(safe-area-inset-right, 0px);
+  --app-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --app-safe-left: env(safe-area-inset-left, 0px);
+}
+html, body, #root {
+  min-height: 100%;
+  width: 100%;
+  min-width: 320px;
+  overscroll-behavior-x: none;
+}
+body {
+  padding-left: var(--app-safe-left);
+  padding-right: var(--app-safe-right);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+button, [role="button"], a, input, select, textarea {
+  touch-action: manipulation;
+}
+button, [role="button"], a {
+  -webkit-user-select: none;
+  user-select: none;
+}
+input, textarea, select {
+  max-width: 100%;
+  min-width: 0;
+  font-size: max(16px, 1em);
+}
+img, video, canvas, svg {
+  max-width: 100%;
+}
+.nexus-shell {
+  min-height: 100dvh;
+  min-height: 100svh;
+  width: 100%;
+  overflow-x: clip;
+}
+.nexus-page, .nexus-page-settings, .nexus-page-servers {
+  width: min(100%, 100%);
+  min-width: 0;
+  padding-bottom: calc(1rem + var(--app-safe-bottom));
+}
+.nexus-mobilebar {
+  padding-top: var(--app-safe-top);
+  min-height: calc(3.5rem + var(--app-safe-top));
+}
+.nexus-sidebar {
+  padding-bottom: var(--app-safe-bottom);
+}
+[role="dialog"], [data-radix-popper-content-wrapper], [data-radix-portal] {
+  max-width: min(100vw, 100%);
+}
+@media (max-width: 767px) {
+  .nexus-shell {
+    min-height: 100dvh;
+    min-height: 100svh;
+    flex-direction: column;
+  }
+  .nexus-mobilebar {
+    position: sticky;
+    top: 0;
+    z-index: 55;
+  }
+  .nexus-page {
+    padding: 1rem;
+    padding-bottom: calc(1.25rem + var(--app-safe-bottom));
+  }
+  .nexus-page h1 {
+    overflow-wrap: anywhere;
+  }
+  .nexus-page .flex.items-end.gap-3,
+  .nexus-page .flex.items-center.gap-3 {
+    min-width: 0;
+  }
+  .nexus-page [role="dialog"] {
+    width: calc(100vw - 1rem);
+    max-height: calc(100dvh - 2rem - var(--app-safe-top) - var(--app-safe-bottom));
+    overflow-y: auto;
+  }
+  .nexus-page button, .nexus-page a, .nexus-page [role="button"] {
+    min-height: 40px;
+  }
+  .nexus-page input, .nexus-page select, .nexus-page textarea {
+    min-height: 42px;
+  }
+}
+@media (min-width: 768px) and (max-width: 1180px) {
+  .nexus-shell {
+    min-height: 100dvh;
+  }
+  .nexus-sidebar {
+    width: clamp(220px, 25vw, 278px);
+    flex: 0 0 auto;
+  }
+  .nexus-page {
+    padding-left: clamp(1rem, 2.5vw, 2rem);
+    padding-right: clamp(1rem, 2.5vw, 2rem);
+  }
+  .nexus-page-servers .grid.lg\:grid-cols-\[280px_minmax\(0\,1fr\)\] {
+    grid-template-columns: minmax(190px, 0.34fr) minmax(0, 1fr);
+  }
+}
+@media (orientation: landscape) and (max-height: 520px) {
+  .nexus-mobilebar {
+    min-height: 2.75rem;
+  }
+  .nexus-sidebar {
+    overflow-y: auto;
+  }
+}
+@media (hover: none), (pointer: coarse) {
+  * {
+    scrollbar-width: none;
+  }
+  *::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+  button, [role="button"], a {
+    -webkit-touch-callout: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
