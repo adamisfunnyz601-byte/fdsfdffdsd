@@ -1,3 +1,4 @@
+import { apiUrl } from "@/lib/api-url";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { CyberInput } from "@/components/CyberInput";
@@ -33,7 +34,7 @@ export default function Login() {
     }
     setRegistering(true);
     try {
-      const response = await fetch("/api/auth/register", {
+      const response = await fetch(apiUrl("/api/auth/register"), {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
