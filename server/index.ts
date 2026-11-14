@@ -11,6 +11,7 @@ app.set("trust proxy", 1);
 // Allow only the app's known origins and keep session cookies enabled.
 const allowedAppOrigins = new Set([
   "capacitor://localhost",
+  "null",
   "ionic://localhost",
   "http://localhost",
   "https://localhost",
