@@ -42,6 +42,11 @@ jobs:
         run: |
           npx cap add ios
           npx cap sync ios
+          # Allow the bundled WKWebView to use the Render API host for its
+          # authenticated native requests and session cookies.
+          /usr/libexec/PlistBuddy -c "Add :WKAppBoundDomains array" ios/App/App/Info.plist 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :WKAppBoundDomains:0 string nexus-api-rcmi.onrender.com" ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c "Print :WKAppBoundDomains" ios/App/App/Info.plist
           test -s ios/App/App/public/index.html
           test -d ios/App/App/public/assets
           echo "iOS-bundled frontend:"
