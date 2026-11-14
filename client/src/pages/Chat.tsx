@@ -1,18 +1,33 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { useAuth } from "@/hooks/use-auth";
 import { useChat } from "@/hooks/use-chat";
 import { Avatar } from "@/components/ProfileModal";
-import { Search, Send, MessageCircle, Users, Loader2 } from "lucide-react";
+import { ChatMediaAttachment } from "@/components/ChatMediaAttachment";
+import { Search, Send, MessageCircle, Users, Loader2, Paperclip, Mic, Square, X } from "lucide-react";
 
 type ChatUser = { id:number; username:string; displayName?:string|null; avatarUrl?:string|null; presenceStatus?:string|null };
-type ChatMessage = { id:number; senderId:number; content:string; createdAt:string; senderName?:string; senderDisplayName?:string|null; senderAvatarUrl?:string|null };
+type ChatMessage = { id:number; senderId:number; content:string; createdAt:string; senderName?:string; senderDisplayName?:string|null; senderAvatarUrl?:string|null; hasMedia?:boolean; mediaType?:string|null };
+
+function readAsDataUrl(file: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("Could not read this file."));
+    reader.onerror = () => reject(new Error("Could not read this file."));
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function Chat() {
   const { user } = useAuth();
   const [selectedId,setSelectedId] = useState<number|null>(null);
   const [draft,setDraft] = useState("");
   const [search,setSearch] = useState("");
+  const [recording,setRecording] = useState(false);
+  const [attachmentBusy,setAttachmentBusy] = useState(false);
+  const recorderRef = useRef<MediaRecorder|null>(null);
+  const streamRef = useRef<MediaStream|null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { users, messages, isLoadingUsers, isLoadingMessages, sendMessage } = useChat({ recipientId:selectedId });
   const people = useMemo(() => ((users || []) as ChatUser[]).filter(person => person.id !== user?.id),[users,user?.id]);
   const selected = people.find(person => person.id === selectedId) || null;
@@ -23,12 +38,68 @@ export default function Chat() {
     if (selectedId !== null && !people.some(person => person.id === selectedId)) setSelectedId(people[0]?.id ?? null);
   },[people,selectedId]);
 
+  useEffect(() => () => {
+    recorderRef.current?.state !== "inactive" && recorderRef.current?.stop();
+    streamRef.current?.getTracks().forEach(track => track.stop());
+  }, []);
+
   const filtered = people.filter(person => `${person.displayName || person.username} ${person.username}`.toLowerCase().includes(search.toLowerCase()));
   const submit = (event:React.FormEvent) => {
     event.preventDefault();
     const content = draft.trim();
     if (!content || !selectedId || sendMessage.isPending) return;
     sendMessage.mutate({content,recipientId:selectedId},{onSuccess:()=>setDraft("")});
+  };
+
+  const sendAttachment = async (file: File, voice = false) => {
+    if (!selectedId) return;
+    if (file.size > 8 * 1024 * 1024) {
+      window.alert("Attachments must be 8 MB or smaller.");
+      return;
+    }
+    setAttachmentBusy(true);
+    try {
+      const dataUrl = await readAsDataUrl(file);
+      const mediaType = voice ? "audio/namaf1" : file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : "audio";
+      sendMessage.mutate({ content: "", recipientId: selectedId, mediaUrl: dataUrl, mediaType });
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Could not attach this file.");
+    } finally { setAttachmentBusy(false); }
+  };
+
+  const startRecording = async () => {
+    if (!selectedId || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      window.alert("Voice recording is not supported by this device or browser.");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const preferred = ["audio/webm;codecs=opus", "audio/mp4", "audio/ogg;codecs=opus"].find(type => MediaRecorder.isTypeSupported(type));
+      const recorder = preferred ? new MediaRecorder(stream, { mimeType: preferred }) : new MediaRecorder(stream);
+      const chunks: BlobPart[] = [];
+      recorder.ondataavailable = event => { if (event.data.size) chunks.push(event.data); };
+      recorder.onstop = async () => {
+        const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+        stream.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+        recorderRef.current = null;
+        setRecording(false);
+        if (blob.size) {
+          const extension = blob.type.includes("mp4") ? "m4a" : blob.type.includes("ogg") ? "ogg" : "webm";
+          await sendAttachment(new File([blob], `nexus-voice-message.${extension}`, { type: blob.type }), true);
+        }
+      };
+      recorderRef.current = recorder;
+      recorder.start(250);
+      setRecording(true);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Microphone permission was denied.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
   };
 
   return <Layout>
@@ -57,13 +128,18 @@ export default function Chat() {
           <div className="flex-1 space-y-4 overflow-y-auto px-5 py-6">
             {isLoadingMessages?<div className="flex justify-center py-10 text-white/45"><Loader2 className="animate-spin"/></div>:rows.length?rows.map(message=><article key={message.id} className="flex gap-3">
               <Avatar url={message.senderAvatarUrl} name={message.senderDisplayName||message.senderName||"?"} size={36}/>
-              <div className="min-w-0"><div className="flex flex-wrap items-baseline gap-2"><span className="text-sm font-semibold text-white">{message.senderDisplayName||message.senderName||"User"}</span><time className="text-[10px] text-white/35">{message.createdAt?new Date(message.createdAt).toLocaleString(): ""}</time></div><p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-white/85">{message.content}</p></div>
+              <div className="min-w-0 flex-1"><div className="flex flex-wrap items-baseline gap-2"><span className="text-sm font-semibold text-white">{message.senderDisplayName||message.senderName||"User"}</span><time className="text-[10px] text-white/35">{message.createdAt?new Date(message.createdAt).toLocaleString(): ""}</time></div>{message.content&&<p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-white/85">{message.content}</p>}{message.hasMedia&&<ChatMediaAttachment messageId={message.id} mediaType={message.mediaType}/>}</div>
             </article>):<div className="flex h-full flex-col items-center justify-center text-center text-white/45"><MessageCircle size={38} className="mb-3 opacity-40"/><p className="font-semibold text-white/70">This is the beginning</p><p className="mt-1 text-xs">Send a message to {selected.displayName||selected.username}.</p></div>}
           </div>
-          <form onSubmit={submit} className="m-4 flex items-center gap-2 app-glass m-4 flex items-center gap-2 rounded-xl p-2">
-            <input value={draft} onChange={e=>setDraft(e.target.value)} maxLength={2000} placeholder={`Message @${selected.username}`} className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"/>
-            <button type="submit" disabled={!draft.trim()||sendMessage.isPending} aria-label="Send message" className="grid h-10 w-10 shrink-0 place-items-center nexus-btn nexus-btn--glow h-10 w-10 rounded-lg p-0 text-white disabled:opacity-40"><Send size={17}/></button>
+          <form onSubmit={submit} className="m-4 flex items-center gap-2 app-glass rounded-xl p-2">
+            <input ref={undefined} value={draft} onChange={e=>setDraft(e.target.value)} maxLength={2000} placeholder={`Message @${selected.username}`} className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"/>
+            <input ref={fileInputRef} type="file" accept="image/*,video/*,audio/*" className="hidden" onChange={event=>{const file=event.target.files?.[0];if(file)void sendAttachment(file);event.target.value="";}}/>
+            <button type="button" disabled={attachmentBusy||sendMessage.isPending} onClick={()=>fileInputRef.current?.click()} aria-label="Attach image, video or audio" title="Attach media" className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/5 text-white/70 disabled:opacity-40"><Paperclip size={17}/></button>
+            <button type="button" disabled={recording||attachmentBusy||sendMessage.isPending} onClick={()=>void startRecording()} aria-label="Record voice message" title="Record voice message" className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/5 text-white/70 disabled:opacity-40"><Mic size={17}/></button>
+            {recording&&<button type="button" onClick={stopRecording} aria-label="Stop and send voice message" title="Stop and send voice message" className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-rose-500/20 text-rose-200"><Square size={15}/></button>}
+            <button type="submit" disabled={!draft.trim()||sendMessage.isPending} aria-label="Send message" className="grid h-10 w-10 shrink-0 place-items-center nexus-btn nexus-btn--glow rounded-lg p-0 text-white disabled:opacity-40"><Send size={17}/></button>
           </form>
+          {(attachmentBusy||recording)&&<div className="px-5 pb-2 text-[11px] text-violet-200/70">{recording?"Recording voice message — press stop to send.": "Preparing attachment…"}</div>}
         </>:<div className="flex flex-1 flex-col items-center justify-center text-center text-white/45"><MessageCircle size={42} className="mb-3 opacity-40"/><p className="font-semibold text-white/70">Your messages</p><p className="mt-1 text-xs">Choose someone to start chatting.</p></div>}
       </section>
     </div></div>
