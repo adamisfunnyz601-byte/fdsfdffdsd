@@ -67,6 +67,23 @@ jobs:
         run: |
           npx cap add ios
           npx cap sync ios
+      - name: Set increasing iOS build number
+        env:
+          IOS_BUILD_NUMBER: ${{ github.run_number }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import plistlib
+          from pathlib import Path
+          path = Path("ios/App/App/Info.plist")
+          data = plistlib.loads(path.read_bytes())
+          data["CFBundleIdentifier"] = "com.nexusos.app"
+          data["CFBundleVersion"] = os.environ["IOS_BUILD_NUMBER"]
+          data["CFBundleDisplayName"] = "NEXUS"
+          path.write_bytes(plistlib.dumps(data))
+          print("Bundle ID:", data["CFBundleIdentifier"])
+          print("Build number:", data["CFBundleVersion"])
+          PY
       - name: Add iOS microphone usage description and audio background mode
         run: |
           python3 - <<'PY'
