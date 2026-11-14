@@ -88,7 +88,8 @@ jobs:
           from pathlib import Path
           path = Path("ios/App/App/Info.plist")
           data = plistlib.loads(path.read_bytes())
-          data["NSMicrophoneUsageDescription"] = "NEXUS uses your microphone for voice calls."
+          data["NSMicrophoneUsageDescription"] = "NEXUS uses your microphone for voice calls and voice messages."
+          data["NSCameraUsageDescription"] = "NEXUS uses your camera for video calls."
           modes = set(data.get("UIBackgroundModes", []))
           modes.add("audio")
           data["UIBackgroundModes"] = sorted(modes)
