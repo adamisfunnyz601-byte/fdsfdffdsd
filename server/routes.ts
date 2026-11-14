@@ -1038,6 +1038,8 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Invalid group" });
     }
     const messages = await storage.getMessages(req.session.userId!, recipientId, groupId);
+    res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
     res.json(messages);
   });
 
