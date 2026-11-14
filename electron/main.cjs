@@ -1,7 +1,7 @@
 const { app, BrowserWindow, shell, session, desktopCapturer, dialog } = require("electron");
 const path = require("node:path");
 
-const API_URL = process.env.NEXUS_API_URL || "https://secure-web-gateway--c00le5tp3rs0n3v.replit.app";
+const API_URL = process.env.NEXUS_API_URL || "https://nexus.tunnelto.me";
 const API_ORIGIN = new URL(API_URL).origin;
 const LOCAL_UI = path.join(__dirname, "..", "dist", "public", "index.html");
 
