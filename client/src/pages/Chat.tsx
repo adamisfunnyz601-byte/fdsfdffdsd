@@ -32,11 +32,11 @@ export default function Chat() {
   };
 
   return <Layout>
-    <div className="mx-auto flex h-full min-h-[480px] max-w-7xl overflow-hidden rounded-2xl border border-white/10 bg-[#171923] shadow-2xl">
-      <aside className="flex w-full max-w-[280px] shrink-0 flex-col border-r border-white/10 bg-[#1e202b] max-sm:max-w-[92px]">
+    <div className="nexus-page nexus-page-chat h-full p-2 sm:p-3"><div className="app-glass mx-auto flex h-full min-h-[480px] max-w-7xl overflow-hidden rounded-2xl">
+      <aside className="flex w-full max-w-[280px] shrink-0 flex-col border-r border-white/10 bg-white/[0.035] backdrop-blur-xl max-sm:max-w-[92px]">
         <div className="border-b border-white/10 p-4 max-sm:px-2">
           <div className="flex items-center gap-2 text-sm font-bold text-white"><MessageCircle size={18}/> <span className="max-sm:hidden">Direct messages</span></div>
-          <div className="relative mt-4 max-sm:hidden"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/35"/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Find a conversation" className="w-full rounded-lg border border-white/10 bg-black/20 py-2 pl-9 pr-3 text-xs text-white outline-none focus:border-violet-400/60"/></div>
+          <div className="relative mt-4 max-sm:hidden"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/35"/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Find a conversation" className="w-full rounded-lg border border-white/10 bg-black/20 backdrop-blur-xl py-2 pl-9 pr-3 text-xs text-white outline-none focus:border-violet-400/60"/></div>
         </div>
         <div className="flex-1 overflow-y-auto p-2">
           <div className="px-2 py-2 text-[10px] font-bold uppercase tracking-widest text-white/35 max-sm:hidden">Messages</div>
@@ -48,7 +48,7 @@ export default function Chat() {
         </div>
         <div className="border-t border-white/10 p-3 text-[10px] text-white/35 max-sm:hidden"><Users size={13} className="mr-1 inline"/> {people.length} people</div>
       </aside>
-      <section className="flex min-w-0 flex-1 flex-col bg-[#313440]">
+      <section className="flex min-w-0 flex-1 flex-col bg-white/[0.025] backdrop-blur-xl">
         {selected?<>
           <header className="flex h-[68px] shrink-0 items-center gap-3 border-b border-black/10 px-5 shadow-sm">
             <Avatar url={selected.avatarUrl} name={selected.displayName||selected.username} size={38}/>
@@ -60,12 +60,12 @@ export default function Chat() {
               <div className="min-w-0"><div className="flex flex-wrap items-baseline gap-2"><span className="text-sm font-semibold text-white">{message.senderDisplayName||message.senderName||"User"}</span><time className="text-[10px] text-white/35">{message.createdAt?new Date(message.createdAt).toLocaleString(): ""}</time></div><p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-white/85">{message.content}</p></div>
             </article>):<div className="flex h-full flex-col items-center justify-center text-center text-white/45"><MessageCircle size={38} className="mb-3 opacity-40"/><p className="font-semibold text-white/70">This is the beginning</p><p className="mt-1 text-xs">Send a message to {selected.displayName||selected.username}.</p></div>}
           </div>
-          <form onSubmit={submit} className="m-4 flex items-center gap-2 rounded-xl bg-[#242631] p-2">
+          <form onSubmit={submit} className="m-4 flex items-center gap-2 app-glass m-4 flex items-center gap-2 rounded-xl p-2">
             <input value={draft} onChange={e=>setDraft(e.target.value)} maxLength={2000} placeholder={`Message @${selected.username}`} className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"/>
-            <button type="submit" disabled={!draft.trim()||sendMessage.isPending} aria-label="Send message" className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-violet-600 text-white transition hover:bg-violet-500 disabled:opacity-40"><Send size={17}/></button>
+            <button type="submit" disabled={!draft.trim()||sendMessage.isPending} aria-label="Send message" className="grid h-10 w-10 shrink-0 place-items-center nexus-btn nexus-btn--glow h-10 w-10 rounded-lg p-0 text-white disabled:opacity-40"><Send size={17}/></button>
           </form>
         </>:<div className="flex flex-1 flex-col items-center justify-center text-center text-white/45"><MessageCircle size={42} className="mb-3 opacity-40"/><p className="font-semibold text-white/70">Your messages</p><p className="mt-1 text-xs">Choose someone to start chatting.</p></div>}
       </section>
-    </div>
+    </div></div>
   </Layout>;
 }
