@@ -109,7 +109,6 @@ export default function Login() {
               {mode === "login" ? <><Lock className="w-4 h-4" /> Sign In</> : <><UserRoundPlus className="w-4 h-4" /> Create Account</>}
             </CyberButton>
           </form>
-          <a href={apiUrl("/api/auth/oauth/google?returnTo=%2Fchat")} className="mt-4 flex w-full items-center justify-center gap-3 rounded-lg border border-white/15 bg-white/[0.06] px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/[0.12]"><span className="grid h-5 w-5 place-items-center rounded-full bg-white text-xs font-black text-[#4285f4]">G</span> Continue with Google</a>
           {mode === "login" && <button type="button" disabled={passkeyBusy || !username.trim()} onClick={() => void signInWithPasskey()} className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-violet-300/20 bg-violet-500/10 px-4 py-3 text-sm font-semibold text-violet-100 transition hover:bg-violet-500/20 disabled:opacity-40">{passkeyBusy ? "Waiting for passkey…" : "Sign in with a passkey"}</button>}
         </div>
       </section>
