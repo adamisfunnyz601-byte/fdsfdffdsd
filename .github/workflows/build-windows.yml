@@ -42,6 +42,14 @@ jobs:
           npm ls electron electron-builder debug --depth=0
           node -e "require.resolve('electron'); require.resolve('electron-builder'); require.resolve('debug'); console.log('Electron build dependencies are resolvable.')"
 
+      - name: Build bundled web interface
+        run: npm run build
+
+      - name: Verify bundled interface exists
+        shell: pwsh
+        run: |
+          if (-not (Test-Path dist/public/index.html)) { throw 'Bundled NEXUS UI is missing.' }
+
       - name: Build Windows installer
         run: npm run desktop:dist -- --publish=never
 
