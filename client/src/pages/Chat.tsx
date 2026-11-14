@@ -19,6 +19,22 @@ function readAsDataUrl(file: Blob): Promise<string> {
   });
 }
 
+async function normalizeNexusAudioFile(file: File): Promise<File> {
+  if (!file.name.toLowerCase().endsWith(".namaf1") || file.type.startsWith("audio/")) return file;
+  const bytes = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  const ascii = (start:number,end:number) => String.fromCharCode(...bytes.slice(start,end));
+  let mime = "";
+  if (ascii(0,4) === "RIFF") mime = "audio/wav";
+  else if (ascii(0,4) === "OggS") mime = "audio/ogg";
+  else if (ascii(0,4) === "fLaC") mime = "audio/flac";
+  else if (ascii(0,3) === "ID3" || (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0)) mime = "audio/mpeg";
+  else if (bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3) mime = "audio/webm";
+  else if (ascii(4,8) === "ftyp") mime = "audio/mp4";
+  else if (bytes[0] === 0xff && (bytes[1] & 0xf6) === 0xf0) mime = "audio/aac";
+  if (!mime) throw new Error("This .namaf1 file does not contain a recognised standard audio stream.");
+  return new File([file], file.name, { type: mime });
+}
+
 export default function Chat() {
   const { user } = useAuth();
   const [selectedId,setSelectedId] = useState<number|null>(null);
@@ -60,8 +76,9 @@ export default function Chat() {
     }
     setAttachmentBusy(true);
     try {
-      const dataUrl = await readAsDataUrl(file);
-      const mediaType = voice ? "audio/namaf1" : file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : "audio";
+      const preparedFile = await normalizeNexusAudioFile(file);
+      const dataUrl = await readAsDataUrl(preparedFile);
+      const mediaType = voice || preparedFile.name.toLowerCase().endsWith(".namaf1") ? "audio/namaf1" : preparedFile.type.startsWith("image/") ? "image" : preparedFile.type.startsWith("video/") ? "video" : "audio";
       sendMessage.mutate({ content: "", recipientId: selectedId, mediaUrl: dataUrl, mediaType });
     } catch (error) {
       window.alert(error instanceof Error ? error.message : "Could not attach this file.");
@@ -135,7 +152,7 @@ export default function Chat() {
           </div>
           <form onSubmit={submit} className="m-4 flex items-center gap-2 app-glass rounded-xl p-2">
             <input ref={undefined} value={draft} onChange={e=>setDraft(e.target.value)} maxLength={2000} placeholder={`Message @${selected.username}`} className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"/>
-            <input ref={fileInputRef} type="file" accept="image/*,video/*,audio/*" className="hidden" onChange={event=>{const file=event.target.files?.[0];if(file)void sendAttachment(file);event.target.value="";}}/>
+            <input ref={fileInputRef} type="file" accept=".namaf1,image/*,video/*,audio/*" className="hidden" onChange={event=>{const file=event.target.files?.[0];if(file)void sendAttachment(file);event.target.value="";}}/>
             <button type="button" disabled={attachmentBusy||sendMessage.isPending} onClick={()=>fileInputRef.current?.click()} aria-label="Attach image, video or audio" title="Attach media" className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/5 text-white/70 disabled:opacity-40"><Paperclip size={17}/></button>
             <button type="button" disabled={recording||attachmentBusy||sendMessage.isPending} onClick={()=>void startRecording()} aria-label="Record voice message" title="Record voice message" className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/5 text-white/70 disabled:opacity-40"><Mic size={17}/></button>
             {recording&&<button type="button" onClick={stopRecording} aria-label="Stop and send voice message" title="Stop and send voice message" className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-rose-500/20 text-rose-200"><Square size={15}/></button>}
