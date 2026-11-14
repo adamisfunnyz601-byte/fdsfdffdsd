@@ -415,7 +415,36 @@ export async function registerRoutes(
   });
 
   // === AUTH ===
-  app.post(api.auth.login.path, authRateLimit, turnstileGuard(), async (req, res) => {
+  // Public username/password registration. The random serialKey is retained only
+  // for compatibility with the existing users table; it is never shown to users.
+  app.post("/api/auth/register", authRateLimit, async (req, res) => {
+    try {
+      const username = String(req.body?.username || "").trim();
+      const password = String(req.body?.password || "");
+      if (!/^[a-zA-Z0-9_]{3,24}$/.test(username)) {
+        return res.status(400).json({ message: "Username must be 3–24 characters and use letters, numbers or underscores." });
+      }
+      if (password.length < 8 || password.length > 128) {
+        return res.status(400).json({ message: "Password must be between 8 and 128 characters." });
+      }
+      const [existing] = await db.select({ id: users.id }).from(users)
+        .where(sql`lower(${users.username}) = ${username.toLowerCase()}`).limit(1);
+      if (existing) return res.status(409).json({ message: "That username is already taken." });
+
+      const [created] = await db.insert(users).values({
+        username,
+        serialKey: "NEXUS_ACCOUNT_" + randomBytes(32).toString("hex"),
+        passwordHash: hashAccountPassword(password),
+        role: "user",
+      }).returning();
+      return res.status(201).json({ message: "Account created.", user: safeUser(created) });
+    } catch (error) {
+      console.error("Account registration failed:", error);
+      return res.status(500).json({ message: "Could not create your account right now." });
+    }
+  });
+
+  app.post(api.auth.login.path, authRateLimit, async (req, res) => {
     try {
       const { serialKey, username } = api.auth.login.input.parse(req.body);
 
