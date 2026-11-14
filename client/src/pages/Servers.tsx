@@ -32,7 +32,7 @@ export default function ServersPage(){
  const selectedChannel=detail?.channels?.find(c=>c.id===channelId);
  const manager=Boolean(detail?.member&&["owner","admin"].includes(detail.member.role));
  const copyInvite=async()=>{if(!detail)return;try{await navigator.clipboard.writeText(detail.server.inviteCode);toast({title:"Invite code copied"});}catch{toast({title:"Invite code",description:detail.server.inviteCode});}};
- return <Layout><div className="mx-auto flex h-[calc(100dvh-7.5rem)] min-h-[500px] max-w-7xl overflow-hidden rounded-2xl border border-white/10 bg-[#313440] text-white shadow-2xl">
+ return <Layout><div className="mx-auto flex h-full min-h-[500px] max-w-7xl overflow-hidden rounded-2xl border border-white/10 bg-[#313440] text-white shadow-2xl">
   <aside className="flex w-[76px] shrink-0 flex-col items-center gap-3 overflow-y-auto border-r border-black/20 bg-[#20222d] py-4">
    <button title="Create server" onClick={()=>setCreateOpen(v=>!v)} className="grid h-12 w-12 place-items-center rounded-2xl bg-[#343744] text-emerald-300 transition hover:rounded-xl hover:bg-emerald-600 hover:text-white"><Plus/></button>
    <div className="h-px w-8 bg-white/10"/>
