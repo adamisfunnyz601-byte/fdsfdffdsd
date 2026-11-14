@@ -26,7 +26,7 @@ function createWindow() {
     show: false,
     autoHideMenuBar: true,
     backgroundColor: "#09090b",
-    title: "Secure Web Gateway",
+    title: "NEXUS",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -56,11 +56,11 @@ function createWindow() {
 
   mainWindow.webContents.on("page-title-updated", (event) => {
     event.preventDefault();
-    mainWindow?.setTitle("Secure Web Gateway");
+    mainWindow?.setTitle("NEXUS");
   });
 
   mainWindow.loadURL(APP_URL).catch((error) => {
-    console.error("Unable to load Secure Web Gateway:", error);
+    console.error("Unable to load NEXUS:", error);
   });
 
   mainWindow.on("closed", () => {
