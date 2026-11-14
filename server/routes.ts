@@ -1880,6 +1880,23 @@ export async function registerRoutes(
     for(const peer of blockBlastMembers.keys()){const queue=blockBlastSignals.get(peer)||[];queue.push({from:id,signal:{type:"left"},createdAt:Date.now()});blockBlastSignals.set(peer,queue);}
     blockBlastSignals.delete(id); res.json({success:true});
   });
+  app.get('/api/chat/voice/ice-config', requireAuth, (_req, res) => {
+    const fallback = [{ urls: 'stun:stun.l.google.com:19302' }];
+    let iceServers = fallback;
+    const configured = process.env.WEBRTC_ICE_SERVERS;
+    if (configured) {
+      try {
+        const parsed = JSON.parse(configured);
+        if (Array.isArray(parsed) && parsed.length > 0 && parsed.every((item) => item && typeof item === 'object' && item.urls)) {
+          iceServers = parsed;
+        }
+      } catch (error) {
+        console.error('WEBRTC_ICE_SERVERS must be a valid JSON array:', error);
+      }
+    }
+    res.set('Cache-Control', 'no-store').json({ iceServers });
+  });
+
   app.post('/api/chat/voice/start', requireAuth, async (req, res) => {
     const calleeId = Number(req.body?.calleeId);
     const callerId = Number(req.session.userId!);
