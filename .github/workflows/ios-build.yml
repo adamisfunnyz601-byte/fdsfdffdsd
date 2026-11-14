@@ -28,7 +28,8 @@ jobs:
           node-version: 22
           cache: npm
       - name: Validate native app identifier
-        run: node -e 'const c=require("./package.json"); if(c.build?.appId!=="com.nexusos.app") throw new Error("Unexpected NEXUS app identifier"); console.log("NEXUS bundle identifier: com.nexusos.app");'
+        run: |
+          node -e 'const c=require("./package.json"); if(c.build?.appId!=="com.nexusos.app") throw new Error("Unexpected NEXUS app identifier"); console.log("NEXUS bundle identifier: com.nexusos.app");'
       - name: Pin stable npm version
         run: |
           npm install --global npm@10.9.4
