@@ -91,4 +91,5 @@ for name, *_ in themes:
         encoding="utf-8"
     )
     (folder / f"{name}.jpg").write_bytes((ROOT / f"{name}.jpg").read_bytes())
+    (ROOT / f"{name}.jpg").unlink()
 print("Generated 5 original 4K wallpapers and 8 original soundboard cues.")
