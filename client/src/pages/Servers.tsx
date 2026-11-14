@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Hash, Plus, Compass, Users, Settings, Copy, Send, ChevronDown, Loader2, Server as ServerIcon } from "lucide-react";
+import { Hash, Plus, LogIn, Users, Settings, Copy, Send, Loader2, Server as ServerIcon } from "lucide-react";
 
 type ServerSummary={id:number;name:string;description:string;visibility:string;inviteCode:string;ownerId:number;role:string|null};
 type ServerDetail={server:any;member:any;categories:any[];channels:any[];members:any[]};
@@ -16,7 +16,7 @@ const request=async(url:string,method="GET",body?:unknown)=>{
 export default function ServersPage(){
  const {toast}=useToast();const qc=useQueryClient();
  const [serverId,setServerId]=useState<number|null>(null);const [channelId,setChannelId]=useState<number|null>(null);
- const [createOpen,setCreateOpen]=useState(false);const [serverName,setServerName]=useState("");const [description,setDescription]=useState("");const [visibility,setVisibility]=useState("private");
+ const [createOpen,setCreateOpen]=useState(false);const [joinOpen,setJoinOpen]=useState(false);const [serverName,setServerName]=useState("");const [description,setDescription]=useState("");const [visibility,setVisibility]=useState("private");
  const [inviteCode,setInviteCode]=useState("");const [draft,setDraft]=useState("");const [manage,setManage]=useState(false);const [newChannel,setNewChannel]=useState("");
  const serversQuery=useQuery<ServerSummary[]>({queryKey:["/api/servers"],queryFn:()=>request("/api/servers"),refetchOnWindowFocus:true});
  const servers=serversQuery.data||[];
@@ -35,7 +35,7 @@ export default function ServersPage(){
  const copyInvite=async()=>{if(!detail)return;try{await navigator.clipboard.writeText(detail.server.inviteCode);toast({title:"Invite code copied"});}catch{toast({title:"Invite code",description:detail.server.inviteCode});}};
  return <Layout><div className="mx-auto flex h-full min-h-[500px] max-w-7xl overflow-hidden rounded-2xl border border-white/10 bg-[#313440] text-white shadow-2xl">
   <aside className="flex w-[76px] shrink-0 flex-col items-center gap-3 overflow-y-auto border-r border-black/20 bg-[#20222d] py-4">
-   <button title="Create server" onClick={()=>setCreateOpen(v=>!v)} className="grid h-12 w-12 place-items-center rounded-2xl bg-[#343744] text-emerald-300 transition hover:rounded-xl hover:bg-emerald-600 hover:text-white"><Plus/></button>
+   <button title="Create server" onClick={()=>setCreateOpen(v=>!v)} className="grid h-12 w-12 place-items-center rounded-2xl bg-[#343744] text-emerald-300 transition hover:rounded-xl hover:bg-emerald-600 hover:text-white"><Plus/></button><button title="Join with invite code" onClick={()=>setJoinOpen(v=>!v)} className="grid h-12 w-12 place-items-center rounded-2xl bg-[#343744] text-violet-300 transition hover:rounded-xl hover:bg-violet-600 hover:text-white"><LogIn/></button>
    <div className="h-px w-8 bg-white/10"/>
    {servers.map(s=><button key={s.id} title={s.name} onClick={()=>setServerId(s.id)} className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl text-sm font-bold transition hover:rounded-xl ${serverId===s.id?"rounded-xl bg-violet-600 text-white":"bg-[#343744] text-white/65"}`}>{s.name.slice(0,2).toUpperCase()}</button>)}
    {servers.length===0&&!serversQuery.isLoading&&<span className="px-2 text-center text-[9px] text-white/35">No servers</span>}
