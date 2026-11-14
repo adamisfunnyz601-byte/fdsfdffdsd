@@ -184,7 +184,7 @@ export function NexusCallPanel({targetId,targetName}:Props) {
     }catch(cause){setError(cause instanceof Error?cause.message:"Screen sharing was cancelled.");}
   };
 
-  useEffect(()=>()=>cleanup(),[cleanup]);
+  useEffect(()=>()=>{const active=callRef.current;if(active)void post("/api/chat/voice/end",{callId:active.callId}).catch(()=>{});cleanup();},[cleanup]);
 
   return <>
     <div className="ml-auto flex items-center gap-2">
