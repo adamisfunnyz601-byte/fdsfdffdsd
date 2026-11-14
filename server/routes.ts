@@ -206,10 +206,62 @@ declare module "express-session" {
   }
 }
 
+async function ensureCommunityServerTables() {
+  // These idempotent DDL statements keep fresh deployments from exposing
+  // server screens whose backing tables were never created by a manual db:push.
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS community_servers (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      visibility TEXT NOT NULL DEFAULT 'private',
+      invite_code TEXT NOT NULL UNIQUE,
+      owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS community_server_members (
+      id SERIAL PRIMARY KEY,
+      server_id INTEGER NOT NULL REFERENCES community_servers(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      role TEXT NOT NULL DEFAULT 'member',
+      joined_at TIMESTAMP DEFAULT NOW()
+    )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS community_server_member_unique
+      ON community_server_members(server_id, user_id)`,
+    `CREATE TABLE IF NOT EXISTS community_server_categories (
+      id SERIAL PRIMARY KEY,
+      server_id INTEGER NOT NULL REFERENCES community_servers(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      position INTEGER NOT NULL DEFAULT 0
+    )`,
+    `CREATE TABLE IF NOT EXISTS community_server_channels (
+      id SERIAL PRIMARY KEY,
+      server_id INTEGER NOT NULL REFERENCES community_servers(id) ON DELETE CASCADE,
+      category_id INTEGER REFERENCES community_server_categories(id) ON DELETE SET NULL,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'text',
+      topic TEXT NOT NULL DEFAULT '',
+      position INTEGER NOT NULL DEFAULT 0,
+      is_locked BOOLEAN NOT NULL DEFAULT FALSE
+    )`,
+    `CREATE TABLE IF NOT EXISTS community_server_messages (
+      id SERIAL PRIMARY KEY,
+      server_id INTEGER NOT NULL REFERENCES community_servers(id) ON DELETE CASCADE,
+      channel_id INTEGER NOT NULL REFERENCES community_server_channels(id) ON DELETE CASCADE,
+      author_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      content TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW(),
+      edited_at TIMESTAMP
+    )`,
+  ];
+  for (const statement of statements) await db.execute(sql.raw(statement));
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  await ensureCommunityServerTables();
   // Session middleware
   app.use(
     session({
