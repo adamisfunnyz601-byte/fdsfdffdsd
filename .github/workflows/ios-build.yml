@@ -27,10 +27,32 @@ jobs:
           APP_URL: ${{ inputs.server_url }}
         run: |
           node -e 'const u=new URL(process.env.APP_URL); if(u.protocol!=="https:") throw new Error("server_url must use HTTPS");'
-      - name: Install app dependencies
-        run: npm install
-      - name: Install Capacitor build tooling
-        run: npm install --no-save --package-lock=false @capacitor/cli@^8 @capacitor/core@^8 @capacitor/ios@^8 @capacitor/push-notifications@^8 @capacitor/local-notifications@^8
+      - name: Pin stable npm version
+        run: |
+          npm install --global npm@10.9.4
+          npm --version
+      - name: Install app dependencies (resilient)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm config set registry https://registry.npmjs.org/
+          npm config set fetch-retries 5
+          npm config set fetch-retry-mintimeout 20000
+          npm config set fetch-retry-maxtimeout 120000
+          npm config set fetch-timeout 300000
+          # The checked-in lockfile contains Replit-only mirror URLs and predates
+          # the Capacitor dependencies. Ignore it in CI rather than fetching from
+          # a private mirror or failing on an out-of-sync lockfile.
+          for attempt in 1 2 3; do
+            if npm install --package-lock=false --no-audit --no-fund --prefer-online --maxsockets=5; then
+              exit 0
+            fi
+            echo "npm install failed (attempt $attempt/3); clearing npm's cache and retrying..."
+            npm cache clean --force || true
+            sleep 5
+          done
+          echo "Dependency installation failed after 3 attempts."
+          exit 1
       - name: Build web application
         run: npm run build
       - name: Generate Xcode project
