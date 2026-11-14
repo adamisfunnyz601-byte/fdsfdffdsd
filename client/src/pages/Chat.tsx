@@ -765,10 +765,13 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
   const { data: groups = [] } = useQuery<any[]>({
     queryKey: ['/api/chat/groups'],
     queryFn: async () => {
-      const response = await apiFetch('/api/chat/groups', { credentials: 'same-origin', cache: 'no-store' });
+      const response = await apiFetch('/api/chat/groups', { cache: 'no-store' });
       if (!response.ok) throw new Error('Could not load your group chats');
       return response.json();
     },
+    // Do not fire protected requests before login. A 401 cached while the
+    // login screen is open otherwise leaves the group list empty after sign-in.
+    enabled: Boolean(currentUser?.id),
     refetchOnMount: 'always',
     refetchOnWindowFocus: true,
     staleTime: 0,
