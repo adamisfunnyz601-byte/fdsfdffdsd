@@ -20,7 +20,7 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate native Xcode project
-        run: xcodegen generate --spec ios-native/project.yml --project ios-native/NEXUS.xcodeproj
+        run: xcodegen generate --spec ios-native/project.yml --project ios-native
       - name: Verify native Swift sources
         run: |
           test -s ios-native/Sources/NEXUSApp.swift
