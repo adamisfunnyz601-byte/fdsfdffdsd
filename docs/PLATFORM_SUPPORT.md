@@ -36,8 +36,7 @@ Run the Build Android APK workflow from Actions and provide the HTTPS URL where 
 
 ## iOS build
 
-Run the Build iOS archive workflow and provide the deployed HTTPS app URL. Without signing secrets, the workflow produces an unsigned archive for Xcode inspection. To export a device-installable IPA, configure `APPLE_CERTIFICATE_BASE64`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_PROVISIONING_PROFILE_BASE64`, and `APPLE_TEAM_ID` as repository Actions secrets. The provisioning profile must match `com.nexusos.app` and include Push Notifications if remote push is required. Add `GOOGLE_SERVICE_INFO_PLIST_BASE64` for Firebase iOS. The exported IPA is uploaded as a workflow artifact. Never paste signing secrets into chat or commit them.
-
+Run the Build iOS archive workflow and provide the deployed HTTPS app URL. It builds an unsigned iOS archive and packages the app bundle as `NEXUS-unsigned.ipa` without Apple certificates or provisioning profiles. The IPA is uploaded as a workflow artifact. **It is an unsigned package for inspection/repackaging; iOS will not install or launch it on a physical device until it is signed.**
 ## Windows desktop wrapper
 
 The Electron app can be pointed at the current deployment with the `NEXUS_APP_URL` environment variable. Its window can now be resized down to phone-sized widths for touch-enabled Windows devices, and it grants notifications and microphone/media permission only to the configured app origin.
