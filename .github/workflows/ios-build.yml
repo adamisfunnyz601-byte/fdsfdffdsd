@@ -89,8 +89,9 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           echo "$APPLE_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$RUNNER_TEMP/profile.mobileprovision"
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          PROFILE_UUID="$(/usr/libexec/PlistBuddy -c 'Print UUID' /dev/stdin <<< "$(security cms -D -i "$RUNNER_TEMP/profile.mobileprovision")")"
-          PROFILE_NAME="$(/usr/libexec/PlistBuddy -c 'Print Name' /dev/stdin <<< "$(security cms -D -i "$RUNNER_TEMP/profile.mobileprovision")")"
+          security cms -D -i "$RUNNER_TEMP/profile.mobileprovision" > "$RUNNER_TEMP/profile.plist"
+          PROFILE_UUID="$(/usr/libexec/PlistBuddy -c 'Print UUID' "$RUNNER_TEMP/profile.plist")"
+          PROFILE_NAME="$(/usr/libexec/PlistBuddy -c 'Print Name' "$RUNNER_TEMP/profile.plist")"
           cp "$RUNNER_TEMP/profile.mobileprovision" "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
           echo "PROFILE_NAME=$PROFILE_NAME" >> "$GITHUB_ENV"
       - name: Configure iOS push entitlement for signed build
@@ -105,7 +106,7 @@ jobs:
           from pathlib import Path
           path = Path("ios/App/App.xcodeproj/project.pbxproj")
           text = path.read_text()
-          text = text.replace("PRODUCT_BUNDLE_IDENTIFIER = com.nexusos.app;", "CODE_SIGN_ENTITLEMENTS = App/App.entitlements;\\n\\t\\t\\t\\tPRODUCT_BUNDLE_IDENTIFIER = com.nexusos.app;")
+          text = text.replace("PRODUCT_BUNDLE_IDENTIFIER = com.nexusos.app;", "CODE_SIGN_ENTITLEMENTS = App/App.entitlements;\n\\t\\t\\t\\tPRODUCT_BUNDLE_IDENTIFIER = com.nexusos.app;")
           path.write_text(text)
           PY
       - name: Archive signed iOS app
@@ -130,9 +131,11 @@ jobs:
 
         uses: actions/upload-artifact@v4
         with:
-          name: nexus-ios-unsigned-archive
+          name: nexus-ios-build
           path: |
             NEXUS.xcarchive
+            NEXUS-Signed.xcarchive
             ios/
+            ios-export/*.ipa
           if-no-files-found: error
           retention-days: 14
