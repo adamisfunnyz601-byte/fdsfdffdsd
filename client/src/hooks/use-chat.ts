@@ -39,7 +39,8 @@ export function useChat({ recipientId = null, groupId = null }: ChatChannel = {}
           : message;
       });
     },
-    refetchInterval: 900,
+    enabled: Boolean(recipientId || groupId),
+    refetchInterval: 2500,
     refetchIntervalInBackground: true,
     staleTime: 250,
   });
