@@ -1,10 +1,8 @@
-const serverUrl = process.env.CAPACITOR_SERVER_URL?.trim();
-
 const config = {
   appId: "com.nexusos.app",
   appName: "NEXUS",
+  // Capacitor packages the Vite build into the native app. Keep the UI local.
   webDir: "dist/public",
-  server: serverUrl ? { url: serverUrl, cleartext: false, androidScheme: "https" } : undefined,
   android: { allowMixedContent: false },
 };
 
