@@ -14,7 +14,7 @@
 
 The Settings page can request permission and send a local test notification. The service worker can display incoming Web Push payloads. Actual remote delivery still requires a server-side Web Push sender, VAPID public/private keys, per-user subscription storage, authenticated subscription endpoints, and cleanup of expired subscriptions. Do not commit VAPID private keys.
 
-On iOS, Web Push requires iOS/iPadOS 16.4 or later and the web app must be added to the Home Screen. Windows and Android browser support depends on the installed browser and OS notification settings. A native Android/iOS wrapper needs native push integration (FCM/APNs) for reliable notifications outside the web runtime. The native wrapper workflows currently add notification permission declarations but do not yet register native push tokens.
+On iOS, Web Push requires iOS/iPadOS 16.4 or later and the web app must be added to the Home Screen. Windows and Android browser support depends on the installed browser and OS notification settings. The native Android/iOS wrapper now uses Capacitor Push Notifications to request OS permission and register with the native push provider. The device token is emitted to the app as a `nexus:push-token` event; it is not yet persisted to the NEXUS account or sent to users because the authenticated token-storage endpoint and server-side FCM/APNs sender are still outstanding. Local test notifications use the native Local Notifications plugin. Android builds can consume the `GOOGLE_SERVICES_JSON_BASE64` Actions secret; iOS builds can consume `GOOGLE_SERVICE_INFO_PLIST_BASE64`. The Firebase projects must be configured for the matching Android package/iOS bundle ID, and iOS Firebase must have APNs credentials configured.
 
 ## Calling
 
@@ -32,11 +32,11 @@ Foreground calling depends on a secure HTTPS origin, microphone permission, and 
 
 ## Android build
 
-Run the Build Android APK workflow from Actions and provide the HTTPS URL where the NEXUS web app is deployed. The workflow generates an Android Studio project, builds a debug APK, and uploads both the APK and project as artifacts. Download the project artifact to open it in Android Studio.
+Run the Build Android APK workflow from Actions and provide the HTTPS URL where the NEXUS web app is deployed. The workflow generates an Android Studio project, builds a debug APK, and uploads both the APK and project as artifacts. Download the project artifact to open it in Android Studio. Add the optional `GOOGLE_SERVICES_JSON_BASE64` repository Actions secret (the base64-encoded Firebase `google-services.json`) to enable Firebase Android push registration.
 
 ## iOS build
 
-Run the Build iOS archive workflow and provide the deployed HTTPS app URL. The workflow builds an unsigned iOS archive on a macOS runner. A device-installable IPA requires Apple Developer signing assets and provisioning profiles configured as GitHub Actions secrets; never paste those secrets into chat or commit them.
+Run the Build iOS archive workflow and provide the deployed HTTPS app URL. Without signing secrets, the workflow produces an unsigned archive for Xcode inspection. To export a device-installable IPA, configure `APPLE_CERTIFICATE_BASE64`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_PROVISIONING_PROFILE_BASE64`, and `APPLE_TEAM_ID` as repository Actions secrets. The provisioning profile must match `com.nexusos.app` and include Push Notifications if remote push is required. Add `GOOGLE_SERVICE_INFO_PLIST_BASE64` for Firebase iOS. The exported IPA is uploaded as a workflow artifact. Never paste signing secrets into chat or commit them.
 
 ## Windows desktop wrapper
 
