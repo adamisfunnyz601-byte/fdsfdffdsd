@@ -53,8 +53,15 @@ function createWindow() {
     mainWindow?.setTitle("NEXUS");
   });
 
-  mainWindow.loadFile(LOCAL_UI).catch((error) => {
-    console.error("Unable to load bundled NEXUS interface:", error);
+  // Use the same HTTPS origin as the hosted NEXUS API. This keeps Windows
+  // desktop authentication, cookies, WebSockets and WebAuthn passkeys on one
+  // trusted origin. Fall back to the bundled UI if the server is temporarily
+  // unavailable; API features require the server to be online either way.
+  mainWindow.loadURL(API_URL).catch((error) => {
+    console.error("Unable to reach the NEXUS server; opening bundled interface:", error);
+    mainWindow?.loadFile(LOCAL_UI).catch((fallbackError) => {
+      console.error("Unable to load bundled NEXUS interface:", fallbackError);
+    });
   });
   mainWindow.on("closed", () => {
     mainWindow = null;
