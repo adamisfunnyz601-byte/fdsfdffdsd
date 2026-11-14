@@ -173,6 +173,16 @@ export const communityServerChannels = pgTable("community_server_channels", {
   isLocked: boolean("is_locked").notNull().default(false),
 });
 
+export const communityServerMessages = pgTable("community_server_messages", {
+  id: serial("id").primaryKey(),
+  serverId: integer("server_id").notNull().references(() => communityServers.id, { onDelete: "cascade" }),
+  channelId: integer("channel_id").notNull().references(() => communityServerChannels.id, { onDelete: "cascade" }),
+  authorId: integer("author_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  editedAt: timestamp("edited_at"),
+});
+
 // OAuth identities are kept separate from usernames and legacy access-key accounts.
 export const oauthAccounts = pgTable("oauth_accounts", {
   id: serial("id").primaryKey(),
