@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 private let bg = Color(red: 0.035, green: 0.035, blue: 0.075)
 private let panel = Color(red: 0.075, green: 0.065, blue: 0.12)
