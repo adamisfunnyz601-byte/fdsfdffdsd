@@ -21,8 +21,9 @@ jobs:
         run: brew install xcodegen
       - name: Generate original bundled visual and audio assets
         run: |
-          python3 -m pip install --user Pillow numpy
-          python3 ios-native/scripts/generate_assets.py
+          python3 -m venv .asset-venv
+          .asset-venv/bin/pip install Pillow numpy
+          .asset-venv/bin/python ios-native/scripts/generate_assets.py
           du -sh ios-native/Resources
       - name: Generate native Xcode project
         run: xcodegen generate --spec ios-native/project.yml --project ios-native
