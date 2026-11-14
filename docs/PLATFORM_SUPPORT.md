@@ -23,6 +23,6 @@ Run the Build Android APK workflow from Actions and provide the HTTPS URL where 
 
 Run the Build iOS archive workflow and provide the deployed HTTPS app URL. The workflow builds an unsigned iOS archive on a macOS runner. A device-installable IPA requires Apple Developer signing assets and provisioning profiles configured as GitHub Actions secrets; never paste those secrets into chat or commit them.
 
-## Important deployment note
+## Windows desktop wrapper\n\nThe Electron app can be pointed at the current deployment with the `NEXUS_APP_URL` environment variable. Its window can now be resized down to phone-sized widths for touch-enabled Windows devices, and it grants notifications and microphone/media permission only to the configured app origin.\n\n## Important deployment note
 
 The Capacitor wrapper loads the deployed web app URL so relative /api/... requests continue to reach the existing Express backend. The site must use HTTPS and allow the app's WebView origin/CSP configuration. The workflow does not migrate or replace the PostgreSQL database.
