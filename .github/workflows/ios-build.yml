@@ -56,6 +56,8 @@ jobs:
           done
           echo "Dependency installation failed after 3 attempts."
           exit 1
+      - name: Type-check all TypeScript and TSX sources
+        run: npm run check
       - name: Build web application
         run: npm run build
       - name: Generate Xcode project with bundled local website
