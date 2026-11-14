@@ -5,7 +5,7 @@ import { useChat } from "@/hooks/use-chat";
 import { Avatar } from "@/components/ProfileModal";
 import { ChatMediaAttachment } from "@/components/ChatMediaAttachment";
 import { NexusCallPanel } from "@/components/NexusCallPanel";
-import { Search, Send, MessageCircle, Users, Loader2, Paperclip, Mic, Square, X } from "lucide-react";
+import { Search, Send, MessageCircle, Users, Loader2, Paperclip, Mic, Square } from "lucide-react";
 
 type ChatUser = { id:number; username:string; displayName?:string|null; avatarUrl?:string|null; presenceStatus?:string|null };
 type ChatMessage = { id:number; senderId:number; content:string; createdAt:string; senderName?:string; senderDisplayName?:string|null; senderAvatarUrl?:string|null; hasMedia?:boolean; mediaType?:string|null };
