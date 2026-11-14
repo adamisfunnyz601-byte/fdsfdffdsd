@@ -1,0 +1,53 @@
+name: Build native SwiftUI iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/mobile-notifications-responsive-platforms
+    paths:
+      - ".github/workflows/ios-build.yml"
+      - "ios-native/**"
+
+permissions:
+  contents: read
+
+jobs:
+  ios-native:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate original bundled visual and audio assets
+        run: |
+          python3 -m venv .asset-venv
+          .asset-venv/bin/pip install Pillow numpy
+          .asset-venv/bin/python ios-native/scripts/generate_assets.py
+          du -sh ios-native/Resources
+      - name: Generate native Xcode project
+        run: xcodegen generate --spec ios-native/project.yml --project ios-native
+      - name: Verify native Swift sources
+        run: |
+          test -s ios-native/Sources/NEXUSApp.swift
+          test -s ios-native/Sources/NexusModel.swift
+          test -s ios-native/Sources/RootView.swift
+      - name: Build native SwiftUI archive
+        run: |
+          xcodebuild -project ios-native/NEXUS.xcodeproj -scheme NEXUS -configuration Release -sdk iphoneos -archivePath "$PWD/NEXUS.xcarchive" archive CODE_SIGNING_ALLOWED=NO
+      - name: Package unsigned native IPA
+        run: |
+          APP_PATH="$PWD/NEXUS.xcarchive/Products/Applications/NEXUS.app"
+          test -d "$APP_PATH"
+          mkdir -p "$RUNNER_TEMP/unsigned-ipa/Payload"
+          cp -R "$APP_PATH" "$RUNNER_TEMP/unsigned-ipa/Payload/NEXUS.app"
+          (cd "$RUNNER_TEMP/unsigned-ipa" && /usr/bin/zip -qry "$GITHUB_WORKSPACE/NEXUS-native-unsigned.ipa" Payload)
+          test -s "$GITHUB_WORKSPACE/NEXUS-native-unsigned.ipa"
+          echo "Native IPA size: $(du -h "$GITHUB_WORKSPACE/NEXUS-native-unsigned.ipa" | cut -f1)"
+      - name: Upload native IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexus-native-ios-unsigned-ipa
+          path: NEXUS-native-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
