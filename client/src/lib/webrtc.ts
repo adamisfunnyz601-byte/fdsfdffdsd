@@ -1,3 +1,5 @@
+import { apiUrl } from "@/lib/api-url";
+
 export type RtcConfiguration = RTCConfiguration;
 
 const FALLBACK_ICE_SERVERS: RTCIceServer[] = [
@@ -6,7 +8,7 @@ const FALLBACK_ICE_SERVERS: RTCIceServer[] = [
 
 export async function getRtcConfiguration(): Promise<RtcConfiguration> {
   try {
-    const response = await fetch("/api/chat/voice/ice-config", {
+    const response = await fetch(apiUrl("/api/chat/voice/ice-config"), {
       credentials: "include",
       cache: "no-store",
     });
