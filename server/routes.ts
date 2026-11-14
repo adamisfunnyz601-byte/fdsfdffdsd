@@ -29,7 +29,7 @@ const verifyAccountPassword = (password: string, stored: string) => {
   if (!salt || !hash || !/^[a-f0-9]{32}$/.test(salt) || !/^[a-f0-9]{128}$/.test(hash)) return false;
   return timingSafeEqual(scryptSync(password, salt, 64), Buffer.from(hash, "hex"));
 };
-type OAuthProvider = "google" | "microsoft";
+type OAuthProvider = "microsoft";
 
 declare module "express-session" {
   interface SessionData {
@@ -81,11 +81,11 @@ const accessRequestRateLimit = rateLimit({
 });
 
 function isOAuthProvider(value: string): value is OAuthProvider {
-  return value === "google" || value === "microsoft";
+  return value === "microsoft";
 }
 
 function isOAuthProviderConfigured(provider: OAuthProvider) {
-  const prefix = provider === "google" ? "GOOGLE" : "MICROSOFT";
+  const prefix = "MICROSOFT";
   return Boolean(process.env[`${prefix}_CLIENT_ID`] && process.env[`${prefix}_CLIENT_SECRET`]);
 }
 
@@ -100,9 +100,7 @@ function getOAuthConfig(provider: OAuthProvider) {
     throw new Error(`${provider} sign-in is not configured`);
   }
 
-  const issuer = provider === "google"
-    ? "https://accounts.google.com"
-    : "https://login.microsoftonline.com/common/v2.0";
+  const issuer = "https://login.microsoftonline.com/common/v2.0";
   const discovery = import("openid-client").then(({ discovery }) =>
     discovery(new URL(issuer), clientId, clientSecret),
   );
@@ -406,7 +404,7 @@ export async function registerRoutes(
       return res.redirect(authorizationUrl.href);
     } catch (error: any) {
       console.error("[oauth] Sign-in start failed:", error?.message || error);
-      return res.status(503).json({ message: error?.message || "Google sign-in is temporarily unavailable." });
+      return res.status(503).json({ message: error?.message || "Microsoft sign-in is temporarily unavailable." });
     }
   });
 
@@ -463,18 +461,31 @@ export async function registerRoutes(
   });
 
   // Passkey registration and authentication use WebAuthn challenges stored in the session.
-  const getWebAuthnSettings = () => {
-    const configuredOrigin = process.env.WEBAUTHN_ORIGIN || (process.env.NODE_ENV !== "production" ? "http://localhost:5000" : "");
-    if (!configuredOrigin) throw new Error("Set WEBAUTHN_ORIGIN to the public HTTPS NEXUS website origin before enabling passkeys.");
-    const parsedOrigin = new URL(configuredOrigin);
-    if (process.env.NODE_ENV === "production" && parsedOrigin.protocol !== "https:") throw new Error("WEBAUTHN_ORIGIN must use HTTPS in production.");
-    return { expectedOrigin: parsedOrigin.origin, rpID: process.env.WEBAUTHN_RP_ID || parsedOrigin.hostname };
+  const getWebAuthnSettings = (req: Request) => {
+    // Web and Capacitor apps have different valid WebAuthn origins. Derive the
+    // origin from the actual client request so passkeys work on web, iOS and Android.
+    const requestOrigin = typeof req.headers.origin === "string" && req.headers.origin !== "null"
+      ? req.headers.origin
+      : undefined;
+    const configuredOrigin = requestOrigin || process.env.WEBAUTHN_ORIGIN
+      || (process.env.NODE_ENV !== "production" ? `http://localhost:${process.env.PORT || 5000}` : "");
+    if (!configuredOrigin) throw new Error("Set WEBAUTHN_ORIGIN or send a valid app Origin header to enable passkeys.");
+    const parsed = new URL(configuredOrigin);
+    const isLocalAppOrigin = parsed.hostname === "localhost" && ["capacitor:", "https:", "http:"].includes(parsed.protocol);
+    if (process.env.NODE_ENV === "production" && parsed.protocol !== "https:" && !isLocalAppOrigin) {
+      throw new Error("Passkeys require HTTPS or a trusted Capacitor localhost origin.");
+    }
+    const configuredRpId = process.env.WEBAUTHN_RP_ID;
+    const rpID = configuredRpId && (parsed.hostname === configuredRpId || parsed.hostname.endsWith(`.${configuredRpId}`))
+      ? configuredRpId
+      : parsed.hostname;
+    return { expectedOrigin: parsed.origin, rpID };
   };
 
   app.post("/api/auth/passkeys/register/options", requireAuth, async (req, res) => {
     try {
       const { generateRegistrationOptions } = await import("@simplewebauthn/server");
-      const { expectedOrigin, rpID } = getWebAuthnSettings();
+      const { expectedOrigin, rpID } = getWebAuthnSettings(req);
       const account = await storage.getUser(Number(req.session.userId!));
       if (!account) return res.status(404).json({ message: "NEXUS account not found." });
       const existing = await db.select().from(passkeyCredentials).where(eq(passkeyCredentials.userId, account.id));
@@ -504,7 +515,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Passkey registration expired. Try again." });
       }
       const { verifyRegistrationResponse } = await import("@simplewebauthn/server");
-      const { expectedOrigin, rpID } = getWebAuthnSettings();
+      const { expectedOrigin, rpID } = getWebAuthnSettings(req);
       const verification = await verifyRegistrationResponse({
         response: req.body?.response,
         expectedChallenge: flow.challenge,
@@ -539,7 +550,7 @@ export async function registerRoutes(
       const credentials = await db.select().from(passkeyCredentials).where(eq(passkeyCredentials.userId, account.id));
       if (!credentials.length) return res.status(404).json({ message: "This account has no registered passkeys yet." });
       const { generateAuthenticationOptions } = await import("@simplewebauthn/server");
-      const { rpID } = getWebAuthnSettings();
+      const { rpID } = getWebAuthnSettings(req);
       const options = await generateAuthenticationOptions({
         rpID,
         userVerification: "preferred",
@@ -563,7 +574,7 @@ export async function registerRoutes(
         .where(and(eq(passkeyCredentials.credentialId, credentialId), eq(passkeyCredentials.userId, flow.userId))).limit(1);
       if (!credential) return res.status(401).json({ message: "This passkey is not registered to that account." });
       const { verifyAuthenticationResponse } = await import("@simplewebauthn/server");
-      const { expectedOrigin, rpID } = getWebAuthnSettings();
+      const { expectedOrigin, rpID } = getWebAuthnSettings(req);
       const verification = await verifyAuthenticationResponse({
         response: req.body?.response,
         expectedChallenge: flow.challenge,
