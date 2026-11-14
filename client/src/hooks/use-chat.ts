@@ -69,6 +69,7 @@ export function useChat({ recipientId = null, groupId = null }: ChatChannel = {}
     }) => {
       const res = await fetch(apiUrl(api.chat.send.path), {
         method: api.chat.send.method,
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
@@ -139,7 +140,7 @@ export function useChat({ recipientId = null, groupId = null }: ChatChannel = {}
 
   const deleteMessage = useMutation({
     mutationFn: async (id: number) => {
-      const res = await fetch(apiUrl(`/api/chat/messages/${id}`), { method: 'DELETE' });
+      const res = await fetch(apiUrl(`/api/chat/messages/${id}`), { method: 'DELETE', credentials: 'include' });
       if (!res.ok) throw new Error("Delete failed");
     },
     onSuccess: () => {
