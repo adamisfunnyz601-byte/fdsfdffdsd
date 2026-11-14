@@ -211,6 +211,9 @@ export const api = {
   }
 };
 
+export type CreateKeyRequest = z.infer<typeof api.admin.generateKey.input>;
+export type CreateHistoryRequest = z.infer<typeof api.history.create.input>;
+
 // ============================================
 // HELPER
 // ============================================
