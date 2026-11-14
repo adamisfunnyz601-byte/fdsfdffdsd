@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";\nimport { enableBrowserNotifications, showTestNotification, getNotificationSupport } from "@/lib/platform-notifications";
+import { useEffect, useState } from "react";
+import { enableBrowserNotifications, showTestNotification, getNotificationSupport } from "@/lib/platform-notifications";
 import { Bell, BellOff, Check, Circle, Moon, Settings as SettingsIcon, Volume2 } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { CyberButton } from "@/components/CyberButton";
@@ -21,7 +22,21 @@ export default function SettingsPage() {
   const [status, setStatus] = useState(user?.presenceStatus || "online");
   const [muteNotifications, setMuteNotifications] = useState(Boolean(user?.muteNotifications));
   const [ringtoneUrl, setRingtoneUrl] = useState(user?.ringtoneUrl || "");
-  const [saving, setSaving] = useState(false);\n  const [notificationState, setNotificationState] = useState(getNotificationSupport());\n  const [notificationBusy, setNotificationBusy] = useState(false);\n\n  const enableNotifications = async () => {\n    setNotificationBusy(true);\n    try {\n      await enableBrowserNotifications();\n      setNotificationState(getNotificationSupport());\n      toast({ title: "Notifications enabled", description: "This device can now show NEXUS notifications while the app is available." });\n    } catch (error: any) {\n      toast({ title: "Notifications unavailable", description: error?.message || "Check your browser or device notification settings.", variant: "destructive" });\n      setNotificationState(getNotificationSupport());\n    } finally { setNotificationBusy(false); }\n  };
+  const [saving, setSaving] = useState(false);
+  const [notificationState, setNotificationState] = useState(getNotificationSupport());
+  const [notificationBusy, setNotificationBusy] = useState(false);
+
+  const enableNotifications = async () => {
+    setNotificationBusy(true);
+    try {
+      await enableBrowserNotifications();
+      setNotificationState(getNotificationSupport());
+      toast({ title: "Notifications enabled", description: "This device can now show NEXUS notifications while the app is available." });
+    } catch (error: any) {
+      toast({ title: "Notifications unavailable", description: error?.message || "Check your browser or device notification settings.", variant: "destructive" });
+      setNotificationState(getNotificationSupport());
+    } finally { setNotificationBusy(false); }
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -109,7 +124,18 @@ export default function SettingsPage() {
               <span className={cn("block w-4 h-4 rounded-full bg-white transition-transform", muteNotifications && "translate-x-5")} />
             </span>
           </button>
-          <div className="rounded-xl border border-border p-3 space-y-2">\n            <div className="flex flex-wrap items-center justify-between gap-2">\n              <div className="min-w-0"><div className="text-sm font-medium text-foreground">Device notifications</div><div className="text-xs text-muted-foreground">{notificationState.description}</div></div>\n              <span className="text-xs text-muted-foreground">{notificationState.permission}</span>\n            </div>\n            <div className="flex flex-wrap gap-2">\n              <CyberButton disabled={notificationBusy || notificationState.permission === "granted"} onClick={enableNotifications}>{notificationBusy ? "Enabling..." : "Enable notifications"}</CyberButton>\n              <CyberButton disabled={notificationState.permission !== "granted"} onClick={() => showTestNotification().catch((error: any) => toast({ title: "Test notification failed", description: error.message, variant: "destructive" }))}>Send test notification</CyberButton>\n            </div>\n            <p className="text-[11px] text-muted-foreground">Works with supported browsers and installed PWAs on Android, iOS 16.4+, and Windows. Remote/background message delivery still needs server push credentials.</p>\n          </div>\n          <div className="flex items-end gap-3">
+          <div className="rounded-xl border border-border p-3 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0"><div className="text-sm font-medium text-foreground">Device notifications</div><div className="text-xs text-muted-foreground">{notificationState.description}</div></div>
+              <span className="text-xs text-muted-foreground">{notificationState.permission}</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <CyberButton disabled={notificationBusy || notificationState.permission === "granted"} onClick={enableNotifications}>{notificationBusy ? "Enabling..." : "Enable notifications"}</CyberButton>
+              <CyberButton disabled={notificationState.permission !== "granted"} onClick={() => showTestNotification().catch((error: any) => toast({ title: "Test notification failed", description: error.message, variant: "destructive" }))}>Send test notification</CyberButton>
+            </div>
+            <p className="text-[11px] text-muted-foreground">Works with supported browsers and installed PWAs on Android, iOS 16.4+, and Windows. Remote/background message delivery still needs server push credentials.</p>
+          </div>
+          <div className="flex items-end gap-3">
             <div className="flex-1">
               <CyberInput label="Custom ringtone URL" value={ringtoneUrl} onChange={e => setRingtoneUrl(e.target.value)} placeholder="https://...mp3" />
             </div>
