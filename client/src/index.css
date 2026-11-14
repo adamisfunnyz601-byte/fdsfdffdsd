@@ -1087,3 +1087,76 @@ body {
     font-size: 16px !important;
   }
 }
+
+
+/* Keyboard-aware responsive overrides shared by web, iOS and Android. */
+:root {
+  --nexus-visual-height: 100dvh;
+  --nexus-visual-offset-top: 0px;
+}
+@media (max-width: 1180px) {
+  .nexus-page-chat {
+    height: calc(var(--nexus-visual-height) - 4.25rem - var(--app-safe-top)) !important;
+    max-height: calc(var(--nexus-visual-height) - 4.25rem - var(--app-safe-top));
+    min-height: 220px !important;
+    overflow: hidden;
+  }
+  .nexus-page-chat .chat-main-panel { min-height: 0; height: 100%; }
+  .nexus-page-chat .chat-message-list {
+    min-height: 0;
+    flex: 1 1 0%;
+    overscroll-behavior: contain;
+    scroll-padding-bottom: 1rem;
+  }
+  .nexus-page-chat .chat-composer {
+    position: relative;
+    flex: 0 0 auto;
+    padding: .5rem !important;
+    padding-bottom: max(.5rem, var(--app-safe-bottom)) !important;
+    background: rgba(8, 7, 15, .98);
+  }
+  .nexus-page-chat .chat-composer form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .375rem;
+  }
+  .nexus-page-chat .chat-composer form > .flex-1 {
+    order: -1;
+    flex: 1 0 100%;
+    width: 100%;
+  }
+  .nexus-page-chat .chat-composer form > .flex-1 input {
+    width: 100%;
+    min-width: 0;
+    height: 46px;
+    font-size: 16px !important;
+  }
+  .nexus-page-chat .chat-composer form > button,
+  .nexus-page-chat .chat-composer form > div:not(.flex-1) { flex: 0 0 auto; }
+  .nexus-page-servers .grid.min-h-\\[460px\\] { grid-template-columns: minmax(0, 1fr) !important; }
+  .nexus-page-servers main,
+  .nexus-page-servers section { min-width: 0; }
+}
+@media (max-width: 520px) {
+  .nexus-page-chat {
+    height: calc(var(--nexus-visual-height) - 4rem - var(--app-safe-top)) !important;
+    max-height: calc(var(--nexus-visual-height) - 4rem - var(--app-safe-top));
+    min-height: 200px !important;
+  }
+  .nexus-page-chat .chat-channel-header { min-height: 48px; flex-wrap: nowrap; }
+  .nexus-page-chat .chat-channel-header h2 {
+    max-width: 42vw;
+    font-size: 11px;
+    letter-spacing: .06em;
+  }
+  .nexus-page-chat .chat-message-list { padding: .5rem; }
+  .nexus-page-chat .chat-composer form > button { min-width: 36px; min-height: 40px; }
+  .nexus-page-servers form input { min-width: 0; width: 100%; font-size: 16px !important; }
+}
+@media (orientation: landscape) and (max-height: 520px) {
+  .nexus-page-chat {
+    height: calc(var(--nexus-visual-height) - 3.5rem) !important;
+    max-height: calc(var(--nexus-visual-height) - 3.5rem);
+  }
+}
