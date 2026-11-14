@@ -213,7 +213,7 @@ export async function registerRoutes(
   // Session middleware
   app.use(
     session({
-      cookie: { maxAge: 86400000 },
+      cookie: { maxAge: 86400000, sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", secure: process.env.NODE_ENV === "production" },
       store: new MemoryStore({
         checkPeriod: 86400000,
       }),
