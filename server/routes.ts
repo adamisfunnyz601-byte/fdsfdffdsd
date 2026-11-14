@@ -232,6 +232,17 @@ export async function registerRoutes(
     })
   );
 
+  // Tunnelto terminates HTTPS before forwarding requests to the local server.
+  // Trust the forwarded protocol and set cross-origin cookies for Capacitor
+  // clients only when the original request was HTTPS; local HTTP development
+  // retains Lax cookies so browsers do not reject insecure SameSite=None.
+  app.use((req, _res, next) => {
+    const isHttpsRequest = req.secure || req.get("x-forwarded-proto") === "https";
+    req.session.cookie.secure = isHttpsRequest;
+    req.session.cookie.sameSite = isHttpsRequest ? "none" : "lax";
+    next();
+  });
+
   // Middleware to check auth
   const requireAuth = (req: Request, res: any, next: any) => {
     if (!req.session.userId) {
