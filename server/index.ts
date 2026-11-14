@@ -16,6 +16,7 @@ const allowedAppOrigins = new Set([
   "http://localhost",
   "https://localhost",
   "https://nexus.is-a.bot",
+  "https://nexus.tunnelto.me",
   process.env.APP_ORIGIN || "",
 ]);
 app.use((req, res, next) => {
