@@ -132,6 +132,7 @@
     },
     "files": [
       "electron/**/*",
+      "dist/public/**/*",
       "package.json"
     ],
     "asar": true,
