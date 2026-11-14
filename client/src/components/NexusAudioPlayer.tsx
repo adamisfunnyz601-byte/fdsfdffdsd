@@ -22,6 +22,10 @@ function extensionFor(src: string) {
 
 export function NexusAudioPlayer({ src, title = "Audio message", nexusFormat = false }: Props) {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const animationRef = useRef<number>(0);
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -31,6 +35,7 @@ export function NexusAudioPlayer({ src, title = "Audio message", nexusFormat = f
     return 18 + Math.round(wave * 82);
   }), []);
   const progress = duration ? current / duration : 0;
+  const [liveBars, setLiveBars] = useState<number[] | null>(null);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -50,12 +55,31 @@ export function NexusAudioPlayer({ src, title = "Audio message", nexusFormat = f
     };
   }, [src]);
 
+  useEffect(() => () => {
+    cancelAnimationFrame(animationRef.current);
+    sourceRef.current?.disconnect();
+    void audioContextRef.current?.close();
+  }, []);
+
+  const animateSpectrum = () => {
+    const analyser = analyserRef.current;
+    if (!analyser) return;
+    const values = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(values);
+    const next = Array.from({ length: 44 }, (_, index) => {
+      const bucket = Math.min(values.length - 1, Math.floor((index / 44) * values.length));
+      return 12 + Math.round((values[bucket] / 255) * 88);
+    });
+    setLiveBars(next);
+    animationRef.current = requestAnimationFrame(animateSpectrum);
+  };
+
   const toggle = async () => {
     const audio = audioRef.current;
     if (!audio) return;
     if (audio.paused) {
       try { await audio.play(); setPlaying(true); } catch { setPlaying(false); }
-    } else { audio.pause(); setPlaying(false); }
+    } else { audio.pause(); setPlaying(false); cancelAnimationFrame(animationRef.current); setLiveBars(null); }
   };
 
   const seek = (value: number) => {
@@ -65,7 +89,7 @@ export function NexusAudioPlayer({ src, title = "Audio message", nexusFormat = f
 
   return (
     <div className="nexus-audio-player app-glass w-full max-w-xl rounded-2xl border border-white/10 p-3">
-      <audio ref={audioRef} src={src} preload="metadata" />
+      <audio ref={audioRef} src={src} preload="metadata" crossOrigin="anonymous" />
       <div className="flex items-center gap-3">
         <button type="button" onClick={toggle} aria-label={playing ? "Pause audio" : "Play audio"} className="nexus-btn nexus-btn--glow grid h-11 w-11 shrink-0 place-items-center rounded-xl text-white">
           {playing ? <Pause size={18} /> : <Play size={18} />}
@@ -79,7 +103,7 @@ export function NexusAudioPlayer({ src, title = "Audio message", nexusFormat = f
             const rect = event.currentTarget.getBoundingClientRect();
             seek(Math.max(0, Math.min(duration, ((event.clientX - rect.left) / rect.width) * duration)));
           }} className="flex h-9 w-full items-center gap-[3px] overflow-hidden rounded-md px-0.5">
-            {bars.map((height, index) => <span key={index} className="min-w-0 flex-1 rounded-full transition-colors" style={{ height: `${height}%`, background: index / bars.length <= progress ? "linear-gradient(180deg,#c4b5fd,#7c3aed)" : "rgba(255,255,255,.17)" }} />)}
+            {bars.map((height, index) => { const shownHeight = liveBars?.[index] ?? height; return <span key={index} className="min-w-0 flex-1 rounded-full transition-colors" style={{ height: `${shownHeight}%`, background: index / bars.length <= progress ? "linear-gradient(180deg,#c4b5fd,#7c3aed)" : "rgba(255,255,255,.17)" }} />; })}
           </button>
         </div>
       </div>
