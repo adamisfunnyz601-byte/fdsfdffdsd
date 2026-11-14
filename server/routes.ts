@@ -1,5 +1,5 @@
 
-import { db } from "./db";
+import { db, pool } from "./db";
 import { users, accessKeys, searchHistory, messages, groupChats, groupChatMembers, customEmojis, friendRequests, blocks, oauthAccounts, moderationLogs, blockBlastScores, communityServers, communityServerMembers, communityServerCategories, communityServerChannels, communityServerMessages, chatMessageReactions, chatPolls, chatPollOptions, chatPollVotes, passkeyCredentials } from "@shared/schema";
 import { eq, desc, and, or, gt, sql, inArray } from "drizzle-orm";
 import type { Express, Request } from "express";
@@ -15,7 +15,7 @@ import {
 } from "@shared/profile-tag";
 import { z } from "zod";
 import session from "express-session";
-import createMemoryStore from "memorystore";
+import connectPgSimple from "connect-pg-simple";
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from "crypto";
 import sharp from "sharp";
 import { rateLimit } from "express-rate-limit";
@@ -45,7 +45,7 @@ declare module "express-session" {
   }
 }
 
-const MemoryStore = createMemoryStore(session);
+const PgSessionStore = connectPgSimple(session);
 const OWNER_KEY = "TSHSKDB163)#(";
 const PRESENCE_STATUSES = ["online", "idle", "dnd", "offline"] as const;
 type ProfileImageKind = "avatar" | "banner";
@@ -272,16 +272,33 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   await ensureCommunityServerTables();
-  // Session middleware
+  // Session middleware. Store sessions in Neon so logins survive server restarts.
+  // The table is created automatically on first boot by connect-pg-simple.
+  const sessionSecret = process.env.SESSION_SECRET;
+  if (!sessionSecret || sessionSecret.length < 32) {
+    throw new Error("SESSION_SECRET must be set to a stable random value of at least 32 characters.");
+  }
   app.use(
     session({
-      cookie: { maxAge: 86400000, sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", secure: process.env.NODE_ENV === "production" },
-      store: new MemoryStore({
-        checkPeriod: 86400000,
+      name: "nexus.sid",
+      store: new PgSessionStore({
+        pool,
+        tableName: "user_sessions",
+        createTableIfMissing: true,
+        pruneSessionInterval: 15 * 60,
       }),
+      secret: sessionSecret,
       resave: false,
       saveUninitialized: false,
-      secret: process.env.SESSION_SECRET || "super secret hacker key",
+      rolling: true,
+      proxy: process.env.NODE_ENV === "production",
+      cookie: {
+        httpOnly: true,
+        path: "/",
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+        secure: process.env.NODE_ENV === "production",
+      },
     })
   );
 
