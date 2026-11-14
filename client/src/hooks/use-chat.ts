@@ -26,7 +26,7 @@ export function useChat({ recipientId = null, groupId = null }: ChatChannel = {}
   const { data: messages, isLoading: isLoadingMessages } = useQuery({
     queryKey: messagesKey,
     queryFn: async () => {
-      const res = await fetch(apiUrl(messagesUrl), { credentials: "include" });
+      const res = await fetch(apiUrl(messagesUrl), { credentials: "include", cache: "no-store" });
       if (!res.ok) throw new Error("Failed to fetch messages");
       const incoming = await res.json();
       const cachedMessages = queryClient.getQueryData<any[]>(messagesKey);
@@ -43,9 +43,10 @@ export function useChat({ recipientId = null, groupId = null }: ChatChannel = {}
     // Global chat has no recipient/group ID; it must still poll so every device
     // reads the same Neon-backed conversation. Pause background polling to avoid
     // unnecessary requests through mobile webviews and reverse proxies.
-    refetchInterval: 4000,
+    refetchInterval: 3000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
     staleTime: 250,
   });
 
