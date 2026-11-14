@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useChat } from "@/hooks/use-chat";
 import { Avatar } from "@/components/ProfileModal";
 import { ChatMediaAttachment } from "@/components/ChatMediaAttachment";
+import { NexusCallPanel } from "@/components/NexusCallPanel";
 import { Search, Send, MessageCircle, Users, Loader2, Paperclip, Mic, Square, X } from "lucide-react";
 
 type ChatUser = { id:number; username:string; displayName?:string|null; avatarUrl?:string|null; presenceStatus?:string|null };
@@ -124,6 +125,7 @@ export default function Chat() {
           <header className="flex h-[68px] shrink-0 items-center gap-3 border-b border-black/10 px-5 shadow-sm">
             <Avatar url={selected.avatarUrl} name={selected.displayName||selected.username} size={38}/>
             <div className="min-w-0"><div className="truncate font-bold text-white">{selected.displayName||selected.username}</div><div className="text-[11px] text-white/45">@{selected.username}</div></div>
+            <NexusCallPanel targetId={selected.id} targetName={selected.displayName||selected.username} currentUserId={Number(user?.id||0)}/>
           </header>
           <div className="flex-1 space-y-4 overflow-y-auto px-5 py-6">
             {isLoadingMessages?<div className="flex justify-center py-10 text-white/45"><Loader2 className="animate-spin"/></div>:rows.length?rows.map(message=><article key={message.id} className="flex gap-3">
