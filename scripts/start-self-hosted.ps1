@@ -15,7 +15,17 @@ if ($databaseUrl -notmatch '^postgres(ql)?://') {
 $env:DATABASE_URL = $databaseUrl
 $env:NODE_ENV = "production"
 $env:PORT = "5000"
-$env:SESSION_SECRET = [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
+
+# Compatible with Windows PowerShell 5.1 and PowerShell 7.
+$randomBytes = New-Object byte[] 48
+$randomGenerator = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+try {
+  $randomGenerator.GetBytes($randomBytes)
+  $env:SESSION_SECRET = ([BitConverter]::ToString($randomBytes) -replace '-', '').ToLowerInvariant()
+}
+finally {
+  $randomGenerator.Dispose()
+}
 
 Write-Host "Installing dependencies..." -ForegroundColor Yellow
 npm install
