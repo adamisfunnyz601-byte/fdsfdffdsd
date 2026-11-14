@@ -61,13 +61,16 @@ jobs:
         run: npm run check
       - name: Build web application
         run: npm run build
-
-      - name: Verify the complete local NEXUS UI bundle
+      - name: Verify the complete NEXUS UI bundle
         run: |
           test -s dist/public/index.html
           find dist/public/assets -maxdepth 1 -type f -name '*.js' | grep -q .
           grep -Eq '/assets/[^"]+\.js' dist/public/index.html
-      - name: Generate Xcode project with bundled local website
+      - name: Generate Xcode project with same-origin NEXUS web app
+        env:
+          # Load the production site inside WKWebView. API requests then share
+          # the site's first-party origin and its Neon-backed session cookie.
+          CAPACITOR_SERVER_URL: https://nexus.tunnelto.me
         run: |
           npx cap add ios
           npx cap sync ios
@@ -137,4 +140,4 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-# Rebuild latest NEXUS source after the WebAuthn TypeScript fix.
+# iOS uses the production origin to preserve first-party session storage in WKWebView.
