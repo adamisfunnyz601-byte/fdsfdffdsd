@@ -42,6 +42,9 @@ jobs:
           npm ls electron electron-builder debug --depth=0
           node -e "require.resolve('electron'); require.resolve('electron-builder'); require.resolve('debug'); console.log('Electron build dependencies are resolvable.')"
 
+      - name: Type-check all TypeScript and TSX sources
+        run: npm run check
+
       - name: Build bundled web interface
         run: npm run build
 
