@@ -350,6 +350,91 @@ export async function registerRoutes(
     };
   };
 
+  // Google/Microsoft OpenID Connect login with state, nonce and PKCE.
+  app.get("/api/auth/oauth/:provider", oauthStartRateLimit, async (req, res) => {
+    try {
+      const provider = String(req.params.provider);
+      if (!isOAuthProvider(provider)) return res.status(404).json({ message: "Unsupported sign-in provider." });
+      if (!isOAuthProviderConfigured(provider)) return res.status(503).json({ message: `${provider} sign-in is not configured on the NEXUS server.` });
+      const oidc = await import("openid-client");
+      const config = await getOAuthConfig(provider);
+      const state = randomBytes(32).toString("hex");
+      const nonce = randomBytes(32).toString("hex");
+      const codeVerifier = oidc.randomPKCECodeVerifier();
+      const codeChallenge = await oidc.calculatePKCECodeChallenge(codeVerifier);
+      const redirectUri = getOAuthRedirectUri(provider);
+      const requestedReturn = typeof req.query.returnTo === "string" ? req.query.returnTo : "/chat";
+      const returnTo = requestedReturn.startsWith("/") && !requestedReturn.startsWith("//") ? requestedReturn : "/chat";
+      req.session.oauthFlow = { provider, state, nonce, codeVerifier, redirectUri, returnTo };
+      await saveSession(req);
+      const authorizationUrl = oidc.buildAuthorizationUrl(config, {
+        redirect_uri: redirectUri,
+        scope: "openid email profile",
+        response_type: "code",
+        state,
+        nonce,
+        code_challenge: codeChallenge,
+        code_challenge_method: "S256",
+      });
+      return res.redirect(authorizationUrl.href);
+    } catch (error: any) {
+      console.error("[oauth] Sign-in start failed:", error?.message || error);
+      return res.status(503).json({ message: error?.message || "Google sign-in is temporarily unavailable." });
+    }
+  });
+
+  app.get("/api/auth/oauth/:provider/callback", oauthStartRateLimit, async (req, res) => {
+    try {
+      const provider = String(req.params.provider);
+      const flow = req.session.oauthFlow;
+      if (!isOAuthProvider(provider) || !flow || flow.provider !== provider) {
+        return res.status(400).send("Your sign-in session expired. Return to NEXUS and try again.");
+      }
+      delete req.session.oauthFlow;
+      await saveSession(req);
+      if (typeof req.query.error === "string") return res.redirect("/?oauth=cancelled");
+      const oidc = await import("openid-client");
+      const config = await getOAuthConfig(provider);
+      const callbackUrl = new URL(req.originalUrl, `${req.protocol}://${req.get("host")}`);
+      const tokens = await oidc.authorizationCodeGrant(config, callbackUrl, {
+        pkceCodeVerifier: flow.codeVerifier,
+        expectedState: flow.state,
+        expectedNonce: flow.nonce,
+      });
+      const claims = tokens.claims();
+      const subject = claims?.sub;
+      if (typeof subject !== "string" || !subject) throw new Error("The identity provider did not return a valid account ID.");
+      const [linked] = await db.select().from(oauthAccounts)
+        .where(and(eq(oauthAccounts.provider, provider), eq(oauthAccounts.providerSubject, subject))).limit(1);
+      let accountId = linked?.userId;
+      if (!accountId) {
+        const email = typeof claims.email === "string" ? claims.email : "";
+        const displayName = typeof claims.name === "string" ? claims.name.slice(0, 80) : null;
+        const base = (email.split("@")[0] || displayName || "nexus-user").toLowerCase().replace(/[^a-z0-9_]/g, "_").replace(/^_+|_+$/g, "").slice(0, 17) || "nexus_user";
+        const username = `${base}_${randomBytes(3).toString("hex")}`;
+        const [created] = await db.insert(users).values({
+          username,
+          serialKey: `OAUTH-${randomBytes(24).toString("hex")}`,
+          passwordHash: null,
+          role: "user",
+          displayName,
+        }).returning({ id: users.id, role: users.role });
+        accountId = created.id;
+        await db.insert(oauthAccounts).values({ userId: accountId, provider, providerSubject: subject });
+      }
+      const account = await storage.getUser(accountId);
+      if (!account) throw new Error("The linked NEXUS account could not be loaded.");
+      await regenerateSession(req);
+      req.session.userId = account.id;
+      req.session.role = account.role;
+      await saveSession(req);
+      return res.redirect(flow.returnTo);
+    } catch (error: any) {
+      console.error("[oauth] Callback failed:", error?.message || error);
+      return res.redirect("/?oauth=failed");
+    }
+  });
+
   app.get("/api/profile-images/:id/:kind/:variant/:version", requireAuth, async (req, res) => {
     const userId = Number(req.params.id);
     const kind = req.params.kind;
