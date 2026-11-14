@@ -37,6 +37,11 @@ jobs:
         run: |
           npx cap add ios
           npx cap sync ios
+      - name: Add iOS microphone usage description and audio background mode
+        run: |
+          /usr/libexec/PlistBuddy -c "Add :NSMicrophoneUsageDescription string NEXUS uses your microphone for voice calls." ios/App/App/Info.plist || /usr/libexec/PlistBuddy -c "Set :NSMicrophoneUsageDescription NEXUS uses your microphone for voice calls." ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes array" ios/App/App/Info.plist || true
+          /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes:0 string audio" ios/App/App/Info.plist || true
       - name: Build unsigned iOS archive
         run: |
           xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -sdk iphoneos -archivePath "$PWD/NEXUS.xcarchive" archive CODE_SIGNING_ALLOWED=NO
