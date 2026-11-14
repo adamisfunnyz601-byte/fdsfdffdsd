@@ -83,7 +83,7 @@ export default function SettingsPage() {
   const save = async (changes: Record<string, unknown>) => {
     setSaving(true);
     try {
-      const response = await fetch("/api/user/settings", {
+      const response = await fetch(apiUrl("/api/user/settings"), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(changes),
