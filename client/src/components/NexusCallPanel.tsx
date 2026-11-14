@@ -6,7 +6,7 @@ import { Phone, PhoneOff, Mic, MicOff, Video, VideoOff, MonitorUp, X } from "luc
 type IncomingCall = { callId:string; fromId:number; fromName:string; withVideo:boolean };
 type ActiveCall = { callId:string; peerId:number; peerName:string; withVideo:boolean; direction:"incoming"|"outgoing" };
 type Signal = { type:string; callId:string; fromId?:number; from?:number; fromName?:string; offer?:RTCSessionDescriptionInit; answer?:RTCSessionDescriptionInit; candidate?:RTCIceCandidateInit; withVideo?:boolean };
-type Props = { targetId:number|null; targetName:string; currentUserId:number };
+type Props = { targetId:number|null; targetName:string };
 
 async function post(path:string, body:Record<string,unknown>) {
   const response = await fetch(apiUrl(path), { method:"POST", credentials:"include", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) });
@@ -32,7 +32,7 @@ function AudioMeter({stream}:{stream:MediaStream|null}) {
   return <div className="flex h-8 items-center justify-center gap-1" aria-label="Call audio level">{Array.from({length:18},(_,i)=><span key={i} className="w-1 rounded-full bg-gradient-to-t from-violet-600 to-cyan-300 transition-all duration-75" style={{height:`${5+Math.max(0,level*26-Math.abs(i-8.5)*1.8)}px`,opacity:.35+level*.65}}/>)}</div>;
 }
 
-export function NexusCallPanel({targetId,targetName,currentUserId}:Props) {
+export function NexusCallPanel({targetId,targetName}:Props) {
   const [incoming,setIncoming]=useState<IncomingCall|null>(null);
   const [call,setCall]=useState<ActiveCall|null>(null);
   const [status,setStatus]=useState("");
@@ -162,11 +162,16 @@ export function NexusCallPanel({targetId,targetName,currentUserId}:Props) {
     try{
       const screen=await navigator.mediaDevices.getDisplayMedia({video:true,audio:false});
       screenRef.current=screen;const track=screen.getVideoTracks()[0];
-      const sender=pc.getSenders().find(item=>item.track?.kind==="video");
-      if(sender)await sender.replaceTrack(track);else pc.addTrack(track,screen);
+      let sender=pc.getSenders().find(item=>item.track?.kind==="video");
+      const cameraTrack=localRef.current?.getVideoTracks()[0];
+      if(sender)await sender.replaceTrack(track);else sender=pc.addTrack(track,screen);
       setSharing(true);
-      track.onended=()=>{setSharing(false);screenRef.current?.getTracks().forEach(item=>item.stop());screenRef.current=null;};
-      if(!sender)await makeOffer(active,pc);
+      track.onended=()=>{
+        setSharing(false);screenRef.current?.getTracks().forEach(item=>item.stop());screenRef.current=null;
+        if(sender&&cameraTrack)void sender.replaceTrack(cameraTrack);
+        else if(sender){pc.removeTrack(sender);void makeOffer(active,pc).catch(cause=>setError(cause.message));}
+      };
+      if(!cameraTrack)await makeOffer(active,pc);
     }catch(cause){setError(cause instanceof Error?cause.message:"Screen sharing was cancelled.");}
   };
 
@@ -188,10 +193,11 @@ export function NexusCallPanel({targetId,targetName,currentUserId}:Props) {
           <div className="flex min-h-[220px] flex-col items-center justify-center rounded-xl border border-white/10 bg-white/[0.035]">
             <video ref={remoteVideoRef} autoPlay playsInline className="h-full max-h-[360px] w-full rounded-xl object-cover"/>
             {!remoteStream&&<><div className="mb-2 grid h-20 w-20 place-items-center rounded-full bg-violet-500/20 text-2xl font-bold">{call.peerName.slice(0,1).toUpperCase()}</div><p className="text-sm text-white/60">Waiting for {call.peerName}…</p></>}
+            <AudioMeter stream={remoteStream}/>
           </div>
           <div className="flex min-h-[180px] flex-col items-center justify-center rounded-xl border border-white/10 bg-white/[0.035]">
-            <div className="mb-2 grid h-16 w-16 place-items-center rounded-full bg-cyan-500/15 text-xl font-bold">{String(currentUserId).slice(-2)}</div><p className="text-sm text-white/65">You</p><AudioMeter stream={localStream}/>
-            {localStream&&<video autoPlay muted playsInline ref={element=>{if(element&&element.srcObject!==localStream)element.srcObject=localStream;}} className="mt-2 max-h-28 w-40 rounded-lg object-cover"/>}
+            <div className="mb-2 grid h-16 w-16 place-items-center rounded-full bg-cyan-500/15 text-xl font-bold">N</div><p className="text-sm text-white/65">You</p><AudioMeter stream={localStream}/>
+            {localStream?.getVideoTracks().length ? <video autoPlay muted playsInline ref={element=>{if(element&&element.srcObject!==localStream)element.srcObject=localStream;}} className="mt-2 max-h-28 w-40 rounded-lg object-cover"/> : null}
           </div>
         </div>
         {error&&<p role="alert" className="mt-3 rounded-lg border border-rose-400/20 bg-rose-500/10 p-2 text-xs text-rose-200">{error}</p>}
