@@ -1,4 +1,4 @@
-name: Build native SwiftUI iOS IPA
+name: Build bundled NEXUS iOS app
 
 on:
   workflow_dispatch:
@@ -7,51 +7,64 @@ on:
       - feat/mobile-notifications-responsive-platforms
     paths:
       - ".github/workflows/ios-build.yml"
-      - "ios-native/**"
+      - "client/**"
+      - "shared/**"
+      - "package.json"
+      - "package-lock.json"
+      - "capacitor.config.ts"
+      - "vite.config.ts"
+      - "tailwind.config.ts"
+      - "postcss.config.js"
+      - "script/build.ts"
 
 permissions:
   contents: read
 
 jobs:
-  ios-native:
+  ios-bundled:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - name: Install XcodeGen
-        run: brew install xcodegen
-      - name: Generate original bundled visual and audio assets
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install project dependencies
+        run: npm ci
+      - name: Build the exact NEXUS website frontend
         run: |
-          python3 -m venv .asset-venv
-          .asset-venv/bin/pip install Pillow numpy
-          .asset-venv/bin/python ios-native/scripts/generate_assets.py
-          du -sh ios-native/Resources
-      - name: Generate native Xcode project
-        run: xcodegen generate --spec ios-native/project.yml --project ios-native
-      - name: Verify native Swift sources
+          npm run build
+          test -s dist/public/index.html
+          test -d dist/public/assets
+          echo "Bundled website assets:"
+          du -sh dist/public
+      - name: Generate Capacitor iOS project and copy website assets locally
         run: |
-          test -s ios-native/Sources/NEXUSApp.swift
-          test -s ios-native/Sources/NexusModel.swift
-          test -s ios-native/Sources/RootView.swift
-      - name: Build native SwiftUI archive
+          npx cap add ios
+          npx cap sync ios
+          test -s ios/App/App/public/index.html
+          test -d ios/App/App/public/assets
+          echo "iOS-bundled frontend:"
+          du -sh ios/App/App/public
+      - name: Build unsigned iOS archive
         run: |
-          xcodebuild -project ios-native/NEXUS.xcodeproj -scheme NEXUS -configuration Release -sdk iphoneos -archivePath "$PWD/NEXUS.xcarchive" archive CODE_SIGNING_ALLOWED=NO
-      - name: Package unsigned native IPA
+          xcodebuild -workspace ios/App/App.xcworkspace -scheme App -configuration Release -sdk iphoneos -archivePath "$PWD/NEXUS.xcarchive" archive CODE_SIGNING_ALLOWED=NO
+      - name: Package unsigned IPA
         run: |
-          APP_PATH="$PWD/NEXUS.xcarchive/Products/Applications/NEXUS.app"
+          APP_PATH="$PWD/NEXUS.xcarchive/Products/Applications/App.app"
           test -d "$APP_PATH"
-          test -s "$APP_PATH/Assets.car"
-          test -s "$APP_PATH/NeuralPing.wav"
+          test -s "$APP_PATH/index.html"
+          test -d "$APP_PATH/public/assets"
           mkdir -p "$RUNNER_TEMP/unsigned-ipa/Payload"
           cp -R "$APP_PATH" "$RUNNER_TEMP/unsigned-ipa/Payload/NEXUS.app"
-          (cd "$RUNNER_TEMP/unsigned-ipa" && /usr/bin/zip -qry "$GITHUB_WORKSPACE/NEXUS-native-unsigned.ipa" Payload)
-          test -s "$GITHUB_WORKSPACE/NEXUS-native-unsigned.ipa"
-          IPA_KB=$(du -k "$GITHUB_WORKSPACE/NEXUS-native-unsigned.ipa" | cut -f1)
-          echo "Native IPA size: $(du -h "$GITHUB_WORKSPACE/NEXUS-native-unsigned.ipa" | cut -f1)"
-          test "$IPA_KB" -ge 70000
-      - name: Upload native IPA
+          (cd "$RUNNER_TEMP/unsigned-ipa" && /usr/bin/zip -qry "$GITHUB_WORKSPACE/NEXUS-website-bundled.ipa" Payload)
+          test -s "$GITHUB_WORKSPACE/NEXUS-website-bundled.ipa"
+          echo "IPA size: $(du -h "$GITHUB_WORKSPACE/NEXUS-website-bundled.ipa" | cut -f1)"
+          unzip -l "$GITHUB_WORKSPACE/NEXUS-website-bundled.ipa" | grep -E 'Payload/NEXUS.app/public/(index.html|assets/)'
+      - name: Upload bundled iOS IPA
         uses: actions/upload-artifact@v4
         with:
-          name: nexus-native-ios-unsigned-ipa
-          path: NEXUS-native-unsigned.ipa
+          name: nexus-website-bundled-unsigned-ipa
+          path: NEXUS-website-bundled.ipa
           if-no-files-found: error
           retention-days: 14
