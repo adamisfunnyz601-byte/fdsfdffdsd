@@ -1,8 +1,9 @@
 const { app, BrowserWindow, shell, session } = require("electron");
 const path = require("node:path");
 
-const APP_URL = process.env.NEXUS_APP_URL || "https://secure-web-gateway--c00le5tp3rs0n3v.replit.app";
-const APP_ORIGIN = new URL(APP_URL).origin;
+const API_URL = process.env.NEXUS_API_URL || "https://secure-web-gateway--c00le5tp3rs0n3v.replit.app";
+const API_ORIGIN = new URL(API_URL).origin;
+const LOCAL_UI = path.join(__dirname, "..", "dist", "public", "index.html");
 
 let mainWindow;
 
@@ -25,7 +26,7 @@ function createWindow() {
     minHeight: 480,
     show: false,
     autoHideMenuBar: true,
-    backgroundColor: "#09090b",
+    backgroundColor: "#09090f",
     title: "NEXUS",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
@@ -37,32 +38,24 @@ function createWindow() {
   });
 
   mainWindow.once("ready-to-show", () => mainWindow.show());
-
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     openExternalSafely(url);
     return { action: "deny" };
   });
-
   mainWindow.webContents.on("will-navigate", (event, targetUrl) => {
-    try {
-      if (new URL(targetUrl).origin !== APP_ORIGIN) {
-        event.preventDefault();
-        openExternalSafely(targetUrl);
-      }
-    } catch {
+    if (targetUrl.startsWith("http://") || targetUrl.startsWith("https://")) {
       event.preventDefault();
+      openExternalSafely(targetUrl);
     }
   });
-
   mainWindow.webContents.on("page-title-updated", (event) => {
     event.preventDefault();
     mainWindow?.setTitle("NEXUS");
   });
 
-  mainWindow.loadURL(APP_URL).catch((error) => {
-    console.error("Unable to load NEXUS:", error);
+  mainWindow.loadFile(LOCAL_UI).catch((error) => {
+    console.error("Unable to load bundled NEXUS interface:", error);
   });
-
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
@@ -72,7 +65,10 @@ app.whenReady().then(() => {
   app.setAppUserModelId("com.nexusos.app");
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
     let trustedOrigin = false;
-    try { trustedOrigin = new URL(webContents.getURL()).origin === APP_ORIGIN; } catch {}
+    try {
+      const current = new URL(webContents.getURL());
+      trustedOrigin = current.protocol === "file:" || current.origin === API_ORIGIN;
+    } catch {}
     callback(trustedOrigin && ["notifications", "media"].includes(permission));
   });
   createWindow();
