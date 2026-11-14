@@ -9,6 +9,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
+import { apiUrl } from "@/lib/api-url";
+import { startRegistration } from "@simplewebauthn/browser";
 import { NEXUS_FONTS, NEXUS_GRADIENTS, readNexusAppearance, saveNexusAppearance, type NexusFont, type NexusGradient } from "@/lib/appearance";
 
 const statuses = [
@@ -25,12 +27,32 @@ export default function SettingsPage() {
   const [muteNotifications, setMuteNotifications] = useState(Boolean(user?.muteNotifications));
   const [ringtoneUrl, setRingtoneUrl] = useState(user?.ringtoneUrl || "");
   const [saving, setSaving] = useState(false);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
   const [appearance, setAppearance] = useState(readNexusAppearance);
   const [notificationState, setNotificationState] = useState(() => isNativeApp()
     ? { supported: true, permission: "default" as NotificationPermission, description: "Native operating-system notifications are available on this device." }
     : getNotificationSupport());
   const [notificationBusy, setNotificationBusy] = useState(false);
   const nativeApp = isNativeApp();
+
+  const registerPasskey = async () => {
+    setPasskeyBusy(true);
+    try {
+      const optionsResponse = await fetch(apiUrl("/api/auth/passkeys/register/options"), { credentials: "include", method: "POST" });
+      const options = await optionsResponse.json().catch(() => ({}));
+      if (!optionsResponse.ok) throw new Error(options.message || "Could not start passkey setup.");
+      const response = await startRegistration({ optionsJSON: options });
+      const verifyResponse = await fetch(apiUrl("/api/auth/passkeys/register/verify"), {
+        credentials: "include", method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ response }),
+      });
+      const result = await verifyResponse.json().catch(() => ({}));
+      if (!verifyResponse.ok || !result.verified) throw new Error(result.message || "Passkey verification failed.");
+      toast({ title: "Passkey added", description: "You can now sign in with this device's passkey." });
+    } catch (error: any) {
+      toast({ title: "Passkey setup failed", description: error?.message || "This browser or device could not create a passkey.", variant: "destructive" });
+    } finally { setPasskeyBusy(false); }
+  };
 
   const enableNotifications = async () => {
     setNotificationBusy(true);
@@ -154,6 +176,12 @@ export default function SettingsPage() {
               <Volume2 className="w-4 h-4" /> Save
             </CyberButton>
           </div>
+        </section>
+
+        <section className="discord-card app-glass space-y-3 p-5">
+          <div><h2 className="font-semibold text-foreground mb-1">Passkeys</h2><p className="text-xs text-muted-foreground">Use Windows Hello, Touch ID, Face ID, Android biometrics or a security key where your browser supports WebAuthn.</p></div>
+          <CyberButton disabled={passkeyBusy || !user} onClick={registerPasskey}>{passkeyBusy ? "Setting up passkey…" : "Add a passkey to this account"}</CyberButton>
+          <p className="text-[11px] text-muted-foreground">Passkeys require the production WEBAUTHN_ORIGIN and WEBAUTHN_RP_ID settings on the server.</p>
         </section>
 
         <section className="discord-card p-5">
