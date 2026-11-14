@@ -8,6 +8,7 @@ private let purple = Color(red: 0.61, green: 0.39, blue: 0.98)
 struct RootView: View {
     @EnvironmentObject var model: NexusModel
     @State private var section = "Messages"
+    @AppStorage("nexus.wallpaper") private var wallpaper = "NexusWallpaperViolet"
 
     var body: some View {
         GeometryReader { geometry in
@@ -21,7 +22,7 @@ struct RootView: View {
                 }
             }
         }
-        .background(bg.ignoresSafeArea())
+        .background { ZStack { Image(wallpaper).resizable().scaledToFill().ignoresSafeArea(); bg.opacity(0.84).ignoresSafeArea() } }
         .task { if model.currentUser == nil { await model.restoreSession() } }
         .alert("NEXUS", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
             Button("OK", role: .cancel) { model.error = nil }
@@ -187,12 +188,29 @@ struct RootView: View {
                     .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary).padding(12)
             }.frame(minHeight: 170)
             Label("SOUNDBOARD", systemImage: "speaker.wave.2").font(.system(size: 10, weight: .bold, design: .monospaced)).tracking(2)
-            let sounds = ["NEURAL PING", "GLITCH PULSE", "DATA EXTRACT", "SYS ALARM", "STATIC BURST", "VOID BEEP", "PROTOCOL INIT", "TERMINATE"]
+            let sounds: [(String, String)] = [
+                ("NEURAL PING", "NeuralPing"), ("GLITCH PULSE", "GlitchPulse"),
+                ("DATA EXTRACT", "DataExtract"), ("SYS ALARM", "SystemAlarm"),
+                ("STATIC BURST", "StaticBurst"), ("VOID BEEP", "VoidBeep"),
+                ("PROTOCOL INIT", "ProtocolInit"), ("TERMINATE", "Terminate")
+            ]
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                ForEach(sounds, id: \.self) { sound in
-                    Button(sound) { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
-                        .font(.system(size: 8, design: .monospaced)).foregroundStyle(.white.opacity(0.8))
-                        .padding(10).frame(maxWidth: .infinity).background(panel).overlay(Rectangle().stroke(purple.opacity(0.2)))
+                ForEach(sounds, id: \.1) { sound in
+                    Button { model.playSound(sound.1) } label: {
+                        Text(sound.0).font(.system(size: 8, design: .monospaced)).foregroundStyle(.white.opacity(0.85)).padding(10).frame(maxWidth: .infinity).background(panel).overlay(Rectangle().stroke(purple.opacity(0.25)))
+                    }
+                }
+            }
+            Label("WALLPAPER STUDIO", systemImage: "photo.on.rectangle.angled").font(.system(size: 10, weight: .bold, design: .monospaced)).tracking(2).padding(.top, 8)
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                ForEach(["NexusWallpaperViolet", "NexusWallpaperMidnight", "NexusWallpaperAmethyst", "NexusWallpaperAurora", "NexusWallpaperEmber"], id: \.self) { name in
+                    Button { wallpaper = name } label: {
+                        ZStack(alignment: .bottomLeading) {
+                            Image(name).resizable().scaledToFill().frame(height: 58).clipped()
+                            Text(name.replacingOccurrences(of: "NexusWallpaper", with: "").uppercased()).font(.system(size: 7, weight: .bold, design: .monospaced)).padding(5).frame(maxWidth: .infinity, alignment: .leading).background(.black.opacity(0.55))
+                            if wallpaper == name { Image(systemName: "checkmark.circle.fill").foregroundStyle(.white).padding(5).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing) }
+                        }.clipShape(RoundedRectangle(cornerRadius: 7)).overlay(RoundedRectangle(cornerRadius: 7).stroke(wallpaper == name ? purple : .white.opacity(0.15), lineWidth: wallpaper == name ? 2 : 1))
+                    }.buttonStyle(.plain)
                 }
             }
             Spacer()
