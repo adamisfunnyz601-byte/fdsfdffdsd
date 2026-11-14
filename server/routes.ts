@@ -907,8 +907,8 @@ export async function registerRoutes(
     const input = api.chat.send.input.parse(req.body);
     if (input.mediaUrl) {
       const mediaUrl = input.mediaUrl;
-      const dataMatch = /^data:(image\\/(?:png|jpeg|gif|webp)|video\\/(?:mp4|webm|quicktime)|audio\\/(?:mpeg|mp4|webm|ogg|wav|x-wav|flac|aac));base64,([A-Za-z0-9+/]*={0,2})$/i.exec(mediaUrl);
-      const isHttpUrl = /^https:\\/\\//i.test(mediaUrl) && mediaUrl.length <= 2048;
+      const dataMatch = /^data:(image\/(?:png|jpeg|gif|webp)|video\/(?:mp4|webm|quicktime)|audio\/(?:mpeg|mp4|webm|ogg|wav|x-wav|flac|aac));base64,([A-Za-z0-9+/]*={0,2})$/i.exec(mediaUrl);
+      const isHttpUrl = /^https:\/\//i.test(mediaUrl) && mediaUrl.length <= 2048;
       if (!dataMatch && !isHttpUrl) return res.status(400).json({ message: "Unsupported attachment format." });
       if (dataMatch && Math.floor(dataMatch[2].length * 3 / 4) > 8 * 1024 * 1024) {
         return res.status(413).json({ message: "Attachments must be 8 MB or smaller." });
