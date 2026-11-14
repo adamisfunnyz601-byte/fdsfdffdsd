@@ -6,6 +6,8 @@ on:
     paths:
       - "electron/**"
       - "client/**"
+      - "client/src/lib/api-url.ts"
+      - "client/src/index.css"
       - "capacitor.config.ts"
       - "package.json"
       - "package-lock.json"
