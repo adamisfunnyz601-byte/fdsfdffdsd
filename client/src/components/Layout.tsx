@@ -2,10 +2,13 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { MessageCircle, Server, Settings, LogOut } from "lucide-react";
 import { Avatar } from "./ProfileModal";
+import { useEffect } from "react";
+import { applyNexusAppearance, readNexusAppearance } from "@/lib/appearance";
 
 export function Layout({children}:{children:React.ReactNode}){
  const {user,logout}=useAuth();const [location]=useLocation();
  const links=[{href:"/chat",label:"Messages",icon:MessageCircle},{href:"/servers",label:"Servers",icon:Server},{href:"/settings",label:"Settings",icon:Settings}];
+ useEffect(()=>{const apply=()=>applyNexusAppearance(readNexusAppearance());apply();window.addEventListener("nexus-appearance-change",apply);return()=>window.removeEventListener("nexus-appearance-change",apply);},[]);
  return <div className="nexus-shell flex h-dvh flex-col text-white md:flex-row">
   <aside className="z-40 flex shrink-0 flex-row items-center justify-between border-b border-white/10 bg-black/25 backdrop-blur-2xl px-3 py-2 md:h-dvh md:w-[76px] md:flex-col md:justify-start md:gap-3 md:border-b-0 md:border-r md:px-0 md:py-4">
    <Link href="/chat" title="NEXUS" className="grid h-11 w-11 place-items-center nexus-btn nexus-btn--glow rounded-2xl text-lg font-black shadow-lg shadow-violet-950/30">N</Link>
