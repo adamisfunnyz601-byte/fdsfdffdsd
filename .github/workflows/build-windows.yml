@@ -5,6 +5,8 @@ on:
   push:
     paths:
       - "electron/**"
+      - "client/**"
+      - "capacitor.config.ts"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/build-windows.yml"
