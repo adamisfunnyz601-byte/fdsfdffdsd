@@ -13,8 +13,9 @@ This runs the existing Express server on your Windows PC and uses your existing 
 2. Run:
    `powershell -ExecutionPolicy Bypass -File .\scripts\start-self-hosted.ps1`
 3. Paste the Neon connection string when prompted. It is only assigned to this PowerShell process and is not written into the repository.
-4. Wait for the build. The local server should be available at http://localhost:5000.
-5. Keep the PowerShell window and PC running.
+4. The script runs `drizzle-kit push` against Neon using `shared/schema.ts`. This creates the full set of NEXUS tables and missing columns. Review any proposed destructive schema changes before confirming them.
+5. Wait for the build. The local server should be available at http://localhost:5000.
+6. Keep the PowerShell window and PC running.
 
 ## Optional public access (Tailscale Funnel)
 Tailscale Funnel can publish a local HTTP service over HTTPS without router port-forwarding. It is available on Tailscale plans, but has usage/bandwidth limits and is not a substitute for production hosting.
