@@ -158,25 +158,16 @@ export default function Admin() {
           )}
         </div>
 
-        <Tabs defaultValue={user?.role === "admin" ? "requests" : "keys"} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 mb-6">
-            <TabsTrigger value="keys">Keys</TabsTrigger>
+        <Tabs defaultValue="emojis" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-6">
             <TabsTrigger value="emojis" className="flex items-center gap-1">
               <Smile className="w-3 h-3" /> Emojis
-            </TabsTrigger>
-            <TabsTrigger value="requests" className="relative">
-              Requests
-              {pendingRequests.length > 0 && (
-                <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-                  {pendingRequests.length}
-                </span>
-              )}
             </TabsTrigger>
             <TabsTrigger value="shop">Shop</TabsTrigger>
           </TabsList>
 
-          {/* ── KEYS TAB ── */}
-          <TabsContent value="keys" className="space-y-6">
+          {/* Account access is open through username/password registration. */}
+          {false && <TabsContent value="keys" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="discord-card p-5 space-y-4">
                 <h3 className="font-semibold text-foreground text-sm flex items-center gap-2">
@@ -267,7 +258,7 @@ export default function Admin() {
                 </div>
               </div>
             </div>
-          </TabsContent>
+          </TabsContent>}
 
           {/* ── EMOJIS TAB ── */}
           <TabsContent value="emojis" className="space-y-6">
@@ -350,64 +341,6 @@ export default function Admin() {
                   </div>
                 )}
               </div>
-            </div>
-          </TabsContent>
-
-          {/* ── REQUESTS TAB ── */}
-          <TabsContent value="requests" className="space-y-4">
-            <div className="discord-card overflow-hidden">
-              <div className="p-4 border-b border-border flex items-center justify-between">
-                <h3 className="font-semibold text-foreground text-sm">Access Requests</h3>
-                <span className="text-xs text-muted-foreground">{accessRequests.length} total</span>
-              </div>
-              {accessRequests.length === 0 ? (
-                <div className="p-8 text-center text-muted-foreground text-sm">
-                  <Clock className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                  No access requests yet
-                </div>
-              ) : (
-                <div className="divide-y divide-border/40">
-                  {accessRequests.map((req: any) => (
-                    <div key={req.id} className="p-4 hover:bg-secondary/20 transition-colors">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-semibold text-foreground text-sm">@{req.name}</span>{req.createdUserId && <span className="rounded bg-green-500/10 px-2 py-0.5 text-[10px] text-green-400">ACCOUNT #{req.createdUserId}</span>}
-                            <span className={cn(
-                              "text-[10px] px-2 py-0.5 rounded-full font-medium",
-                              req.status === "approved" ? "bg-green-500/20 text-green-400" :
-                              req.status === "rejected" ? "bg-red-500/20 text-red-400" :
-                              "bg-amber-500/20 text-amber-400"
-                            )}>
-                              {req.status}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground">
-                              {req.createdAt ? format(new Date(req.createdAt), "MMM d, HH:mm") : ""}
-                            </span>
-                          </div>
-                          <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words">{req.message}</p>
-                        </div>
-                        {req.status === "pending" && (
-                          <div className="flex gap-2 shrink-0">
-                            <button
-                              onClick={() => updateRequestMut.mutate({ id: req.id, status: "approved" })}
-                              className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-green-500/15 text-green-400 hover:bg-green-500/25 text-xs font-medium transition-colors"
-                            >
-                              <CheckCircle2 className="w-3.5 h-3.5" /> Approve
-                            </button>
-                            <button
-                              onClick={() => updateRequestMut.mutate({ id: req.id, status: "rejected" })}
-                              className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-red-500/15 text-red-400 hover:bg-red-500/25 text-xs font-medium transition-colors"
-                            >
-                              <XCircle className="w-3.5 h-3.5" /> Reject
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           </TabsContent>
 
