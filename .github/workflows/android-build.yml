@@ -30,7 +30,7 @@ jobs:
         run: |
           node -e 'const u=new URL(process.env.APP_URL); if(u.protocol!=="https:") throw new Error("server_url must use HTTPS");'
       - name: Install app dependencies
-        run: npm ci
+        run: npm install
       - name: Install Capacitor build tooling
         run: npm install --no-save --package-lock=false @capacitor/cli@^8 @capacitor/core@^8 @capacitor/android@^8 @capacitor/push-notifications@^8 @capacitor/local-notifications@^8
       - name: Build web application
@@ -63,12 +63,12 @@ jobs:
           app = Path("android/app/build.gradle")
           text = app.read_text()
           if "com.google.gms.google-services" not in text:
-              text += "\\napply plugin: 'com.google.gms.google-services'\\n"
+              text += "\napply plugin: 'com.google.gms.google-services'\n"
               app.write_text(text)
           root = Path("android/build.gradle")
           text = root.read_text()
           if "com.google.gms:google-services" not in text:
-              text = text.replace("dependencies {", "dependencies {\\n        classpath 'com.google.gms:google-services:4.4.2'", 1)
+              text = text.replace("dependencies {", "dependencies {\n        classpath 'com.google.gms:google-services:4.4.2'", 1)
               root.write_text(text)
           PY
       - name: Build debug APK
