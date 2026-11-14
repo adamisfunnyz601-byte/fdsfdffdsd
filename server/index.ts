@@ -7,6 +7,29 @@ const app = express();
 const httpServer = createServer(app);
 app.set("trust proxy", 1);
 
+// Native Capacitor shells use a local origin while the API remains hosted.
+// Allow only the app's known origins and keep session cookies enabled.
+const allowedAppOrigins = new Set([
+  "capacitor://localhost",
+  "ionic://localhost",
+  "http://localhost",
+  "https://localhost",
+  "https://nexus.is-a.bot",
+  process.env.APP_ORIGIN || "",
+]);
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && allowedAppOrigins.has(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+  }
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
+
 declare module "http" {
   interface IncomingMessage {
     rawBody: unknown;
