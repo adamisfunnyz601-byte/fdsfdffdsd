@@ -33,7 +33,7 @@ export default function SettingsPage() {
     try {
       if (nativeApp) {
         await enableNativeNotifications();
-        toast({ title: "Native notifications enabled", description: `Push registration started on ${nativePlatform()}. Configure Firebase/APNs credentials for remote delivery.` });
+        toast({ title: "Native notification permission enabled", description: `The device registered with ${nativePlatform()} push services. NEXUS still needs its server push sender before messages can be delivered remotely.` });
       } else {
         await enableBrowserNotifications();
         setNotificationState(getNotificationSupport());
