@@ -17,7 +17,7 @@ export function useAuth() {
     queryKey: [api.auth.me.path],
     queryFn: async () => {
       const res = await fetch(apiUrl(api.auth.me.path), {
-        credentials: "same-origin"
+        credentials: "include"
       });
 
       if (res.status === 401) return null;
@@ -33,7 +33,7 @@ export function useAuth() {
     mutationFn: async (credentials: LoginCredentials) => {
       const res = await fetch(apiUrl(api.auth.login.path), {
         method: api.auth.login.method,
-        credentials: "same-origin",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json"
         },
@@ -82,7 +82,7 @@ export function useAuth() {
     mutationFn: async () => {
       await fetch(apiUrl(api.auth.logout.path), {
         method: api.auth.logout.method,
-        credentials: "same-origin"
+        credentials: "include"
       });
     },
 
