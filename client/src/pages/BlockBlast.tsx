@@ -180,7 +180,7 @@ function BlockBlastGame() {
    pc=new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
    stream.getTracks().forEach(track=>pc!.addTrack(track,stream));
    pc.onicecandidate=e=>{if(e.candidate)sendVoiceSignal(peerId,{type:"ice",candidate:e.candidate.toJSON()}).catch(()=>{});};
-   pc.ontrack=e=>{let audio=remoteAudioRef.current.get(peerId);if(!audio){audio=new Audio();audio.autoplay=true;audio.playsInline=true;remoteAudioRef.current.set(peerId,audio);}audio.srcObject=e.streams[0];audio.play().catch(()=>{});};
+   pc.ontrack=e=>{let audio=remoteAudioRef.current.get(peerId);if(!audio){audio=new Audio();audio.autoplay=true;audio.setAttribute("playsinline","");remoteAudioRef.current.set(peerId,audio);}audio.srcObject=e.streams[0];audio.play().catch(()=>{});};
    pc.onconnectionstatechange=()=>{if(pc!.connectionState==="failed"||pc!.connectionState==="closed"||pc!.connectionState==="disconnected"){pc!.close();peersRef.current.delete(peerId);}};
    peersRef.current.set(peerId,pc);return pc;
   };
@@ -196,7 +196,7 @@ function BlockBlastGame() {
     for(const participant of participants){if(Number(user.id)<Number(participant.userId)&&!peersRef.current.has(Number(participant.userId))){
       const pc=makePeer(Number(participant.userId));const offer=await pc.createOffer();await pc.setLocalDescription(offer);await sendVoiceSignal(Number(participant.userId),{type:"offer",description:pc.localDescription});
     }}
-    for(const [peerId,pc] of peersRef.current){const stats=await pc.getStats();let level=0;stats.forEach(report=>{if(report.type==="inbound-rtp"&&report.kind==="audio")level=Number((report as any).audioLevel||0);});setVoiceParticipants(prev=>prev.map(p=>p.userId===peerId?{...p,speaking:level>0.025}:p));}
+    for(const [peerId,pc] of peersRef.current){const stats=await pc.getStats();let level=0;stats.forEach((report:any)=>{if(report.type==="inbound-rtp"&&report.kind==="audio")level=Number((report as any).audioLevel||0);});setVoiceParticipants(prev=>prev.map(p=>p.userId===peerId?{...p,speaking:level>0.025}:p));}
     for(const item of signals){const peerId=Number(item.from);if(item.signal.type==="emote"){const emote=item.signal.emote||{};showRoomEmote({...emote,fromName:emote.fromName||voiceParticipants.find((p:any)=>Number(p.userId)===peerId)?.username||"Player"});continue;}if(item.signal.type==="left"){peersRef.current.get(peerId)?.close();peersRef.current.delete(peerId);const audio=remoteAudioRef.current.get(peerId);audio?.remove();remoteAudioRef.current.delete(peerId);continue;}
      if(item.signal.type==="offer"){const pc=makePeer(peerId);await pc.setRemoteDescription(new RTCSessionDescription(item.signal.description));const answer=await pc.createAnswer();await pc.setLocalDescription(answer);await sendVoiceSignal(peerId,{type:"answer",description:pc.localDescription});}
      else if(item.signal.type==="answer"){const pc=peersRef.current.get(peerId);if(pc&&pc.signalingState==="have-local-offer")await pc.setRemoteDescription(new RTCSessionDescription(item.signal.description));}
