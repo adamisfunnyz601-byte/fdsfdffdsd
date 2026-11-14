@@ -24,7 +24,9 @@ export default function SettingsPage() {
   const [muteNotifications, setMuteNotifications] = useState(Boolean(user?.muteNotifications));
   const [ringtoneUrl, setRingtoneUrl] = useState(user?.ringtoneUrl || "");
   const [saving, setSaving] = useState(false);
-  const [notificationState, setNotificationState] = useState(getNotificationSupport());
+  const [notificationState, setNotificationState] = useState(() => isNativeApp()
+    ? { supported: true, permission: "default" as NotificationPermission, description: "Native operating-system notifications are available on this device." }
+    : getNotificationSupport());
   const [notificationBusy, setNotificationBusy] = useState(false);
   const nativeApp = isNativeApp();
 
