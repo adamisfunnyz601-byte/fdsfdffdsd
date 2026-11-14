@@ -1,3 +1,4 @@
+import { apiUrl } from "@/lib/api-url";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@shared/routes";
@@ -15,7 +16,7 @@ export function useAuth() {
   const { data: user, isLoading, error } = useQuery({
     queryKey: [api.auth.me.path],
     queryFn: async () => {
-      const res = await fetch(api.auth.me.path, {
+      const res = await fetch(apiUrl(api.auth.me.path), {
         credentials: "same-origin"
       });
 
@@ -30,7 +31,7 @@ export function useAuth() {
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: LoginCredentials) => {
-      const res = await fetch(api.auth.login.path, {
+      const res = await fetch(apiUrl(api.auth.login.path), {
         method: api.auth.login.method,
         credentials: "same-origin",
         headers: {
@@ -79,7 +80,7 @@ export function useAuth() {
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      await fetch(api.auth.logout.path, {
+      await fetch(apiUrl(api.auth.logout.path), {
         method: api.auth.logout.method,
         credentials: "same-origin"
       });
