@@ -46,8 +46,8 @@ export default function ServersPage() {
   const messagesQuery=useQuery<any[]>({
     queryKey:["/api/servers",selectedId,"channels",selectedChannelId,"messages"],
     enabled:selectedId!==null&&selectedChannelId!==null,
-    refetchInterval:5000,
-    queryFn:async()=>{const r=await apiFetch(`/api/servers/${selectedId}/channels/${selectedChannelId}/messages`,{credentials:"include"});const d=await r.json().catch(()=>[]);if(!r.ok)throw new Error(d.message||"Could not load channel messages");return d;},
+    refetchInterval:3000, refetchIntervalInBackground:false, refetchOnWindowFocus:true, staleTime:0,
+    queryFn:async()=>{const r=await apiFetch(`/api/servers/${selectedId}/channels/${selectedChannelId}/messages`,{credentials:"include",cache:"no-store"});const d=await r.json().catch(()=>[]);if(!r.ok)throw new Error(d.message||"Could not load channel messages");return d;},
   });
   const refresh=async()=>{await queryClient.invalidateQueries({queryKey:["/api/servers"]});if(selectedId)await queryClient.invalidateQueries({queryKey:["/api/servers",selectedId]});};
   const request=async(url:string,method:string,body?:any)=>{
