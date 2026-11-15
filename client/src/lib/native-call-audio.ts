@@ -1,16 +1,10 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
 
-interface NativeCallAudioPlugin {
-  start(options?: { name?: string }): Promise<void>;
-  stop(): Promise<void>;
-}
-
 interface NativeCallKitPlugin {
   start(options: { callId: string; name: string }): Promise<void>;
   stop(): Promise<void>;
 }
 
-const NativeCallAudio = registerPlugin<NativeCallAudioPlugin>("CallAudio");
 const NativeCallKit = registerPlugin<NativeCallKitPlugin>("NexusCallKit");
 
 /**
@@ -30,6 +24,5 @@ export async function startNativeCallAudio(name = "NEXUS call"): Promise<void> {
 
 export async function stopNativeCallAudio(): Promise<void> {
   const platform = Capacitor.getPlatform();
-  if (platform === "android") await NativeCallAudio.stop();
-  else if (platform === "ios") await NativeCallKit.stop();
+  if (platform === "android" || platform === "ios") await NativeCallKit.stop();
 }
