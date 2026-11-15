@@ -22,7 +22,6 @@ import Chat from "@/pages/Chat";
 import UpdatesPage from "@/pages/Updates";
 import ServersPage from "@/pages/Servers";
 import Dihtro from "@/pages/Dihtro";
-import AppleTwoFactor from "@/components/AppleTwoFactor";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
  const {user,isLoading}=useAuth();
@@ -49,4 +48,4 @@ function Router(){return <Switch>
  <Route component={NotFound}/>
  </Switch>}
 function GlobalChatHost(){const {user,isLoading}=useAuth();const [location]=useLocation();if(isLoading||!user)return null;const active=location==="/chat";return <div aria-hidden={!active} style={{position:"fixed",inset:0,zIndex:30,visibility:active?"visible":"hidden",pointerEvents:active?"auto":"none"}}><Chat/></div>}
-export default function App(){return <QueryClientProvider client={queryClient}><TooltipProvider><Router/><GlobalChatHost/><AppleTwoFactor/><Toaster/></TooltipProvider></QueryClientProvider>}
+export default function App(){return <QueryClientProvider client={queryClient}><TooltipProvider><Router/><GlobalChatHost/><Toaster/></TooltipProvider></QueryClientProvider>}
