@@ -372,7 +372,7 @@ export function ProfileModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          className="nexus-profile-overlay fixed inset-0 z-[100] bg-black/85 backdrop-blur-sm flex items-start justify-center overflow-y-auto overscroll-contain p-2 sm:items-center sm:p-4"
           onClick={onClose}
         >
           <motion.div
@@ -380,7 +380,7 @@ export function ProfileModal({
             animate={{ scale: 1, y: 0 }}
             exit={{ scale: 0.9, y: 20 }}
             onClick={(e) => e.stopPropagation()}
-            className="bg-black border border-primary/40 rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto shadow-[0_0_40px_rgba(34,197,94,0.3)]"
+            className="nexus-profile-dialog bg-black border border-primary/40 rounded-xl w-full max-w-2xl max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)] overflow-x-hidden overflow-y-auto overscroll-contain shadow-[0_0_40px_rgba(34,197,94,0.3)]"
             data-testid="profile-modal"
           >
             {/* Profile banner */}
