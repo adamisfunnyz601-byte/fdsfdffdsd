@@ -4,6 +4,11 @@ import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
 export default defineConfig({
+  // The same bundled UI is loaded from file:// by the Electron desktop app
+  // and from the Capacitor web view on mobile. Relative asset URLs are
+  // required there; absolute /assets URLs resolve to the filesystem root
+  // and produce a blank/black window.
+  base: "./",
   plugins: [
     react(),
     runtimeErrorOverlay(),
