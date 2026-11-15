@@ -1,0 +1,63 @@
+name: Retrieve Apple Personal Team ID
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  retrieve-team-id:
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+
+      - name: Install Fastlane Spaceship
+        run: gem install fastlane --no-document
+
+      - name: Retrieve Apple teams
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${APPLE_ID:-}" || -z "${FASTLANE_SESSION:-}" ]]; then
+            echo "::error::Add APPLE_ID and FASTLANE_SESSION in repository Actions secrets first."
+            exit 1
+          fi
+
+          ruby <<'RUBY'
+          require "spaceship"
+
+          begin
+            client = Spaceship::Portal.login(ENV.fetch("APPLE_ID"))
+            teams = client.teams
+
+            if teams.empty?
+              abort "Apple returned no Developer Portal teams for this account. A free Personal Team may not be provisioned on this account yet."
+            end
+
+            puts "Apple Developer teams available to this Apple Account:"
+            teams.each do |team|
+              name = team["name"] || "Unnamed team"
+              kind = team["type"] || "Team"
+              team_id = team["teamId"]
+              next if team_id.to_s.empty?
+
+              puts "- #{name} (#{kind}): #{team_id}"
+              File.open(ENV.fetch("GITHUB_STEP_SUMMARY"), "a") do |summary|
+                summary.puts "- **#{name}** (#{kind}): `#{team_id}`"
+              end
+            end
+          rescue => error
+            warn "Could not retrieve Apple teams. The Apple session may have expired or require fresh two-factor authentication."
+            warn "Error class: #{error.class}"
+            exit 1
+          end
+          RUBY
