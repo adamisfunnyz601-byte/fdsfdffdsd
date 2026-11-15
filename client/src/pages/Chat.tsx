@@ -759,6 +759,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
   const offerCreationPromiseRef = useRef<Promise<void> | null>(null);
   const callPeerIdRef = useRef<number | null>(null);
   const callInitiatorRef = useRef(false);
+  const callVideoRequestedRef = useRef(false);
   const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const callClockRef = useRef<NodeJS.Timeout | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -1388,20 +1389,22 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     if (peerConnectionRef.current && localStreamRef.current) return peerConnectionRef.current;
     const setup = (async () => {
       const peer = new RTCPeerConnection(await getRtcConfiguration());
+      const wantsVideo = callVideoRequestedRef.current;
       // Reserve a negotiated video sender even for audio-first calls so enabling
       // the camera later does not require an unsupported renegotiation.
-      if (!isVideoOn) peer.addTransceiver("video", { direction: "sendrecv" });
+      if (!wantsVideo) peer.addTransceiver("video", { direction: "sendrecv" });
       peerConnectionRef.current = peer;
       let stream: MediaStream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           audio: VOICE_AUDIO_CONSTRAINTS,
-          video: isVideoOn ? { facingMode: 'user' } : false,
+          video: wantsVideo ? { facingMode: 'user' } : false,
         });
       } catch (mediaError) {
         if (!isVideoOn) throw mediaError;
         // Keep the call working as audio-only if the camera is unavailable/denied.
         stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+        callVideoRequestedRef.current = false;
         setIsVideoOn(false);
         toast({ title: 'Camera unavailable', description: 'Connected with microphone only.' });
       }
@@ -1577,6 +1580,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     setCallTargetName(targetName);
     updateCallState('requesting');
     setRtcStatus('connecting');
+    callVideoRequestedRef.current = withVideo;
     setIsVideoOn(withVideo);
     pushLog(`CALL_REQUESTING: ${targetName}`, 'warn');
     try {
@@ -1598,6 +1602,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     callPeerIdRef.current = call.fromId;
     callInitiatorRef.current = false;
     setCallTargetName(call.fromName);
+    callVideoRequestedRef.current = Boolean(call.withVideo);
     setIsVideoOn(Boolean(call.withVideo));
     if (autoDeclineTimerRef.current) { clearTimeout(autoDeclineTimerRef.current); autoDeclineTimerRef.current = null; }
     setIncomingCall(null);
@@ -1662,6 +1667,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
   const toggleCamera = async () => {
     if (isVideoOn) {
       localStreamRef.current?.getVideoTracks().forEach(track => { track.enabled = false; });
+      callVideoRequestedRef.current = false;
       setIsVideoOn(false);
       return;
     }
@@ -1669,6 +1675,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
       const existingTrack = localStreamRef.current?.getVideoTracks().find(track => track.readyState === 'live');
       if (existingTrack) {
         existingTrack.enabled = true;
+        callVideoRequestedRef.current = true;
         setIsVideoOn(true);
         return;
       }
@@ -1685,6 +1692,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
         localVideoRef.current.srcObject = localStreamRef.current;
         localVideoRef.current.play().catch(() => {});
       }
+      callVideoRequestedRef.current = true;
       setIsVideoOn(true);
     } catch {
       toast({ title: 'CAMERA_DENIED', description: 'Allow camera access to turn video on.', variant: 'destructive' });
