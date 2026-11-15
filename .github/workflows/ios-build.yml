@@ -45,7 +45,7 @@ jobs:
           # Allow the bundled WKWebView to use the Render API host for its
           # authenticated native requests and session cookies.
           /usr/libexec/PlistBuddy -c "Add :WKAppBoundDomains array" ios/App/App/Info.plist 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :WKAppBoundDomains:0 string nexus-api-rcmi.onrender.com" ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c "Add :WKAppBoundDomains:0 string nexuss.devs.li" ios/App/App/Info.plist
           /usr/libexec/PlistBuddy -c "Print :WKAppBoundDomains" ios/App/App/Info.plist
           /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string NEXUS uses the camera for video calls and profile features." ios/App/App/Info.plist 2>/dev/null || /usr/libexec/PlistBuddy -c "Set :NSCameraUsageDescription NEXUS uses the camera for video calls and profile features." ios/App/App/Info.plist
           /usr/libexec/PlistBuddy -c "Add :NSMicrophoneUsageDescription string NEXUS uses the microphone for voice and video calls." ios/App/App/Info.plist 2>/dev/null || /usr/libexec/PlistBuddy -c "Set :NSMicrophoneUsageDescription NEXUS uses the microphone for voice and video calls." ios/App/App/Info.plist
