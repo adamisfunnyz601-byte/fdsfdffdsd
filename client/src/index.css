@@ -1134,7 +1134,7 @@ body {
   }
   .nexus-page-chat .chat-composer form > button,
   .nexus-page-chat .chat-composer form > div:not(.flex-1) { flex: 0 0 auto; }
-  .nexus-page-servers .grid.min-h-\\[460px\\] { grid-template-columns: minmax(0, 1fr) !important; }
+  .nexus-page-servers .grid[class~="min-h-[460px]"] { grid-template-columns: minmax(0, 1fr) !important; }
   .nexus-page-servers main,
   .nexus-page-servers section { min-width: 0; }
 }
