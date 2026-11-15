@@ -32,7 +32,7 @@ export default function TermsPage() {
           <p className="mt-2 text-sm leading-7 text-white/70">{section.body}</p>
         </section>)}
       </div>
-      <p className="mt-8 border-t border-white/10 pt-5 text-xs leading-6 text-white/40">This is a general starter terms document, not legal advice. The NEXUS operator should review it for the actual service, identify the responsible legal entity and publish accurate contact details and a separate privacy notice before public launch.</p>
+      <p className="mt-8 border-t border-white/10 pt-5 text-xs leading-6 text-white/40">© 2026 AdamisFunnyz. All rights reserved. NEXUS™, AdamisFunnyz™ and BLOCKED™ are names used as brand identifiers. The ™ symbol indicates a claimed brand identifier; it does not mean the name is registered as a trade mark. This is a general starter terms document, not legal advice. The NEXUS operator should review it for the actual service, identify the responsible legal entity and publish accurate contact details and a separate privacy notice before public launch.</p>
     </div>
   </main>;
 }
