@@ -2042,12 +2042,15 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
 
   const createDihhroGift = async () => {
     try {
-      const response = await apiFetch("/api/dihhro/gift-links", { method:"POST", credentials:"same-origin" });
+      const rawMonths = window.prompt("Gift Dihtro for how many months? (1–24)", "1");
+      if (rawMonths === null) return;
+      const months = Number(rawMonths);
+      if (!Number.isInteger(months) || months < 1 || months > 24) throw new Error("Choose a duration from 1 to 24 months.");
+      const response = await apiFetch("/api/dihtro/gifts", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ months }), credentials:"include" });
       const data = await response.json().catch(()=>({}));
       if (!response.ok) throw new Error(data.message || "Could not create gift link");
-      const url = `${window.location.origin}${data.url}`;
-      sendMessage.mutate({ content: `🎁 Claim Dihhro for 1 month! ${url}`, recipientId: selectedRecipientId ?? undefined, groupId: selectedGroupId ?? undefined } as any);
-      toast({ title:"Dihhro gift link created", description:"A single-use gift embed has been sent to this chat." });
+      sendMessage.mutate({ content: `🎁 You got gifted Dihtro for ${months} month${months === 1 ? "" : "s"}! CLAIM YOUR FREE DIHTRO PRESENT 🎁 ${data.claimUrl}`, recipientId: selectedRecipientId ?? undefined, groupId: selectedGroupId ?? undefined } as any);
+      toast({ title:"Dihtro gift link created", description:"A single-use gift link has been sent to this chat." });
     } catch (error:any) {
       toast({ title:"Gift link failed", description:error.message || "Could not create gift link", variant:"destructive" });
     }
