@@ -11,6 +11,7 @@ on:
       - "capacitor.config.ts"
       - "package.json"
       - "package-lock.json"
+      - "vite.config.ts"
       - ".github/workflows/build-windows.yml"
 
 permissions:
