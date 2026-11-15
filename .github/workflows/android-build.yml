@@ -101,6 +101,7 @@ jobs:
           permissions = [
               "android.permission.FOREGROUND_SERVICE",
               "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+              "android.permission.FOREGROUND_SERVICE_CAMERA",
               "android.permission.WAKE_LOCK",
               "android.permission.POST_NOTIFICATIONS",
           ]
@@ -112,7 +113,7 @@ jobs:
                   android:name=".NexusCallKitService"
                   android:enabled="true"
                   android:exported="false"
-                  android:foregroundServiceType="microphone" />
+                  android:foregroundServiceType="microphone|camera" />
           '''
           if "NexusCallKitService" not in xml:
               xml = xml.replace("</application>", service + "\n    </application>")
@@ -155,6 +156,7 @@ jobs:
                       Intent intent = new Intent(getContext(), NexusCallKitService.class);
                       String name = call.getString("name");
                       intent.putExtra("call_name", name == null || name.trim().isEmpty() ? "NEXUS call" : name);
+                      intent.putExtra("call_video", call.getBoolean("video", false));
                       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) getContext().startForegroundService(intent);
                       else getContext().startService(intent);
                       call.resolve();
@@ -220,7 +222,11 @@ jobs:
                   if (pending != null) builder.setContentIntent(pending);
                   Notification notification = builder.build();
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                      startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
+                      int foregroundTypes = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE;
+                      if (intent != null && intent.getBooleanExtra("call_video", false)) {
+                          foregroundTypes |= ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA;
+                      }
+                      startForeground(NOTIFICATION_ID, notification, foregroundTypes);
                   } else {
                       startForeground(NOTIFICATION_ID, notification);
                   }
