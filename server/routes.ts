@@ -1371,12 +1371,18 @@ export async function registerRoutes(
       replyToId,
     });
     if (mentionRecipientIds.length) {
-      await pool.query(
-        `INSERT INTO nexus_chat_mention_notifications (user_id, message_id)
-         SELECT recipient_id, $1 FROM unnest($2::int[]) AS recipient_id
-         ON CONFLICT (user_id, message_id) DO NOTHING`,
-        [message.id, mentionRecipientIds],
-      );
+      try {
+        await pool.query(
+          `INSERT INTO nexus_chat_mention_notifications (user_id, message_id)
+           SELECT target_id, $1 FROM unnest($2::int[]) AS targets(target_id)
+           ON CONFLICT (user_id, message_id) DO NOTHING`,
+          [message.id, mentionRecipientIds],
+        );
+      } catch (notificationError) {
+        // Never turn a valid chat send into a failed message just because the
+        // notification queue is temporarily unavailable.
+        console.error("Chat mention notification enqueue failed:", notificationError);
+      }
     }
     // Return the reply preview immediately as well as through the history query.
     // The optimistic client can therefore render the quoted message on first send.
