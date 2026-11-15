@@ -1396,7 +1396,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
       }
       // getUserMedia has now granted microphone access; promote the live call
       // to an Android microphone foreground service before the user backgrounds the app.
-      await startNativeCallAudio();
+      await startNativeCallAudio(callTargetName || "NEXUS call");
       localStreamRef.current = stream;
       setVisualizerStream(stream);
       if (localVideoRef.current) {
