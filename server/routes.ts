@@ -1043,10 +1043,20 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Invalid role" });
     }
     const aRole = canonicalRole(actor.role), tRole = canonicalRole(target.role);
-    if (tRole === "owner" || requestedRole === "owner") return res.status(403).json({ message: "Owner role is immutable and protected." });
-    if (aRole !== "owner" && aRole !== "admin") return res.status(403).json({ message: "Only Owner or Admin can assign roles." });
-    if (aRole !== "owner" && (roleRank[tRole] ?? 0) >= (roleRank[aRole] ?? 0)) return res.status(403).json({ message: "You cannot change a peer or higher-ranked role." });
-    if (aRole !== "owner" && (roleRank[requestedRole] ?? 0) >= (roleRank[aRole] ?? 0)) return res.status(403).json({ message: "You cannot assign a role equal to or above your own." });
+    if (!(aRole in roleRank) || (roleRank[aRole] ?? 0) < roleRank["trial-helper"]) {
+      return res.status(403).json({ message: "Staff access is required to assign roles." });
+    }
+    if (targetId === actorId) return res.status(403).json({ message: "You cannot change your own role." });
+    if (tRole === "owner") return res.status(403).json({ message: "Existing owner accounts are protected." });
+    if (requestedRole === "owner" && aRole !== "owner") {
+      return res.status(403).json({ message: "Only an owner can grant the owner role." });
+    }
+    if (aRole !== "owner" && (roleRank[tRole] ?? 0) >= (roleRank[aRole] ?? 0)) {
+      return res.status(403).json({ message: "You can only change members with a lower role than yours." });
+    }
+    if (aRole !== "owner" && (roleRank[requestedRole] ?? 0) >= (roleRank[aRole] ?? 0)) {
+      return res.status(403).json({ message: "You can only assign roles below your own." });
+    }
     await db.update(users).set({ role: requestedRole }).where(eq(users.id, targetId));
     await db.insert(moderationLogs).values({ actorId, targetId, action: "role-change", reason: `Role changed from ${target.role} to ${requestedRole}`, metadata: { from: tRole, to: requestedRole } });
     res.json({ success: true, userId: targetId, role: requestedRole });
