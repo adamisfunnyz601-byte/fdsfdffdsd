@@ -978,6 +978,80 @@ export async function registerRoutes(
   });
 
   // === ADMIN ===
+  // Account deletion is enforced here on the server, not just hidden in the UI.
+  app.get("/api/admin/users", requireAuth, async (req, res) => {
+    const actor = await storage.getUser(req.session.userId!);
+    const actorRole = String(actor?.role || "").toLowerCase();
+    if (!actor || !["owner", "super_owner"].includes(actorRole)) {
+      return res.status(403).json({ message: "Only owners can manage accounts." });
+    }
+    const rows = await db.select({
+      id: users.id,
+      username: users.username,
+      role: users.role,
+      createdAt: users.createdAt,
+      lastSeen: users.lastSeen,
+      presenceStatus: users.presenceStatus,
+    }).from(users).orderBy(users.id);
+    return res.json(rows.map(account => ({
+      ...account,
+      role: String(account.role).toLowerCase() === "super_owner" ? "owner" : account.role,
+      canDelete: account.id !== actor.id && (
+        actorRole === "super_owner" ||
+        (actorRole === "owner" && !["super_owner", "owner", "admin", "trial-admin"].includes(String(account.role).toLowerCase()))
+      ),
+    })));
+  });
+
+  app.delete("/api/admin/users/:id", requireAuth, async (req, res) => {
+    const actorId = Number(req.session.userId);
+    const actor = await storage.getUser(actorId);
+    const actorRole = String(actor?.role || "").toLowerCase();
+    const targetId = Number(req.params.id);
+    if (!actor || !["owner", "super_owner"].includes(actorRole)) {
+      return res.status(403).json({ message: "Only owners can delete accounts." });
+    }
+    if (!Number.isSafeInteger(targetId) || targetId <= 0) return res.status(400).json({ message: "Invalid account ID." });
+    if (targetId === actorId) return res.status(400).json({ message: "You cannot delete the account you are currently using." });
+    const target = await storage.getUser(targetId);
+    if (!target) return res.status(404).json({ message: "Account not found." });
+    const targetRole = String(target.role).toLowerCase();
+    if (targetRole === "super_owner" || (actorRole === "owner" && ["owner", "admin", "trial-admin"].includes(targetRole))) {
+      return res.status(403).json({ message: actorRole === "super_owner" ? "The active super-owner account cannot be deleted by this action." : "Owners cannot delete admin or owner accounts." });
+    }
+
+    await db.transaction(async tx => {
+      // Remove rows with restrictive user foreign keys before deleting the account.
+      const ownedGroups = await tx.select({ id: groupChats.id }).from(groupChats).where(eq(groupChats.ownerId, targetId));
+      const ownedGroupIds = ownedGroups.map(group => group.id);
+      if (ownedGroupIds.length) {
+        await tx.delete(messages).where(inArray(messages.groupId, ownedGroupIds));
+        await tx.delete(groupChatMembers).where(inArray(groupChatMembers.groupId, ownedGroupIds));
+        await tx.delete(groupChats).where(inArray(groupChats.id, ownedGroupIds));
+      }
+      await tx.delete(messages).where(or(eq(messages.senderId, targetId), eq(messages.recipientId, targetId)));
+      await tx.execute(sql`DELETE FROM friend_requests WHERE requester_id = ${targetId} OR addressee_id = ${targetId}`);
+      await tx.execute(sql`DELETE FROM blocks WHERE blocker_id = ${targetId} OR blocked_id = ${targetId}`);
+      await tx.delete(groupChatMembers).where(eq(groupChatMembers.userId, targetId));
+      await tx.execute(sql`DELETE FROM user_inventory WHERE user_id = ${targetId}`);
+      await tx.delete(searchHistory).where(eq(searchHistory.userId, targetId));
+      await tx.execute(sql`UPDATE access_keys SET created_by = NULL WHERE created_by = ${targetId}`);
+      await tx.execute(sql`UPDATE access_requests SET created_user_id = NULL WHERE created_user_id = ${targetId}`);
+      await tx.execute(sql`UPDATE custom_emojis SET created_by = NULL WHERE created_by = ${targetId}`);
+      await tx.delete(moderationLogs).where(or(eq(moderationLogs.actorId, targetId), eq(moderationLogs.targetId, targetId)));
+      await tx.execute(sql`DELETE FROM user_sessions WHERE sess->>'userId' = ${String(targetId)}`);
+      await tx.insert(moderationLogs).values({
+        actorId,
+        targetId: null,
+        action: "account-delete",
+        reason: `Deleted account ${target.username} (#${target.id})`,
+        metadata: { deletedUserId: target.id, deletedUsername: target.username, deletedRole: targetRole, actorRole },
+      });
+      await tx.delete(users).where(eq(users.id, targetId));
+    });
+    return res.json({ success: true, message: "Account deleted." });
+  });
+
   app.post(api.admin.generateKey.path, requireOwner, async (req, res) => {
     const input = api.admin.generateKey.input.parse(req.body);
     // Generate a random key
