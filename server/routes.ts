@@ -1352,9 +1352,9 @@ export async function registerRoutes(
       const members = await db.select({ userId: groupChatMembers.userId }).from(groupChatMembers)
         .where(eq(groupChatMembers.groupId, input.groupId));
       const memberIds = new Set(members.map(member => Number(member.userId)));
-      if (mentionRecipientIds.some(id => !Number.isInteger(id) || !memberIds.has(id))) {
-        return res.status(400).json({ message: "One of those mentions is not a member of this group." });
-      }
+      // A stale/global user suggestion must never prevent an otherwise valid
+      // chat message from being sent. Only actual channel members receive pings.
+      mentionRecipientIds = mentionRecipientIds.filter(id => Number.isInteger(id) && memberIds.has(id));
       if (hasEveryoneMention) mentionRecipientIds = Array.from(memberIds).filter(id => id !== Number(req.session.userId!));
     } else if (input.recipientId) {
       mentionRecipientIds = mentionRecipientIds.filter(id => id === Number(input.recipientId));
