@@ -1,4 +1,4 @@
-name: Enzonic Cloud connection check
+name: Enzonic Cloud database setup
 
 on:
   workflow_dispatch:
@@ -12,84 +12,59 @@ permissions:
   contents: read
 
 jobs:
-  check-enzonic-cloud:
+  inspect-enzonic:
     runs-on: ubuntu-latest
     steps:
-      - name: Check Enzonic Cloud MCP authentication (read-only)
+      - name: Inspect Enzonic projects and database tool schemas
         env:
           ENZONIC_CLOUD_TOKEN: ${{ secrets.ENZONIC_CLOUD_TOKEN }}
         run: |
           node --input-type=module <<'NODE'
           const endpoint = "https://panel.enzonic.com/api/cloud/mcp";
           const token = process.env.ENZONIC_CLOUD_TOKEN;
-          if (!token) {
-            console.error("Missing GitHub Actions secret: ENZONIC_CLOUD_TOKEN");
-            process.exit(1);
-          }
-
-          async function rpc(payload, sessionId) {
+          if (!token) throw new Error("Missing ENZONIC_CLOUD_TOKEN GitHub secret.");
+          let sessionId;
+          async function rpc(payload) {
             const headers = {
-              "Authorization": `Bearer ${token}`,
+              Authorization: `Bearer ${token}`,
               "Content-Type": "application/json",
-              "Accept": "application/json, text/event-stream",
-              "MCP-Protocol-Version": "2025-03-26"
-            };
-            if (sessionId) headers["Mcp-Session-Id"] = sessionId;
-            const response = await fetch(endpoint, {
-              method: "POST",
-              headers,
-              body: JSON.stringify(payload)
-            });
-            const body = await response.text();
-            if (!response.ok) {
-              console.error(`Enzonic MCP returned HTTP ${response.status}`);
-              console.error(body.slice(0, 1200));
-              process.exit(1);
-            }
-            let message;
-            try {
-              message = JSON.parse(body);
-            } catch {
-              const dataLine = body.split("\n").find(line => line.startsWith("data:"));
-              if (!dataLine) throw new Error("Enzonic returned an unrecognised MCP response.");
-              message = JSON.parse(dataLine.slice(5).trim());
-            }
-            if (message.error) throw new Error(message.error.message || "MCP request failed");
-            return { message, sessionId: response.headers.get("mcp-session-id") || sessionId };
-          }
-
-          const init = await rpc({
-            jsonrpc: "2.0",
-            id: 1,
-            method: "initialize",
-            params: {
-              protocolVersion: "2025-03-26",
-              capabilities: {},
-              clientInfo: { name: "nexus-github-actions", version: "1.0.0" }
-            }
-          });
-
-          const notifyResponse = await fetch(endpoint, {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${token}`,
-              "Content-Type": "application/json",
-              "Accept": "application/json, text/event-stream",
+              Accept: "application/json, text/event-stream",
               "MCP-Protocol-Version": "2025-03-26",
-              ...(init.sessionId ? { "Mcp-Session-Id": init.sessionId } : {})
-            },
-            body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })
+              ...(sessionId ? { "Mcp-Session-Id": sessionId } : {})
+            };
+            const response = await fetch(endpoint, { method: "POST", headers, body: JSON.stringify(payload) });
+            const body = await response.text();
+            if (!response.ok) throw new Error(`Enzonic HTTP ${response.status}: ${body.slice(0, 1000)}`);
+            sessionId = response.headers.get("mcp-session-id") || sessionId;
+            if (!body.trim()) return {};
+            try { return JSON.parse(body); }
+            catch {
+              const dataLine = body.split("\n").find(line => line.startsWith("data:"));
+              if (!dataLine) throw new Error("Unrecognised MCP response.");
+              return JSON.parse(dataLine.slice(5).trim());
+            }
+          }
+          const init = await rpc({
+            jsonrpc: "2.0", id: 1, method: "initialize",
+            params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "nexus-github-actions", version: "1.1.0" } }
           });
-          if (!notifyResponse.ok) throw new Error(`MCP initialization notification failed: HTTP ${notifyResponse.status}`);
-          const listed = await rpc({
-            jsonrpc: "2.0",
-            id: 2,
-            method: "tools/list",
-            params: {}
-          }, init.sessionId);
-
-          const tools = listed.message.result?.tools || [];
-          console.log(`Authenticated with Enzonic Cloud. ${tools.length} tool(s) are available to this token.`);
-          for (const tool of tools) console.log(`- ${tool.name}`);
-          console.log("This check only lists permitted tools; it does not change databases or deployments.");
+          if (init.error) throw new Error(init.error.message);
+          await rpc({ jsonrpc: "2.0", method: "notifications/initialized" });
+          const listed = await rpc({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
+          if (listed.error) throw new Error(listed.error.message);
+          const tools = listed.result?.tools || [];
+          for (const name of ["list_projects", "list_databases", "create_database", "get_database"]) {
+            const tool = tools.find(item => item.name === name);
+            console.log(`\n=== ${name} schema ===`);
+            console.log(JSON.stringify(tool || { missing: true }, null, 2));
+          }
+          async function callTool(id, name, args = {}) {
+            const result = await rpc({ jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: args } });
+            if (result.error) throw new Error(result.error.message);
+            return result.result;
+          }
+          for (const name of ["list_projects", "list_databases"]) {
+            console.log(`\n=== Current ${name} ===`);
+            console.log(JSON.stringify(await callTool(name === "list_projects" ? 3 : 4, name), null, 2));
+          }
           NODE
