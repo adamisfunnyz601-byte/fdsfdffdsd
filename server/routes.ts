@@ -456,7 +456,7 @@ export async function registerRoutes(
     try {
       const username = String(req.body?.username || "").trim();
       if (!username) return res.status(400).json({ message: "Enter your NEXUS username first." });
-      const [account] = await db.select().from(users).where(eq(users.username, username)).limit(1);
+      const [account] = await db.select().from(users).where(sql`lower(${users.username}) = ${username.toLowerCase()}`).limit(1);
       if (!account) return res.status(404).json({ message: "No passkey-enabled account was found." });
       const credentials = await db.select().from(passkeyCredentials).where(eq(passkeyCredentials.userId, account.id));
       if (!credentials.length) return res.status(404).json({ message: "This account has no registered passkeys yet." });
