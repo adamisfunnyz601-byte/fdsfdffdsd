@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { enableBrowserNotifications, showTestNotification, getNotificationSupport } from "@/lib/platform-notifications";
 import { enableNativeNotifications, isNativeApp, nativePlatform, showNativeTestNotification } from "@/lib/native-notifications";
-import { Bell, BellOff, Check, Circle, Moon, Settings as SettingsIcon, Volume2 } from "lucide-react";
+import { Bell, BellOff, Check, Circle, KeyRound, Moon, Settings as SettingsIcon, Trash2, Volume2 } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { CyberButton } from "@/components/CyberButton";
 import { CyberInput } from "@/components/CyberInput";
@@ -28,6 +28,9 @@ export default function SettingsPage() {
   const [ringtoneUrl, setRingtoneUrl] = useState(user?.ringtoneUrl || "");
   const [saving, setSaving] = useState(false);
   const [passkeyBusy, setPasskeyBusy] = useState(false);
+  const [passkeys, setPasskeys] = useState<Array<{ id: number; createdAt: string | null; transports: string[] }>>([]);
+  const [passkeysLoading, setPasskeysLoading] = useState(false);
+  const [deletingPasskeyId, setDeletingPasskeyId] = useState<number | null>(null);
   const [appleTeamId, setAppleTeamId] = useState(() => localStorage.getItem("nexus-apple-team-id") || "");
   const [teamIdSaved, setTeamIdSaved] = useState(false);
   const [appearance, setAppearance] = useState(readNexusAppearance);
@@ -38,6 +41,34 @@ export default function SettingsPage() {
   const nativeApp = isNativeApp();
 
   useEffect(() => { saveNexusAppearance(appearance); }, []);
+
+  const loadPasskeys = async () => {
+    if (!user) return;
+    setPasskeysLoading(true);
+    try {
+      const response = await fetch(apiUrl("/api/auth/passkeys"), { credentials: "include", cache: "no-store" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || "Could not load your passkeys.");
+      setPasskeys(Array.isArray(data.passkeys) ? data.passkeys : []);
+    } catch (error: any) {
+      toast({ title: "Could not load passkeys", description: error?.message || "Try refreshing Settings.", variant: "destructive" });
+    } finally { setPasskeysLoading(false); }
+  };
+
+  useEffect(() => { void loadPasskeys(); }, [user?.id]);
+
+  const deletePasskey = async (id: number) => {
+    setDeletingPasskeyId(id);
+    try {
+      const response = await fetch(apiUrl("/api/auth/passkeys/" + id), { method: "DELETE", credentials: "include" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || "Could not remove this passkey.");
+      setPasskeys(current => current.filter(item => item.id !== id));
+      toast({ title: "Passkey removed", description: "This passkey can no longer sign in to your NEXUS account." });
+    } catch (error: any) {
+      toast({ title: "Could not remove passkey", description: error?.message || "Please try again.", variant: "destructive" });
+    } finally { setDeletingPasskeyId(null); }
+  };
 
   const registerPasskey = async () => {
     setPasskeyBusy(true);
@@ -52,7 +83,8 @@ export default function SettingsPage() {
       });
       const result = await verifyResponse.json().catch(() => ({}));
       if (!verifyResponse.ok || !result.verified) throw new Error(result.message || "Passkey verification failed.");
-      toast({ title: "Passkey added", description: "You can now sign in with this device's passkey." });
+      await loadPasskeys();
+      toast({ title: "Passkey saved to your account", description: "NEXUS verified and stored this passkey. You can manage it below." });
     } catch (error: any) {
       toast({ title: "Passkey setup failed", description: error?.message || "This browser or device could not create a passkey.", variant: "destructive" });
     } finally { setPasskeyBusy(false); }
@@ -200,6 +232,20 @@ export default function SettingsPage() {
         <section className="discord-card app-glass space-y-4 p-5">
           <div><h2 className="font-semibold text-foreground mb-1">Passkeys</h2><p className="text-xs text-muted-foreground">Use Windows Hello, Touch ID, Face ID, Android biometrics or a security key where your browser supports WebAuthn.</p></div>
           <CyberButton disabled={passkeyBusy || !user} onClick={registerPasskey}>{passkeyBusy ? "Setting up passkey…" : "Add a passkey to this account"}</CyberButton>
+          <div className="rounded-xl border border-border p-3 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div><h3 className="text-sm font-medium text-foreground">Your saved passkeys</h3><p className="text-xs text-muted-foreground">Only passkeys confirmed as saved by NEXUS appear here.</p></div>
+              <CyberButton disabled={passkeysLoading} onClick={() => void loadPasskeys()}>{passkeysLoading ? "Refreshing…" : "Refresh"}</CyberButton>
+            </div>
+            {passkeysLoading && passkeys.length === 0 ? <p className="text-xs text-muted-foreground">Loading passkeys…</p>
+              : passkeys.length === 0 ? <p className="text-xs text-muted-foreground">No passkeys are saved to this account yet. Add one above while signed in.</p>
+              : <div className="space-y-2">{passkeys.map((item, index) => <div key={item.id} className="flex items-center gap-3 rounded-lg bg-secondary/40 p-3">
+                <KeyRound className="h-4 w-4 shrink-0 text-primary" />
+                <div className="min-w-0 flex-1"><p className="text-sm font-medium text-foreground">Passkey {passkeys.length - index}</p><p className="text-xs text-muted-foreground">Added {item.createdAt ? new Date(item.createdAt).toLocaleString() : "date unavailable"}</p></div>
+                <button type="button" aria-label={"Remove passkey " + item.id} disabled={deletingPasskeyId === item.id} onClick={() => void deletePasskey(item.id)} className="rounded-md p-2 text-destructive hover:bg-destructive/10 disabled:opacity-50"><Trash2 className="h-4 w-4" /></button>
+              </div>)}</div>}
+          </div>
+          <p className="text-[11px] text-muted-foreground">If a passkey is unavailable or this browser glitches, use your normal password on the sign-in screen. Passkey login cannot safely bypass credential verification.</p>
           <p className="text-[11px] text-muted-foreground">Passkeys require the production WEBAUTHN_ORIGIN and WEBAUTHN_RP_ID settings on the server.</p>
           <div className="border-t border-border pt-4 space-y-2">
             <div><h3 className="text-sm font-medium text-foreground">Apple Developer Team ID</h3><p className="text-xs text-muted-foreground">Save the Team ID associated with your Apple account for NEXUS iOS app configuration.</p></div>
