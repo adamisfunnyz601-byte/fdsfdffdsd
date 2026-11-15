@@ -1605,3 +1605,94 @@ body {
     max-height: calc(100dvh - .5rem - var(--app-safe-top) - var(--app-safe-bottom));
   }
 }
+
+
+/* Scroll containment and responsive navigation fixes (desktop, iPad, Android,
+   iOS WebView and narrow Windows windows). */
+@media (min-width: 1024px) {
+  .nexus-sidebar {
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+    height: 100dvh;
+    max-height: 100dvh;
+  }
+  .nexus-sidebar .nexus-nav {
+    min-height: 0;
+    flex: 1 1 0%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+.nexus-content {
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: visible;
+}
+.nexus-page-chat {
+  min-width: 0;
+}
+.nexus-page-chat .chat-conversation-sidebar {
+  min-height: 0;
+}
+.nexus-page-chat .chat-conversation-sidebar > .min-h-0.flex-1 {
+  min-height: 0;
+  flex: 1 1 0%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+.nexus-page-chat .chat-main-panel {
+  min-height: 0;
+  min-width: 0;
+}
+.nexus-page-chat .chat-message-list {
+  min-height: 0;
+  flex: 1 1 0%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+@media (max-width: 1023px) {
+  .nexus-mobilebar {
+    display: flex;
+  }
+  .nexus-sidebar {
+    position: fixed;
+    top: 58px;
+    bottom: 0;
+    left: 0;
+    height: calc(100dvh - 58px);
+    max-height: calc(100dvh - 58px);
+    width: min(278px, 86vw);
+    z-index: 80;
+  }
+  .nexus-sidebar .nexus-nav {
+    min-height: 0;
+    flex: 1 1 0%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .nexus-topbar {
+    display: none;
+  }
+  .nexus-main {
+    min-width: 0;
+    width: 100%;
+  }
+}
+@media (max-width: 900px) {
+  .nexus-shell {
+    display: flex;
+    flex-direction: column;
+  }
+  .nexus-main {
+    flex: 1 0 auto;
+  }
+}
