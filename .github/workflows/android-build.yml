@@ -16,7 +16,7 @@ on:
       - "script/**"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   android:
@@ -272,3 +272,13 @@ jobs:
           retention-days: 14
 
 # Rebuild latest NEXUS source after the WebAuthn TypeScript fix.
+
+      - name: Publish directly downloadable APK release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nexus-android-${{ github.run_number }}-${{ github.run_attempt }}
+          name: NEXUS Android ${{ github.run_number }}
+          body: Automated Android APK build from commit ${{ github.sha }}.
+          prerelease: true
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+          fail_on_unmatched_files: true
