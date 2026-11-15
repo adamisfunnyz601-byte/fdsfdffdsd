@@ -1544,18 +1544,10 @@ export async function registerRoutes(
     }
   });
 
-  app.get(api.chat.users.path, requireAuth, async (req, res) => {
-    // Ensure the NEXUS AI bot account exists before the client builds its DM list.
-    await getNexusAiBot();
-    const bot = await getNexusAiBot();
+  app.get(api.chat.users.path, requireAuth, async (_req, res) => {
     const usersList = await storage.getAllUsers();
-    // Guarantee the AI member is present in the response even if a stale user query
-    // or a concurrent account-creation request briefly returned an older list.
-    const withBot = usersList.some((user: any) => user.id === bot.id)
-      ? usersList
-      : [...usersList, bot];
     res.setHeader("Cache-Control", "no-store");
-    res.json(withBot.map(safeUser));
+    res.json(usersList.map(safeUser));
   });
 
   // === FRIENDS & BLOCKS ===
