@@ -1,4 +1,4 @@
-import { Switch, Route, useLocation } from "wouter";
+import { Switch, Route, Router as WouterRouter, useHashLocation, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -25,7 +25,8 @@ import UpdatesPage from "@/pages/Updates";
 import ServersPage from "@/pages/Servers";
 import Dihtro from "@/pages/Dihtro";
 
-const nativeApp = Capacitor.isNativePlatform() || window.location.protocol === "file:";
+const desktopFileApp = window.location.protocol === "file:";
+const nativeApp = Capacitor.isNativePlatform() || desktopFileApp;
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
  const {user,isLoading}=useAuth();
@@ -33,7 +34,7 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
  if(!user)return <Login/>;
  return <Component/>;
 }
-function Home(){const {user,isLoading}=useAuth();if(nativeApp)return <Login/>;if(isLoading)return <div className="flex min-h-screen items-center justify-center bg-background"><Loader2 className="h-8 w-8 animate-spin text-primary"/></div>;return user?<Proxy/>:<Landing/>;}
+function Home(){const {user,isLoading}=useAuth();if(nativeApp && !desktopFileApp)return <Login/>;if(isLoading)return <div className="flex min-h-screen items-center justify-center bg-background"><Loader2 className="h-8 w-8 animate-spin text-primary"/></div>;return user?<Proxy/>:<Landing/>;}
 function Router(){return <Switch>
  <Route path="/" component={Home}/>
  <Route path="/sign-in" component={Login}/>
@@ -59,4 +60,4 @@ function Router(){return <Switch>
  <Route component={NotFound}/>
  </Switch>}
 function GlobalChatHost(){const {user,isLoading}=useAuth();const [location]=useLocation();if(isLoading||!user)return null;const active=location==="/chat";return <div aria-hidden={!active} style={{position:"fixed",inset:0,zIndex:30,visibility:active?"visible":"hidden",pointerEvents:active?"auto":"none"}}><Chat/></div>}
-export default function App(){return <QueryClientProvider client={queryClient}><TooltipProvider><Router/><GlobalChatHost/><Toaster/></TooltipProvider></QueryClientProvider>}
+export default function App(){return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter hook={desktopFileApp ? useHashLocation : undefined}><Router/><GlobalChatHost/></WouterRouter><Toaster/></TooltipProvider></QueryClientProvider>}
