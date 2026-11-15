@@ -551,7 +551,6 @@ export function ProfileModal({
                       )}
                     </div>
                     {["owner","admin"].includes(String(viewer?.role || "").toLowerCase()) && !isOwn && (
-                      <button onClick={giftDihhro} className="mt-2 rounded border border-fuchsia-400/40 px-2 py-1 text-[9px] font-mono text-fuchsia-300 hover:bg-fuchsia-400/10">✦ CREATE DIHTRO GIFT</button>
                     )}
                     {canEditProfile && !editing && (
                       <button

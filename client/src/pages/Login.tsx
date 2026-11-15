@@ -22,7 +22,7 @@ export default function Login() {
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    if (user) setLocation("/proxy");
+    if (user) setLocation(window.location.pathname.startsWith("/dihtro/claim/") ? window.location.pathname : "/proxy");
   }, [user, setLocation]);
 
   if (user) return null;

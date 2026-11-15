@@ -21,6 +21,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: "/updates", label: "Update Logs", icon: ScrollText, section: "Workspace" },
     { href: "/block-blast", label: "Block Blast", icon: Blocks, section: "Playground", accent: "amber" },
     { href: "/shop", label: "Shop", icon: ShoppingBag, section: "Playground", accent: "pink" },
+    { href: "/dihtro", label: "Dihtro", icon: Gift, section: "Account", accent: "pink" },
     { href: "/hub", label: "Community Hub", icon: Gamepad2, section: "Playground" },
     { href: "/hangouts", label: "2D Hangouts", icon: Users, section: "Playground" },
     { href: "/settings", label: "Settings", icon: Settings, section: "Account" },
