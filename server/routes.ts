@@ -383,16 +383,36 @@ export async function registerRoutes(
         !timingSafeEqual(createHash("sha256").update(supplied).digest(), createHash("sha256").update(configured).digest())) {
       return res.status(401).json({ message: "Unauthorized." });
     }
-    const result = await pool.query(
-      "UPDATE apple_2fa_challenges SET state = 'consumed', code_ciphertext = NULL, code_iv = NULL, code_tag = NULL WHERE id = $1 AND state = 'code_ready' AND expires_at > NOW() RETURNING code_ciphertext, code_iv, code_tag",
-      [String(req.params.id)]
-    );
-    if (!result.rows.length) {
-      const exists = await pool.query("SELECT state FROM apple_2fa_challenges WHERE id = $1 AND expires_at > NOW() LIMIT 1", [String(req.params.id)]);
-      if (!exists.rows.length) return res.status(410).json({ message: "Challenge expired or missing." });
+    const client = await pool.connect();
+    let row: any = null;
+    let missing = false;
+    try {
+      await client.query("BEGIN");
+      const ready = await client.query(
+        "SELECT code_ciphertext, code_iv, code_tag FROM apple_2fa_challenges WHERE id = $1 AND state = 'code_ready' AND expires_at > NOW() FOR UPDATE",
+        [String(req.params.id)]
+      );
+      if (ready.rows.length) {
+        row = ready.rows[0];
+        await client.query(
+          "UPDATE apple_2fa_challenges SET state = 'consumed', code_ciphertext = NULL, code_iv = NULL, code_tag = NULL WHERE id = $1",
+          [String(req.params.id)]
+        );
+      } else {
+        const exists = await client.query("SELECT id FROM apple_2fa_challenges WHERE id = $1 AND expires_at > NOW() LIMIT 1", [String(req.params.id)]);
+        missing = !exists.rows.length;
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+    if (!row) {
+      if (missing) return res.status(410).json({ message: "Challenge expired or missing." });
       return res.status(202).json({ waiting: true });
     }
-    const row = result.rows[0];
     const code = decryptAppleCode(row.code_ciphertext, row.code_iv, row.code_tag);
     return res.json({ code });
   });
