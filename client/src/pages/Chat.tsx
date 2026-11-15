@@ -1477,7 +1477,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
       pushLog('WEBRTC_ICE_' + state.toUpperCase(), state === 'failed' ? 'warn' : 'info');
       if (state === 'failed') setRtcStatus('failed');
       else if (state === 'checking') setRtcStatus('connecting');
-      else if (state === 'connected' || state === 'completed') setRtcStatus('connected');
+      else if (state === 'connected' || state === 'completed') pushLog('WEBRTC_ICE_PATH_READY', 'info');
     };
     peer.onicegatheringstatechange = () => pushLog('WEBRTC_ICE_GATHERING_' + peer.iceGatheringState.toUpperCase(), 'info');
     setRtcStatus('connecting');
