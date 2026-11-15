@@ -7,6 +7,8 @@ import { Lock, UserRoundPlus, Eye, EyeOff } from "lucide-react";
 import { useLocation } from "wouter";
 import { queryClient } from "@/lib/queryClient";
 import { startAuthentication } from "@simplewebauthn/browser";
+import { Capacitor } from "@capacitor/core";
+import { PushNotifications } from "@capacitor/push-notifications";
 
 export default function Login() {
   const [mode, setMode] = useState<"login" | "register">(
@@ -18,6 +20,9 @@ export default function Login() {
   const [registering, setRegistering] = useState(false);
   const [passkeyBusy, setPasskeyBusy] = useState(false);
   const [error, setError] = useState("");
+  const nativeApp = Capacitor.isNativePlatform() || window.location.protocol === "file:";
+  const [permissionsReady, setPermissionsReady] = useState(() => !nativeApp || localStorage.getItem("nexus-device-permissions-v1") === "granted");
+  const [permissionsBusy, setPermissionsBusy] = useState(false);
   const { login, isLoggingIn, user } = useAuth();
   const [, setLocation] = useLocation();
 
@@ -27,7 +32,23 @@ export default function Login() {
 
   if (user) return null;
 
-  const signInWithPasskey = async () => {
+  const allowDevicePermissions = async () => {
+    setPermissionsBusy(true); setError("");
+    try {
+      let push = await PushNotifications.checkPermissions();
+      if (push.receive !== "granted") push = await PushNotifications.requestPermissions();
+      if (push.receive !== "granted") throw new Error("Allow notifications to continue.");
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error("This device does not expose microphone and camera permissions.");
+      const media = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+      media.getTracks().forEach(track => track.stop());
+      localStorage.setItem("nexus-device-permissions-v1", "granted");
+      setPermissionsReady(true);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Allow notifications, microphone and camera access to continue.");
+    } finally { setPermissionsBusy(false); }
+  };
+
+  const signInWithPasskey = async () => {\n    if (nativeApp && !permissionsReady) { setError("Allow notifications and call permissions before signing in."); return; }
     const cleanUsername = username.trim();
     if (!cleanUsername) { setError("Enter your NEXUS username before using your passkey."); return; }
     setPasskeyBusy(true); setError("");
@@ -90,6 +111,8 @@ export default function Login() {
           <p className="text-muted-foreground text-sm mt-1">{mode === "login" ? "Sign in to continue to NEXUS" : "Join NEXUS with a username and password"}</p>
         </header>
 
+        {nativeApp && !permissionsReady && <div className="mb-5 rounded-xl border border-fuchsia-400/30 bg-fuchsia-500/10 p-4"><p className="text-sm font-semibold text-foreground">Before you sign in</p><p className="mt-1 text-xs text-muted-foreground">Allow notifications, microphone and camera access so NEXUS calls and alerts can work on this device.</p><button type="button" onClick={() => void allowDevicePermissions()} disabled={permissionsBusy} className="mt-3 w-full rounded-lg bg-fuchsia-500 px-4 py-3 text-sm font-bold text-white disabled:opacity-50">{permissionsBusy ? "Requesting permissions…" : "ALLOW NOTIFICATIONS & CALLS"}</button></div>}
+        {nativeApp && permissionsReady && <p className="mb-4 flex items-center gap-2 text-xs text-emerald-300"><span>✓</span> Device permissions enabled</p>}
         <div className="flex bg-secondary/60 rounded-lg p-1 mb-6">
           <button type="button" onClick={() => { setMode("login"); setError(""); }} className={`flex-1 py-2 rounded-md text-sm font-medium ${mode === "login" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground"}`}>Sign In</button>
           <button type="button" onClick={() => { setMode("register"); setError(""); }} className={`flex-1 py-2 rounded-md text-sm font-medium ${mode === "register" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground"}`}>Create Account</button>
@@ -107,11 +130,11 @@ export default function Login() {
               {mode === "register" && <p className="text-xs text-muted-foreground">Use 3–24 characters for your username and at least 8 for your password.</p>}
             </div>
             {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-            <CyberButton type="submit" className="w-full mt-2" isLoading={isLoggingIn || registering} disabled={!username.trim() || password.length < 8 || isLoggingIn || registering}>
+            <CyberButton type="submit" className="w-full mt-2" isLoading={isLoggingIn || registering} disabled={!username.trim() || password.length < 8 || isLoggingIn || registering || (nativeApp && !permissionsReady)}>
               {mode === "login" ? <><Lock className="w-4 h-4" /> Sign In</> : <><UserRoundPlus className="w-4 h-4" /> Create Account</>}
             </CyberButton>
           </form>
-          {mode === "login" && <button type="button" disabled={passkeyBusy || !username.trim()} onClick={() => void signInWithPasskey()} className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-violet-300/20 bg-violet-500/10 px-4 py-3 text-sm font-semibold text-violet-100 transition hover:bg-violet-500/20 disabled:opacity-40">{passkeyBusy ? "Waiting for passkey…" : "Sign in with a passkey"}</button>}
+          {mode === "login" && <button type="button" disabled={passkeyBusy || !username.trim() || (nativeApp && !permissionsReady)} onClick={() => void signInWithPasskey()} className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-violet-300/20 bg-violet-500/10 px-4 py-3 text-sm font-semibold text-violet-100 transition hover:bg-violet-500/20 disabled:opacity-40">{passkeyBusy ? "Waiting for passkey…" : "Sign in with a passkey"}</button>}
         </div>
       </section>
     </main>
