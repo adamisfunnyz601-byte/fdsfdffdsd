@@ -9,6 +9,8 @@ on:
       - ".github/workflows/android-build.yml"
       - "capacitor.config.ts"
       - "client/**"
+      - "server/**"
+      - "shared/**"
       - "package.json"
       - "package-lock.json"
       - "script/**"
