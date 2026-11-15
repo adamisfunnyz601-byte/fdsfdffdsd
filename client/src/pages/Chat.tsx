@@ -1316,8 +1316,6 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
       const username = String(person?.username || "").trim();
       if (person?.id && person.id !== currentUser?.id && username.length >= 2) mentionNames.set(username, Number(person.id));
     }
-    let encodedMessageContent = messageContent.replace(/(^|\\s)@everyone(?=$|\\s|[.,!?;:])/gi, "$1<!everyone>");
-    for (const [username, id] of Array.from(mentionNames.entries()).sort((a, b) => b[0].length - a[0].length)) {
     let encodedMessageContent = messageContent.replace(/(^|\s)@everyone(?=$|\s|[.,!?;:])/gi, "$1<!everyone>");
     for (const [username, id] of Array.from(mentionNames.entries()).sort((a, b) => b[0].length - a[0].length)) {
       const needle = "@" + username.toLocaleLowerCase();
@@ -1335,8 +1333,6 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
           searchFrom = at + String(id).length + 3;
         } else searchFrom = at + 1;
       }
-    }
-      encodedMessageContent = encodedMessageContent.replace(matcher, (_match, prefix) => `${prefix}<@${id}>`);
     }
     if (encodedMessageContent.includes("<!everyone>") && !selectedGroupId) {
       toast({ title: "@everyone only works in group channels", description: "Choose a group channel to notify everyone.", variant: "destructive" });
