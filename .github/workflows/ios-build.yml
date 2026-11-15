@@ -47,6 +47,8 @@ jobs:
           /usr/libexec/PlistBuddy -c "Add :WKAppBoundDomains array" ios/App/App/Info.plist 2>/dev/null || true
           /usr/libexec/PlistBuddy -c "Add :WKAppBoundDomains:0 string nexus-api-rcmi.onrender.com" ios/App/App/Info.plist
           /usr/libexec/PlistBuddy -c "Print :WKAppBoundDomains" ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string NEXUS uses the camera for video calls and profile features." ios/App/App/Info.plist 2>/dev/null || /usr/libexec/PlistBuddy -c "Set :NSCameraUsageDescription NEXUS uses the camera for video calls and profile features." ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c "Add :NSMicrophoneUsageDescription string NEXUS uses the microphone for voice and video calls." ios/App/App/Info.plist 2>/dev/null || /usr/libexec/PlistBuddy -c "Set :NSMicrophoneUsageDescription NEXUS uses the microphone for voice and video calls." ios/App/App/Info.plist
           test -s ios/App/App/public/index.html
           test -d ios/App/App/public/assets
           echo "iOS-bundled frontend:"
