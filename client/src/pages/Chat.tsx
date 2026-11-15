@@ -1812,8 +1812,25 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
             if (emote.audioUrl) { const audio = new Audio(emote.audioUrl); audio.play().catch(() => {}); }
             window.setTimeout(() => setRemoteCallEmote((current:any) => current?.name === emote.name ? null : current), duration * 1000);
           } else if (signal.type === 'accepted' && state === 'requesting' && signal.callId === callIdRef.current) {
-            setCallState('connected');
-            pushLog('CALL_CONNECTED', 'info');
+            // The caller must create the offer after the recipient accepts.
+            // Previously we only changed the UI state here, so neither peer ever
+            // received an SDP offer and the call sat on the two empty video tiles.
+            try {
+              setCallState('connected');
+              const peer = await createPeerConnection();
+              const offer = await peer.createOffer();
+              await peer.setLocalDescription(offer);
+              await postVoiceSignal('/api/chat/voice/offer', {
+                callId: callIdRef.current,
+                recipientId: callPeerIdRef.current,
+                offer: peer.localDescription,
+              });
+              pushLog('WEBRTC_OFFER_SENT', 'info');
+            } catch (error: any) {
+              pushLog(`WEBRTC_OFFER_ERROR: ${error?.message || error}`, 'warn');
+              toast({ title: 'Call connection failed', description: error?.message || 'Could not start the call.', variant: 'destructive' });
+              endCall(true);
+            }
           } else if ((signal.type === 'declined' || signal.type === 'ended') && signal.callId === callIdRef.current) {
             if (signal.type === 'declined') toast({ title: 'Call declined.' });
             endCall(true);
