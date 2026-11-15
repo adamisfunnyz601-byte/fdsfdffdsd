@@ -1483,7 +1483,7 @@ export async function registerRoutes(
         if ((!gradients.includes(selectedGradient) && !customProfile) || !validStyle2) return res.status(400).json({message:"Invalid profile gradient settings."});
         const current = await storage.getUser(req.session.userId!);
         const hasDihtro = ["owner", "admin"].includes(String(current?.role || "").toLowerCase()) || Boolean(current?.dihhroUntil && new Date(current.dihhroUntil) > new Date());
-        if ((selectedGradient === "custom" || customProfile || isStyle2) && !hasDihtro) return res.status(403).json({ message: "Custom profile gradients require active Dihtro." });
+        if ((selectedGradient !== "none" || customProfile || isStyle2) && !hasDihtro) return res.status(403).json({ message: "Custom profile gradients require active Dihtro." });
 
         update.profileGradient = selectedGradient === "none" && !isStyle2 ? null : rawGradient;
       }
