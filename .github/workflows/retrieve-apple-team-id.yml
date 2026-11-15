@@ -1,8 +1,22 @@
-# Apple Personal Team ID lookup workflow
+
 name: Retrieve Apple Personal Team ID
 
 on:
   workflow_dispatch:
+    inputs:
+      verification_method:
+        description: "How should Apple send your verification code?"
+        required: true
+        type: choice
+        options:
+          - trusted_device
+          - sms
+        default: trusted_device
+
+      apple_2fa_code:
+        description: "Enter the Apple verification code"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -11,83 +25,123 @@ jobs:
   retrieve-team-id:
     runs-on: macos-latest
     timeout-minutes: 10
+
     steps:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.3"
 
-      - name: Install Fastlane Spaceship
+      - name: Install Fastlane
         run: gem install fastlane --no-document
 
-      - name: Retrieve Apple teams
+      - name: Authenticate and retrieve Apple Team ID
+        shell: bash
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }}
           FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
-          APPLE_2FA_CODE: ${{ secrets.APPLE_2FA_CODE }}
+          FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }}
+          APPLE_TRUSTED_PHONE_NUMBER: ${{ secrets.APPLE_TRUSTED_PHONE_NUMBER }}
+          APPLE_2FA_CODE: ${{ inputs.apple_2fa_code }}
+          VERIFICATION_METHOD: ${{ inputs.verification_method }}
           LANG: en_US.UTF-8
           LC_ALL: en_US.UTF-8
-        shell: bash
+
         run: |
           set -euo pipefail
 
           if [[ -z "${APPLE_ID:-}" ]]; then
-            echo "::error::Add APPLE_ID in repository Actions secrets."
+            echo "::error::Missing APPLE_ID secret."
             exit 1
           fi
 
-          if [[ -z "${FASTLANE_SESSION:-}" && -z "${FASTLANE_PASSWORD:-}" ]]; then
-            echo "::error::Add FASTLANE_PASSWORD or FASTLANE_SESSION in repository Actions secrets."
+          if [[ -z "${FASTLANE_PASSWORD:-}" && -z "${FASTLANE_SESSION:-}" ]]; then
+            echo "::error::Missing FASTLANE_PASSWORD or FASTLANE_SESSION secret."
             exit 1
+          fi
+
+          if [[ ! "${APPLE_2FA_CODE:-}" =~ ^[0-9]{4,6}$ ]]; then
+            echo "::error::Enter a valid Apple verification code."
+            exit 1
+          fi
+
+          if [[ "$VERIFICATION_METHOD" == "sms" ]]; then
+            if [[ -z "${APPLE_TRUSTED_PHONE_NUMBER:-}" ]]; then
+              echo "::error::Add APPLE_TRUSTED_PHONE_NUMBER as a repository secret."
+              exit 1
+            fi
+
+            export SPACESHIP_2FA_SMS_DEFAULT_PHONE_NUMBER="$APPLE_TRUSTED_PHONE_NUMBER"
+            echo "SMS verification selected."
+          else
+            unset SPACESHIP_2FA_SMS_DEFAULT_PHONE_NUMBER || true
+            echo "Trusted-device verification selected."
           fi
 
           ruby <<'RUBY'
           require "spaceship"
 
-          # Allow a one-time code generated before starting this workflow to
-          # satisfy Fastlane's otherwise-interactive 2FA prompt.
           module Spaceship
             class Client
               def ask_for_2fa_code(prompt)
                 code = ENV["APPLE_2FA_CODE"].to_s.strip
+
                 unless code.match?(/\A\d{4,6}\z/)
-                  raise "Apple requested 2FA, but no valid 4–6 digit APPLE_2FA_CODE was supplied. Generate a fresh code on a trusted Apple device and rerun."
+                  raise "Missing or invalid Apple verification code."
                 end
-                puts "Using the one-time 2FA code supplied for this workflow run."
+
+                puts "Using the verification code supplied for this run."
                 code
               end
             end
           end
 
           begin
+            puts "Connecting to Apple Developer Portal..."
+
             password = ENV["FASTLANE_PASSWORD"]
-            client = if password && !password.empty?
-              Spaceship::Portal.login(ENV.fetch("APPLE_ID"), password)
-            else
-              Spaceship::Portal.login(ENV.fetch("APPLE_ID"))
-            end
+
+            client =
+              if password && !password.empty?
+                Spaceship::Portal.login(ENV.fetch("APPLE_ID"), password)
+              else
+                Spaceship::Portal.login(ENV.fetch("APPLE_ID"))
+              end
+
             teams = client.teams
 
             if teams.empty?
-              abort "Apple returned no Developer Portal teams for this account. A free Personal Team may not be provisioned on this account yet."
+              abort "Apple returned no Developer Portal teams. Check whether your Personal Team has been provisioned."
             end
 
-            puts "Apple Developer teams available to this Apple Account:"
+            found = false
+
+            puts ""
+            puts "Apple Developer teams:"
+
             teams.each do |team|
-              name = team["name"] || "Unnamed team"
-              kind = team["type"] || "Team"
               team_id = team["teamId"]
               next if team_id.to_s.empty?
 
-              puts "- #{name} (#{kind}): #{team_id}"
+              found = true
+              name = team["name"] || "Unnamed team"
+              type = team["type"] || "Team"
+
+              puts "#{name} (#{type}): #{team_id}"
+
               File.open(ENV.fetch("GITHUB_STEP_SUMMARY"), "a") do |summary|
-                summary.puts "- **#{name}** (#{kind}): `#{team_id}`"
+                summary.puts "### Apple Developer Team"
+                summary.puts "- Name: #{name}"
+                summary.puts "- Type: #{type}"
+                summary.puts "- **Team ID: `#{team_id}`**"
               end
             end
+
+            abort "No Team IDs were returned." unless found
+
           rescue => error
-            warn "Could not retrieve Apple teams. Check the Apple sign-in, 2FA code, and any saved Fastlane session."
-            warn "Error class: #{error.class}"
+            warn "Apple authentication or team lookup failed."
+            warn "#{error.class}: #{error.message}"
             exit 1
           end
           RUBY
