@@ -48,7 +48,8 @@ export default function Login() {
     } finally { setPermissionsBusy(false); }
   };
 
-  const signInWithPasskey = async () => {\n    if (nativeApp && !permissionsReady) { setError("Allow notifications and call permissions before signing in."); return; }
+  const signInWithPasskey = async () => {
+    if (nativeApp && !permissionsReady) { setError("Allow notifications and call permissions before signing in."); return; }
     const cleanUsername = username.trim();
     if (!cleanUsername) { setError("Enter your NEXUS username before using your passkey."); return; }
     setPasskeyBusy(true); setError("");
