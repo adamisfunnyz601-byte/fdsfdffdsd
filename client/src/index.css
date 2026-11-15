@@ -1421,3 +1421,187 @@ body {
   .chat-channel-header > div { min-width:0; }
   .chat-conversation-sidebar { left:5px; top:5px; bottom:5px; width:min(310px,calc(100% - 10px))!important; max-height:calc(100% - 10px); }
 }
+
+
+
+/* NEXUS cross-device layout recovery: normal document scrolling on touch
+   devices, stable dynamic viewport sizing, and safe-area-aware profile editor. */
+html {
+  min-height: 100%;
+  height: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scroll-padding-top: calc(4.25rem + var(--app-safe-top));
+}
+body {
+  min-height: 100%;
+  height: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: auto;
+}
+#root {
+  min-height: 100%;
+  height: auto;
+  overflow: visible;
+}
+.nexus-shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+  height: auto;
+  overflow: visible;
+}
+.nexus-main {
+  min-height: 0;
+  min-width: 0;
+  height: auto;
+  overflow: visible;
+}
+.nexus-content {
+  min-height: 0;
+  height: auto;
+  flex: 1 0 auto;
+  overflow-x: clip;
+  overflow-y: visible;
+  overscroll-behavior-y: auto;
+  scrollbar-gutter: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.nexus-page,
+.nexus-page-profile,
+.nexus-page-settings,
+.nexus-page-servers {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.nexus-profile-overlay {
+  min-height: 100%;
+  padding-top: max(.5rem, var(--app-safe-top));
+  padding-bottom: max(.5rem, var(--app-safe-bottom));
+  -webkit-overflow-scrolling: touch;
+}
+.nexus-profile-dialog {
+  flex: 0 0 auto;
+  min-width: 0;
+  width: min(100%, 46rem);
+  max-height: calc(100dvh - 1rem - var(--app-safe-top) - var(--app-safe-bottom));
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.nexus-profile-dialog img {
+  max-width: 100%;
+}
+.nexus-profile-dialog input,
+.nexus-profile-dialog textarea,
+.nexus-profile-dialog select,
+.nexus-profile-dialog button {
+  min-width: 0;
+  max-width: 100%;
+}
+.nexus-profile-dialog .profile-gradient-surface {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.nexus-profile-dialog .profile-gradient-surface > * {
+  min-width: 0;
+}
+@media (max-width: 900px) {
+  .nexus-shell {
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+  }
+  .nexus-main {
+    flex: 1 0 auto;
+    width: 100%;
+  }
+  .nexus-content {
+    flex: 1 0 auto;
+    padding: 0 !important;
+    overflow: visible;
+  }
+  .nexus-page {
+    width: 100%;
+    padding-left: max(.85rem, var(--app-safe-left));
+    padding-right: max(.85rem, var(--app-safe-right));
+    padding-bottom: calc(1.5rem + var(--app-safe-bottom));
+  }
+  .nexus-page-profile {
+    max-width: 100%;
+    padding-top: 1rem;
+  }
+  .nexus-profile-overlay {
+    align-items: flex-start;
+    padding-left: max(.5rem, var(--app-safe-left));
+    padding-right: max(.5rem, var(--app-safe-right));
+  }
+  .nexus-profile-dialog {
+    width: 100%;
+    max-width: 46rem;
+    max-height: calc(100dvh - 1rem - var(--app-safe-top) - var(--app-safe-bottom));
+    border-radius: .85rem;
+  }
+  .nexus-profile-dialog .profile-gradient-surface {
+    padding: clamp(.85rem, 3vw, 1.25rem);
+  }
+}
+@media (max-width: 520px) {
+  .nexus-profile-dialog {
+    max-height: calc(100dvh - .5rem - var(--app-safe-top) - var(--app-safe-bottom));
+    border-radius: .65rem;
+  }
+  .nexus-profile-dialog .profile-gradient-surface > .flex.items-end {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: .75rem;
+  }
+  .nexus-profile-dialog .profile-gradient-surface > .flex.items-end > .relative {
+    flex: 0 0 4.5rem;
+    width: 4.5rem;
+    height: 4.5rem;
+  }
+  .nexus-profile-dialog .profile-gradient-surface > .flex.items-end > .flex-1 {
+    flex: 1 1 calc(100% - 5.5rem);
+    min-width: 0;
+  }
+  .nexus-profile-dialog .profile-gradient-surface > .flex.items-end > button {
+    margin-left: auto;
+  }
+  .nexus-profile-dialog .grid.grid-cols-3,
+  .nexus-profile-dialog .grid.grid-cols-2 {
+    min-width: 0;
+  }
+}
+@media (min-width: 768px) and (max-width: 1180px) {
+  .nexus-shell {
+    min-height: 100dvh;
+    height: auto;
+    align-items: stretch;
+  }
+  .nexus-main {
+    min-height: 0;
+    height: auto;
+    flex: 1 1 0%;
+  }
+  .nexus-content {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+  .nexus-page {
+    width: 100%;
+    max-width: 100%;
+  }
+}
+@media (orientation: landscape) and (max-height: 520px) {
+  .nexus-profile-overlay {
+    align-items: flex-start;
+  }
+  .nexus-profile-dialog {
+    max-height: calc(100dvh - .5rem - var(--app-safe-top) - var(--app-safe-bottom));
+  }
+}
