@@ -6,3 +6,8 @@ vite.config.ts.*
 *.tar.gz
 # Local-only signing secret for persistent NEXUS sessions
 .nexus-session-secret
+
+# Never commit local environment files or secrets
+.env
+.env.*
+!.env.example
