@@ -28,6 +28,8 @@ export default function SettingsPage() {
   const [ringtoneUrl, setRingtoneUrl] = useState(user?.ringtoneUrl || "");
   const [saving, setSaving] = useState(false);
   const [passkeyBusy, setPasskeyBusy] = useState(false);
+  const [appleTeamId, setAppleTeamId] = useState(() => localStorage.getItem("nexus-apple-team-id") || "");
+  const [teamIdSaved, setTeamIdSaved] = useState(false);
   const [appearance, setAppearance] = useState(readNexusAppearance);
   const [notificationState, setNotificationState] = useState(() => isNativeApp()
     ? { supported: true, permission: "default" as NotificationPermission, description: "Native operating-system notifications are available on this device." }
@@ -195,10 +197,18 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        <section className="discord-card app-glass space-y-3 p-5">
+        <section className="discord-card app-glass space-y-4 p-5">
           <div><h2 className="font-semibold text-foreground mb-1">Passkeys</h2><p className="text-xs text-muted-foreground">Use Windows Hello, Touch ID, Face ID, Android biometrics or a security key where your browser supports WebAuthn.</p></div>
           <CyberButton disabled={passkeyBusy || !user} onClick={registerPasskey}>{passkeyBusy ? "Setting up passkey…" : "Add a passkey to this account"}</CyberButton>
           <p className="text-[11px] text-muted-foreground">Passkeys require the production WEBAUTHN_ORIGIN and WEBAUTHN_RP_ID settings on the server.</p>
+          <div className="border-t border-border pt-4 space-y-2">
+            <div><h3 className="text-sm font-medium text-foreground">Apple Developer Team ID</h3><p className="text-xs text-muted-foreground">Save the Team ID associated with your Apple account for NEXUS iOS app configuration.</p></div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <CyberInput label="Team ID" value={appleTeamId} onChange={event => { setAppleTeamId(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10)); setTeamIdSaved(false); }} placeholder="10-character Team ID" />
+              <CyberButton disabled={appleTeamId.length !== 10} onClick={() => { localStorage.setItem("nexus-apple-team-id", appleTeamId); setTeamIdSaved(true); toast({ title: "Apple Team ID saved", description: "Saved in this browser on this device." }); }}>{teamIdSaved ? "Saved" : "Save Team ID"}</CyberButton>
+            </div>
+            <p className="text-[11px] text-muted-foreground">This is stored locally in this browser. It does not change website WebAuthn/passkey verification; those use the relying-party domain and origin.</p>
+          </div>
         </section>
 
         <section className="discord-card p-5">
