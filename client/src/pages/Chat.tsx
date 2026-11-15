@@ -2357,7 +2357,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
                 onClick={() => setIsSidebarOpen(false)}
               />
               <motion.div initial={{ x: -320 }} animate={{ x: 0 }} exit={{ x: -320 }}
-              className="chat-conversation-sidebar w-72 flex-shrink-0 flex flex-col bg-black border border-violet-500/20 overflow-hidden">
+              className="chat-conversation-sidebar w-72 min-h-0 flex-shrink-0 flex flex-col bg-black border border-violet-500/20 overflow-hidden">
               <div className="p-4 border-b border-violet-500/20 bg-violet-500/5">
                 <div className="flex items-center justify-between">
                   <h2 className="font-display text-[11px] tracking-[0.4em] uppercase text-violet-200">NEXUS SERVER</h2>
@@ -2378,7 +2378,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-2 space-y-1">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-2 space-y-1" style={{ WebkitOverflowScrolling: "touch" }}>
                 <div className="mb-2 grid grid-cols-2 gap-2 px-1">
                   <button onClick={() => setShowCreateGroupModal(true)} className="flex items-center justify-center gap-1.5 rounded-lg border border-fuchsia-400/25 bg-fuchsia-500/10 px-2 py-2 text-[9px] font-bold text-fuchsia-200 transition hover:bg-fuchsia-500/20"><Plus className="h-3.5 w-3.5" /> CREATE GROUP</button>
                   <button onClick={() => setShowJoinGroupModal(true)} className="flex items-center justify-center gap-1.5 rounded-lg border border-violet-400/20 bg-violet-500/5 px-2 py-2 text-[9px] font-bold text-violet-200 transition hover:bg-violet-500/15"><UserPlus className="h-3.5 w-3.5" /> JOIN GROUP</button>
@@ -2441,7 +2441,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
         {/* ======================================================
             MAIN CHAT AREA
             ====================================================== */}
-        <div className="chat-main-panel flex-1 flex flex-col border border-violet-500/10 bg-black/70 overflow-hidden">
+        <div className="chat-main-panel min-h-0 min-w-0 flex-1 flex flex-col border border-violet-500/10 bg-black/70 overflow-hidden">
           {/* Header */}
           <div className="chat-channel-header flex items-center justify-between px-5 py-3 border-b border-violet-500/20 bg-black/60 flex-shrink-0">
             <div className="flex items-center gap-3">
@@ -2498,7 +2498,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
           )}
 
           {/* Messages */}
-          <div className="chat-message-list flex-1 overflow-y-auto p-5 space-y-1 scroll-smooth [scrollbar-gutter:stable]">
+          <div className="chat-message-list min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-5 space-y-1 scroll-smooth [scrollbar-gutter:stable]" style={{ WebkitOverflowScrolling: "touch" }}>
             {unifiedMessages.length === 0 && (
               <div className="flex flex-col items-center justify-center h-full opacity-10">
                 <Bug className="w-12 h-12 mb-4" />
