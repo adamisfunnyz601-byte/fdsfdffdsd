@@ -341,22 +341,6 @@ export function ProfileModal({
   const isOwn = profile?.id === currentUserId;
   const canEditProfile = Boolean(isOwn && userId != null);
   const canUseDihhro = ["owner","admin"].includes(String(viewer?.role || "").toLowerCase()) || Boolean(viewer?.dihhroUntil && new Date(viewer.dihhroUntil) > new Date());
-  const giftDihhro = async () => {
-    try {
-      const response = await fetch("/api/admin/dihhro/grant", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, months: 1 }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.message || "Could not gift Dihhro");
-      await navigator.clipboard?.writeText(data.claimUrl);\n      toast({ title: "CLAIM YOUR FREE DIHTRO PRESENT 🎁", description: data.claimUrl });
-      await qc.invalidateQueries({ queryKey: ["/api/user/profile", userId] });
-    } catch (error: any) {
-      toast({ title: "GIFT_FAILED", description: error.message || "Could not gift Dihhro", variant: "destructive" });
-    }
-  };
   const displayName = profile?.username || ""; 
   const uploadedFontSource = getUploadedFontSource(editing ? form.usernameFont : profile?.usernameFont);
   const profileDecoration = profileShopItems.find((item:any) => item.type === "decoration" && String(item.id) === String(profile?.decorationId));
