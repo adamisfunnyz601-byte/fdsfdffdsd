@@ -614,6 +614,7 @@ export default function Chat() {
   const [callState, setCallState] = useState<CallState>('idle');
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
   const [callTime, setCallTime] = useState(0);
+  const [rtcStatus, setRtcStatus] = useState<"idle" | "connecting" | "connected" | "reconnecting" | "failed">("idle");
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOn, setIsVideoOn] = useState(false);
   const [hasRemoteVideo, setHasRemoteVideo] = useState(false);
@@ -1376,6 +1377,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     callClockRef.current = null;
     callPeerIdRef.current = null;
     setCallTime(0);
+    setRtcStatus("idle");
     setIsMuted(false);
     setIsVideoOn(false);
     setIsSharingScreen(false);
@@ -1419,23 +1421,33 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
       }
       stream.getTracks().forEach(track => peer.addTrack(track, stream));
       peer.ontrack = event => {
-      const remote = remoteStreamRef.current || new MediaStream();
-      remoteStreamRef.current = remote;
-      // Keep the live visualizer attached to this user's microphone stream.
-      if (!remote.getTracks().some(track => track.id === event.track.id)) remote.addTrack(event.track);
-      if (event.track.kind === 'audio') { event.track.enabled = true; setRemoteAudioVersion(version => version + 1); }
-      if (event.track.kind === 'video') setHasRemoteVideo(true);
-      if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = remote;
-        remoteVideoRef.current.play().catch(() => {});
-      }
-      if (remoteAudioRef.current) {
-        remoteAudioRef.current.srcObject = remote;
-        remoteAudioRef.current.muted = false;
-        remoteAudioRef.current.volume = 1;
-        remoteAudioRef.current.play().catch(error => pushLog(`REMOTE_AUDIO_PLAY_BLOCKED: ${error?.message || error}`, 'warn'));
-      }
-    };
+        const remote = remoteStreamRef.current || event.streams?.[0] || new MediaStream();
+        remoteStreamRef.current = remote;
+        if (!remote.getTracks().some(track => track.id === event.track.id)) remote.addTrack(event.track);
+        if (event.track.kind === 'audio') {
+          event.track.enabled = true;
+          setRemoteAudioVersion(version => version + 1);
+          event.track.onunmute = () => setRemoteAudioVersion(version => version + 1);
+        }
+        if (event.track.kind === 'video') {
+          event.track.onunmute = () => {
+            setHasRemoteVideo(true);
+            const video = remoteVideoRef.current;
+            if (video && video.srcObject !== remote) video.srcObject = remote;
+            void video?.play().catch(error => pushLog('REMOTE_VIDEO_PLAY_BLOCKED: ' + (error?.message || error), 'warn'));
+          };
+          event.track.onmute = () => setHasRemoteVideo(false);
+          event.track.onended = () => setHasRemoteVideo(false);
+          if (event.track.readyState === 'live' && !event.track.muted) setHasRemoteVideo(true);
+        }
+        const video = remoteVideoRef.current;
+        if (video && video.srcObject !== remote) video.srcObject = remote;
+        if (video) void video.play().catch(error => pushLog('REMOTE_VIDEO_PLAY_BLOCKED: ' + (error?.message || error), 'warn'));
+        const audio = remoteAudioRef.current;
+        if (audio && audio.srcObject !== remote) audio.srcObject = remote;
+        if (audio) { audio.muted = false; audio.volume = 1; void audio.play().catch(error => pushLog('REMOTE_AUDIO_PLAY_BLOCKED: ' + (error?.message || error), 'warn')); }
+        pushLog('REMOTE_TRACK_RECEIVED: ' + event.track.kind, 'info');
+      };
     peer.onicecandidate = event => {
       if (event.candidate && callPeerIdRef.current != null && callIdRef.current) {
         postVoiceSignal('/api/chat/voice/ice', {
@@ -1446,13 +1458,30 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
       }
     };
     peer.onconnectionstatechange = () => {
-      if (peer.connectionState === 'failed' || peer.connectionState === 'disconnected') {
-        pushLog(`WEBRTC_${peer.connectionState.toUpperCase()}`, 'warn');
-      }
+      const state = peer.connectionState;
+      pushLog('WEBRTC_CONNECTION_' + state.toUpperCase(), state === 'failed' ? 'warn' : 'info');
+      if (state === 'connected') {
+        setRtcStatus('connected');
+        if (callClockRef.current) clearInterval(callClockRef.current);
+        callClockRef.current = setInterval(() => setCallTime(t => t + 1), 1000);
+      } else if (state === 'disconnected') {
+        setRtcStatus('reconnecting');
+        if (callClockRef.current) { clearInterval(callClockRef.current); callClockRef.current = null; }
+      } else if (state === 'failed') {
+        setRtcStatus('failed');
+        if (callClockRef.current) { clearInterval(callClockRef.current); callClockRef.current = null; }
+      } else if (state === 'connecting') setRtcStatus('connecting');
     };
-      if (callClockRef.current) clearInterval(callClockRef.current);
-      setCallTime(0);
-      callClockRef.current = setInterval(() => setCallTime(t => t + 1), 1000);
+    peer.oniceconnectionstatechange = () => {
+      const state = peer.iceConnectionState;
+      pushLog('WEBRTC_ICE_' + state.toUpperCase(), state === 'failed' ? 'warn' : 'info');
+      if (state === 'failed') setRtcStatus('failed');
+      else if (state === 'checking') setRtcStatus('connecting');
+      else if (state === 'connected' || state === 'completed') setRtcStatus('connected');
+    };
+    peer.onicegatheringstatechange = () => pushLog('WEBRTC_ICE_GATHERING_' + peer.iceGatheringState.toUpperCase(), 'info');
+    setRtcStatus('connecting');
+    setCallTime(0);
       return peer;
     })();
     peerSetupPromiseRef.current = setup;
@@ -1464,6 +1493,14 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
       throw error;
     }
   };
+
+  useEffect(() => {
+    const video = remoteVideoRef.current;
+    const stream = remoteStreamRef.current;
+    if (!video || !stream || callState !== 'connected') return;
+    if (video.srcObject !== stream) video.srcObject = stream;
+    void video.play().catch(error => pushLog('REMOTE_VIDEO_PLAY_BLOCKED: ' + (error?.message || error), 'warn'));
+  }, [callState, hasRemoteVideo]);
 
   useEffect(() => {
     const audio = remoteAudioRef.current;
