@@ -2354,9 +2354,10 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
                 onClick={() => setIsSidebarOpen(false)}
               />
-              <motion.div initial={{ x: -320 }} animate={{ x: 0 }} exit={{ x: -320 }}
+              <motion.div initial={{ x: -320, opacity: 0.7 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -300, opacity: 0 }} transition={{ type: "tween", duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
               className="chat-conversation-sidebar w-72 min-h-0 flex-shrink-0 flex flex-col bg-black border border-violet-500/20 overflow-hidden">
               <div className="p-4 border-b border-violet-500/20 bg-violet-500/5">
                 <div className="flex items-center justify-between">
