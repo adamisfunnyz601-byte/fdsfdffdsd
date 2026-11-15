@@ -564,21 +564,25 @@ export default function Chat() {
     recipientId: selectedRecipientId,
     groupId: selectedGroupId,
   });
-  const lastMentionNoticeId = useRef<number | null>(null);
+  const { data: mentionNotifications = [] } = useQuery<any[]>({
+    queryKey: ["/api/chat/mentions/poll", currentUser?.id ?? null],
+    queryFn: async () => {
+      const response = await apiFetch("/api/chat/mentions/poll", { credentials: "include", cache: "no-store" });
+      if (!response.ok) throw new Error("Could not check chat mentions");
+      return response.json();
+    },
+    enabled: Boolean(currentUser?.id),
+    refetchInterval: 4000,
+    refetchIntervalInBackground: true,
+    staleTime: 0,
+  });
   useEffect(() => {
-    if (!messages?.length || !currentUser?.id) return;
-    const newestId = Math.max(...messages.map((message: any) => Number(message.id) || 0));
-    if (lastMentionNoticeId.current === null) { lastMentionNoticeId.current = newestId; return; }
-    const fresh = messages.filter((message: any) => Number(message.id) > Number(lastMentionNoticeId.current) && Number(message.senderId) !== Number(currentUser.id));
-    lastMentionNoticeId.current = Math.max(lastMentionNoticeId.current, newestId);
-    for (const message of fresh) {
-      const content = String(message.content || "");
-      if (!content.includes(`<@${currentUser.id}>`) && !content.includes("<!everyone>")) continue;
-      const sender = message.senderDisplayName || message.senderNickname || message.senderName || "Someone";
+    for (const notice of mentionNotifications) {
+      const sender = notice.senderDisplayName || notice.senderNickname || notice.senderName || "Someone";
       toast({ title: "You were mentioned", description: `${sender} mentioned you in NEXUS chat.` });
       try { if ("Notification" in window && Notification.permission === "granted") new Notification("NEXUS · You were mentioned", { body: `${sender} mentioned you in chat.` }); } catch {}
     }
-  }, [messages, currentUser?.id, toast]);
+  }, [mentionNotifications, toast]);
   const chatInteractionsKey = ["/api/chat/interactions", selectedRecipientId ?? null, selectedGroupId ?? null];
   const { data: chatInteractions = { reactions: {}, polls: {} } } = useQuery<any>({
     queryKey: chatInteractionsKey,
