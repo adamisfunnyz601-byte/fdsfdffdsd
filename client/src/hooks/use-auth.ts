@@ -1,4 +1,5 @@
 import { apiUrl } from "@/lib/api-url";
+import { useLocation } from "wouter";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@shared/routes";
@@ -11,6 +12,7 @@ type LoginCredentials = LoginRequest;
 
 export function useAuth() {
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
 
   const { data: user, isLoading, error } = useQuery({
@@ -93,6 +95,7 @@ export function useAuth() {
       );
 
       queryClient.clear();
+      setLocation("/");
 
       toast({
         title: "SESSION TERMINATED",
