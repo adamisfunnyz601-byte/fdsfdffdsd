@@ -1576,6 +1576,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     callInitiatorRef.current = true;
     setCallTargetName(targetName);
     updateCallState('requesting');
+    setRtcStatus('connecting');
     setIsVideoOn(withVideo);
     pushLog(`CALL_REQUESTING: ${targetName}`, 'warn');
     try {
@@ -1601,6 +1602,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     if (autoDeclineTimerRef.current) { clearTimeout(autoDeclineTimerRef.current); autoDeclineTimerRef.current = null; }
     setIncomingCall(null);
     updateCallState('connected');
+    setRtcStatus('connecting');
     try {
       await postVoiceSignal('/api/chat/voice/accept', { callId: call.callId });
       pushLog(`CALL_ACCEPTED: ${call.fromName}`, 'info');
@@ -2256,7 +2258,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
                     <div className="text-center mt-5">
                       <div className="font-display text-3xl text-violet-200 tracking-[0.3em] uppercase">{callTargetName}</div>
                       <div className="text-[10px] font-mono text-violet-200/40 mt-3 tracking-widest uppercase">
-                        {callState === 'requesting' ? '◌ RINGING...' : `◉ CONNECTED — ${Math.floor(callTime / 60)}:${(callTime % 60).toString().padStart(2, '0')}`}
+                        {callState === 'requesting' ? '◌ RINGING...' : rtcStatus === 'connected' ? `◉ CONNECTED — ${Math.floor(callTime / 60)}:${(callTime % 60).toString().padStart(2, '0')}` : rtcStatus === 'failed' ? '⚠ CONNECTION FAILED — CHECK NETWORK' : rtcStatus === 'reconnecting' ? '◌ RECONNECTING...' : '◌ CONNECTING MEDIA...'}
                       </div>
                     </div>
                   </div>}
@@ -2269,7 +2271,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
                     {callState === 'requesting' ? (
                       <><span className="w-2 h-2 rounded-full bg-yellow-400 animate-ping" />RINGING...</>
                     ) : (
-                      <><span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />LIVE {Math.floor(callTime / 60)}:{(callTime % 60).toString().padStart(2, '0')}</>
+                      <><span className={cn("w-2 h-2 rounded-full", rtcStatus === "connected" ? "bg-green-400" : rtcStatus === "failed" ? "bg-red-500" : "bg-yellow-400 animate-pulse")} />{rtcStatus === "connected" ? `LIVE ${Math.floor(callTime / 60)}:${(callTime % 60).toString().padStart(2, "0")}` : rtcStatus === "failed" ? "CONNECTION FAILED" : rtcStatus === "reconnecting" ? "RECONNECTING" : "CONNECTING..."}</>
                     )}
                   </div>
                 </div>
