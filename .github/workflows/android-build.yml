@@ -109,12 +109,12 @@ jobs:
                   xml = xml.replace("<application", f'    <uses-permission android:name="{permission}" />\n    <application', 1)
           service = '''
               <service
-                  android:name=".CallAudioService"
+                  android:name=".NexusCallKitService"
                   android:enabled="true"
                   android:exported="false"
                   android:foregroundServiceType="microphone" />
           '''
-          if "CallAudioService" not in xml:
+          if "NexusCallKitService" not in xml:
               xml = xml.replace("</application>", service + "\n    </application>")
           manifest.write_text(xml)
 
@@ -126,19 +126,19 @@ jobs:
           if not package:
               raise SystemExit("Could not detect Android package name")
           package_name = package.group(1)
-          if "CallAudioPlugin.class" not in source:
-              source = source.replace("import com.getcapacitor.BridgeActivity;", "import android.os.Bundle;\nimport com.getcapacitor.BridgeActivity;\nimport " + package_name + ".CallAudioPlugin;")
+          if "NexusCallKitPlugin.class" not in source:
+              source = source.replace("import com.getcapacitor.BridgeActivity;", "import android.os.Bundle;\nimport com.getcapacitor.BridgeActivity;\nimport " + package_name + ".NexusCallKitPlugin;")
               source = source.replace("public class MainActivity extends BridgeActivity {}", """public class MainActivity extends BridgeActivity {
               @Override
               public void onCreate(Bundle savedInstanceState) {
-                  registerPlugin(CallAudioPlugin.class);
+                  registerPlugin(NexusCallKitPlugin.class);
                   super.onCreate(savedInstanceState);
               }
           }""")
               main.write_text(source)
 
           java_dir = main.parent
-          (java_dir / "CallAudioPlugin.java").write_text("""package PACKAGE_NAME;
+          (java_dir / "NexusCallKitPlugin.java").write_text("""package PACKAGE_NAME;
 
           import android.content.Intent;
           import android.os.Build;
@@ -147,12 +147,12 @@ jobs:
           import com.getcapacitor.PluginMethod;
           import com.getcapacitor.annotation.CapacitorPlugin;
 
-          @CapacitorPlugin(name = "CallAudio")
-          public class CallAudioPlugin extends Plugin {
+          @CapacitorPlugin(name = "NexusCallKit")
+          public class NexusCallKitPlugin extends Plugin {
               @PluginMethod
               public void start(PluginCall call) {
                   try {
-                      Intent intent = new Intent(getContext(), CallAudioService.class);
+                      Intent intent = new Intent(getContext(), NexusCallKitService.class);
                       String name = call.getString("name");
                       intent.putExtra("call_name", name == null || name.trim().isEmpty() ? "NEXUS call" : name);
                       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) getContext().startForegroundService(intent);
@@ -165,7 +165,7 @@ jobs:
 
               @PluginMethod
               public void stop(PluginCall call) {
-                  getContext().stopService(new Intent(getContext(), CallAudioService.class));
+                  getContext().stopService(new Intent(getContext(), NexusCallKitService.class));
                   call.resolve();
               }
           }
@@ -183,7 +183,7 @@ jobs:
           import android.os.Build;
           import android.os.IBinder;
 
-          public class CallAudioService extends Service {
+          public class NexusCallKitService extends Service {
               private static final String CHANNEL_ID = "nexus_active_calls";
               private static final int NOTIFICATION_ID = 6402;
 
