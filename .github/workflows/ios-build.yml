@@ -18,7 +18,7 @@ on:
       - "script/build.ts"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   ios-bundled:
@@ -237,3 +237,13 @@ jobs:
           path: NEXUS-website-bundled.ipa
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish directly downloadable IPA release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nexus-ios-${{ github.run_number }}-${{ github.run_attempt }}
+          name: NEXUS iOS ${{ github.run_number }}
+          body: Unsigned iOS IPA build from commit ${{ github.sha }}. Requires signing before installation.
+          prerelease: true
+          files: NEXUS-website-bundled.ipa
+          fail_on_unmatched_files: true
