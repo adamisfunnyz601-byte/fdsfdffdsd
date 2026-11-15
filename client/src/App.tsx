@@ -25,6 +25,7 @@ import Chat from "@/pages/Chat";
 import UpdatesPage from "@/pages/Updates";
 import ServersPage from "@/pages/Servers";
 import Dihtro from "@/pages/Dihtro";
+import TermsPage from "@/pages/Terms";
 
 const desktopFileApp = window.location.protocol === "file:";
 const nativeApp = Capacitor.isNativePlatform() || desktopFileApp;
@@ -38,6 +39,7 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
 function Home(){const {user,isLoading}=useAuth();if(nativeApp && !desktopFileApp)return <Login/>;if(isLoading)return <div className="flex min-h-screen items-center justify-center bg-background"><Loader2 className="h-8 w-8 animate-spin text-primary"/></div>;return user?<Proxy/>:<Landing/>;}
 function Router(){return <Switch>
  <Route path="/" component={Home}/>
+ <Route path="/terms" component={TermsPage}/>
  <Route path="/sign-in" component={Login}/>
  <Route path="/sign-up" component={Login}/>
  <Route path="/signup" component={Login}/>
