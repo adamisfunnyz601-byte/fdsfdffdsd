@@ -2,6 +2,11 @@ name: Retrieve Apple Personal Team ID
 
 on:
   workflow_dispatch:
+    inputs:
+      apple_2fa_code:
+        description: "Type the current Apple verification code"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -26,13 +31,13 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
           FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }}
-          APPLE_2FA_CODE: ${{ secrets.APPLE_2FA_CODE }}
+          APPLE_2FA_CODE: ${{ inputs.apple_2fa_code }}
           LANG: en_US.UTF-8
           LC_ALL: en_US.UTF-8
         run: |
           set -euo pipefail
 
-          # Mask the short-lived code before any command can print it.
+          # Mask the code before any command can print it.
           if [[ -n "${APPLE_2FA_CODE:-}" ]]; then
             echo "::add-mask::${APPLE_2FA_CODE}"
           fi
@@ -48,14 +53,13 @@ jobs:
           fi
 
           if [[ ! "${APPLE_2FA_CODE:-}" =~ ^[0-9]{4,6}$ ]]; then
-            echo "::error::Add a fresh 4–6 digit code as the temporary APPLE_2FA_CODE repository secret, then rerun."
+            echo "::error::Enter a valid 4–6 digit Apple verification code."
             exit 1
           fi
 
           ruby <<'RUBY'
           require "spaceship"
 
-          # Supply the one-time code when Spaceship requests its 2FA challenge.
           module Spaceship
             class Client
               def ask_for_2fa_code(_prompt)
