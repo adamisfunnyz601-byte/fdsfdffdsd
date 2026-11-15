@@ -1628,7 +1628,7 @@ export async function registerRoutes(
       senderId: messages.senderId, recipientId: messages.recipientId,
       groupId: messages.groupId, mediaUrl: messages.mediaUrl,
     }).from(messages).where(eq(messages.id, messageId)).limit(1);
-    if (!message?.mediaUrl || !/^file:[a-f0-9]{40}\\.gif$/i.test(message.mediaUrl)) return res.status(404).json({ message: "Attachment not found" });
+    if (!message?.mediaUrl || !/^file:[a-f0-9]{40}\.gif$/i.test(message.mediaUrl)) return res.status(404).json({ message: "Attachment not found" });
     let allowed = !message.recipientId && !message.groupId;
     if (message.recipientId) allowed = message.senderId === req.session.userId || message.recipientId === req.session.userId;
     if (message.groupId) {
