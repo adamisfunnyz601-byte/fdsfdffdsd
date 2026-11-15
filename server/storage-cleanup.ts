@@ -1,12 +1,37 @@
 import { pool } from "./db";
 
 const DEFAULT_DATABASE_LIMIT_MB = 1024;
+const DEFAULT_CLEANUP_TRIGGER_MB = 875;
+const DEFAULT_CLEANUP_BATCH_MB = 512;
 const CHECK_INTERVAL_MS = 5 * 60 * 1000;
 const CLEANUP_LOCK_ID = 731928401;
 
+function getPositiveMb(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function getCleanupTriggerBytes(): number {
+  const triggerMb = getPositiveMb(
+    process.env.DATABASE_CLEANUP_TRIGGER_MB,
+    DEFAULT_CLEANUP_TRIGGER_MB,
+  );
+  return Math.floor(triggerMb * 1024 * 1024);
+}
+
+function getCleanupBatchBytes(): number {
+  const batchMb = getPositiveMb(
+    process.env.DATABASE_CLEANUP_BATCH_MB,
+    DEFAULT_CLEANUP_BATCH_MB,
+  );
+  return Math.floor(batchMb * 1024 * 1024);
+}
+
 function getDatabaseLimitBytes(): number {
-  const configured = Number(process.env.DATABASE_STORAGE_LIMIT_MB || DEFAULT_DATABASE_LIMIT_MB);
-  const limitMb = Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_DATABASE_LIMIT_MB;
+  const limitMb = getPositiveMb(
+    process.env.DATABASE_STORAGE_LIMIT_MB,
+    DEFAULT_DATABASE_LIMIT_MB,
+  );
   return Math.floor(limitMb * 1024 * 1024);
 }
 
@@ -35,13 +60,20 @@ async function runStorageCleanup(): Promise<void> {
       "SELECT pg_database_size(current_database())::text AS size_bytes",
     );
     const sizeBytes = Number(sizeResult.rows[0]?.size_bytes || 0);
-    const thresholdBytes = Math.floor(getDatabaseLimitBytes() * 0.5);
+    const triggerBytes = getCleanupTriggerBytes();
+    const configuredLimitBytes = getDatabaseLimitBytes();
+    const batchBytes = getCleanupBatchBytes();
+
+    if (triggerBytes >= configuredLimitBytes) {
+      throw new Error("DATABASE_CLEANUP_TRIGGER_MB must be lower than DATABASE_STORAGE_LIMIT_MB.");
+    }
+
     const stateResult = await client.query<{ over_threshold: boolean }>(
       "SELECT over_threshold FROM nexus_storage_cleanup_state WHERE id = 1 FOR UPDATE",
     );
     const alreadyHandled = Boolean(stateResult.rows[0]?.over_threshold);
 
-    if (sizeBytes < thresholdBytes) {
+    if (sizeBytes < triggerBytes) {
       await client.query(
         "UPDATE nexus_storage_cleanup_state SET over_threshold = FALSE, last_checked_at = NOW() WHERE id = 1",
       );
@@ -49,9 +81,8 @@ async function runStorageCleanup(): Promise<void> {
       return;
     }
 
-    // Only clean once per threshold crossing. DELETE does not immediately shrink
-    // PostgreSQL's on-disk files, so repeating while still above 50% could erase
-    // the entire chat history. The latch rearms after storage drops below 50%.
+    // PostgreSQL does not immediately shrink its data files after DELETE. Run one
+    // bounded batch per threshold crossing so repeated checks cannot erase history.
     if (alreadyHandled) {
       await client.query(
         "UPDATE nexus_storage_cleanup_state SET last_checked_at = NOW() WHERE id = 1",
@@ -60,31 +91,61 @@ async function runStorageCleanup(): Promise<void> {
       return;
     }
 
-    const regularMessages = await client.query<{ id: number }>(`
-      WITH oldest AS (
-        SELECT id
+    // Select the oldest chat rows across both chat tables until their estimated
+    // content + attachment payload reaches the configured batch size. Account
+    // tables (including users, avatars and credentials) are never touched.
+    const deleted = await client.query<{ table_name: string; id: number }>(`
+      WITH candidates AS (
+        SELECT
+          'messages'::text AS table_name,
+          id,
+          created_at,
+          (COALESCE(octet_length(content), 0)
+            + COALESCE(octet_length(media_url), 0) + 128)::bigint AS payload_bytes
         FROM messages
-        ORDER BY created_at ASC NULLS FIRST, id ASC
-        LIMIT (SELECT (COUNT(*) + 1) / 2 FROM messages)
-      )
-      DELETE FROM messages AS m
-      USING oldest
-      WHERE m.id = oldest.id
-      RETURNING m.id
-    `);
-
-    const communityMessages = await client.query<{ id: number }>(`
-      WITH oldest AS (
-        SELECT id
+        UNION ALL
+        SELECT
+          'community_server_messages'::text AS table_name,
+          id,
+          created_at,
+          (COALESCE(octet_length(content), 0) + 128)::bigint AS payload_bytes
         FROM community_server_messages
-        ORDER BY created_at ASC NULLS FIRST, id ASC
-        LIMIT (SELECT (COUNT(*) + 1) / 2 FROM community_server_messages)
+      ),
+      ranked AS (
+        SELECT
+          table_name,
+          id,
+          payload_bytes,
+          COALESCE(
+            SUM(payload_bytes) OVER (
+              ORDER BY created_at ASC NULLS FIRST, table_name, id
+              ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+            ),
+            0
+          ) AS bytes_before
+        FROM candidates
+      ),
+      doomed AS (
+        SELECT table_name, id
+        FROM ranked
+        WHERE bytes_before < $1
+      ),
+      deleted_messages AS (
+        DELETE FROM messages m
+        USING doomed d
+        WHERE d.table_name = 'messages' AND m.id = d.id
+        RETURNING 'messages'::text AS table_name, m.id
+      ),
+      deleted_community AS (
+        DELETE FROM community_server_messages c
+        USING doomed d
+        WHERE d.table_name = 'community_server_messages' AND c.id = d.id
+        RETURNING 'community_server_messages'::text AS table_name, c.id
       )
-      DELETE FROM community_server_messages AS m
-      USING oldest
-      WHERE m.id = oldest.id
-      RETURNING m.id
-    `);
+      SELECT table_name, id FROM deleted_messages
+      UNION ALL
+      SELECT table_name, id FROM deleted_community
+    `, [batchBytes]);
 
     await client.query(`
       UPDATE nexus_storage_cleanup_state
@@ -96,8 +157,10 @@ async function runStorageCleanup(): Promise<void> {
     `, [sizeBytes]);
 
     await client.query("COMMIT");
+    const regularCount = deleted.rows.filter(row => row.table_name === "messages").length;
+    const communityCount = deleted.rows.filter(row => row.table_name === "community_server_messages").length;
     console.warn(
-      `[storage-cleanup] Database crossed 50% of its configured limit. Removed ${regularMessages.rowCount || 0} oldest chat messages and ${communityMessages.rowCount || 0} oldest community messages (including message-attached media).`,
+      `[storage-cleanup] Database reached the ${Math.round(triggerBytes / 1024 / 1024)} MB cleanup trigger. Removed ${regularCount} oldest direct/group messages and ${communityCount} oldest community messages (approximately ${Math.round(batchBytes / 1024 / 1024)} MB of message payload targeted). Accounts and profile data were untouched.`,
     );
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
@@ -108,8 +171,8 @@ async function runStorageCleanup(): Promise<void> {
 }
 
 export function startStorageCleanup(): void {
-  // Run once after startup, then periodically. The database advisory lock makes
-  // this safe when Enzonic has more than one application instance.
+  // This service's DATABASE_URL is Neon (chat storage). Enzonic is reserved for
+  // account data and is not cleaned by this job.
   void runStorageCleanup();
   const timer = setInterval(() => void runStorageCleanup(), CHECK_INTERVAL_MS);
   timer.unref?.();
