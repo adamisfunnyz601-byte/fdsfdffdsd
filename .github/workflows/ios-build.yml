@@ -117,7 +117,7 @@ jobs:
                   activeCallUUID = uuid
                   let handle = CXHandle(type: .generic, value: displayName)
                   let action = CXStartCallAction(call: uuid, handle: handle)
-                  action.isVideo = false
+                  action.isVideo = call.getBool("video") ?? false
                   callController.request(CXTransaction(action: action)) { [weak self] error in
                       guard let self = self else { return }
                       if let error = error {
