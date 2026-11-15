@@ -683,7 +683,7 @@ export default function Chat() {
       groupCallIdRef.current=created.roomId;setGroupCallId(created.roomId);setGroupCallGroupId(selectedGroupId);groupCallActiveRef.current=true;
       setGroupCallParticipants([{userId:Number(currentUserId),username:(currentUser as any)?.username||"You"}]);setActiveGroupCallTab(Number(currentUserId));
       const local=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:withVideo?{facingMode:"user"}:false});
-      await startNativeCallAudio();
+      await startNativeCallAudio("NEXUS group call", Boolean(joined.withVideo));
       groupLocalStreamRef.current=local;setVisualizerStream(local);setCallTime(0);
       pushLog("GROUP_CALL_STARTED","info");
     }catch(error:any){toast({title:"GROUP_CALL_FAILED",description:error.message||"Could not start group call.",variant:"destructive"});await leaveGroupCall();}
@@ -1412,7 +1412,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
       // to an Android microphone foreground service before the user backgrounds the app.
       // Native call indicators are best-effort: a plugin/OS notification failure
       // must never prevent the actual WebRTC call from connecting.
-      await startNativeCallAudio(callTargetName || "NEXUS call").catch(error =>
+      await startNativeCallAudio(callTargetName || "NEXUS call", wantsVideo).catch(error =>
         pushLog(`NATIVE_CALL_INDICATOR_FAILED: ${error?.message || error}`, 'warn')
       );
       localStreamRef.current = stream;
@@ -2256,7 +2256,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
               <div className="relative flex min-h-0 flex-1">
                 {/* Remote participant is the main video; your own camera stays picture-in-picture. */}
                 <div className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden bg-black">
-                  <video ref={remoteVideoRef} autoPlay muted playsInline controls={false} disablePictureInPicture onLoadedMetadata={event => { void event.currentTarget.play().catch(() => {}); }} className="absolute inset-0 w-full h-full object-cover" />
+                  <video ref={remoteVideoRef} autoPlay muted playsInline webkit-playsinline="true" controls={false} disablePictureInPicture disableRemotePlayback tabIndex={-1} onLoadedMetadata={event => { void event.currentTarget.play().catch(() => {}); }} className="nexus-call-video absolute inset-0 h-full w-full object-cover" />
                   <audio ref={remoteAudioRef} autoPlay playsInline muted={false} />
                   <AnimatePresence>{remoteCallEmote?.gifUrl && <motion.div initial={{opacity:0,scale:.75,y:12}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:.9,y:8}} transition={{type:"spring",stiffness:360,damping:24}} className="absolute bottom-24 left-1/2 z-30 -translate-x-1/2 rounded-2xl border border-violet-300/50 bg-[#111827]/95 p-3 shadow-2xl"><div className="mb-1 text-center text-xs font-bold text-violet-100">{remoteCallEmote.name}</div><img src={remoteCallEmote.gifUrl} alt={remoteCallEmote.name} className="h-28 w-28 rounded-xl object-contain"/></motion.div>}</AnimatePresence>
                   {!hasRemoteVideo && <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
@@ -2271,7 +2271,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
                     </div>
                   </div>}
                   <div className="nexus-local-call-preview absolute z-40 aspect-video overflow-hidden rounded-xl border-2 border-violet-400/60 bg-[#10091b] shadow-2xl">
-                    <video ref={localVideoRef} autoPlay muted playsInline controls={false} disablePictureInPicture onLoadedMetadata={event => { void event.currentTarget.play().catch(() => {}); }} className="w-full h-full object-cover" />
+                    <video ref={localVideoRef} autoPlay muted playsInline webkit-playsinline="true" controls={false} disablePictureInPicture disableRemotePlayback tabIndex={-1} onLoadedMetadata={event => { void event.currentTarget.play().catch(() => {}); }} className="nexus-call-video h-full w-full object-cover" />
                     {!isVideoOn && <div className="absolute inset-0 flex items-center justify-center text-[9px] font-mono text-violet-200/50">CAMERA OFF</div>}
                     <span className="absolute bottom-1 left-2 text-[8px] font-mono text-white bg-black/50 px-1.5 py-0.5">YOU</span>
                   </div>
