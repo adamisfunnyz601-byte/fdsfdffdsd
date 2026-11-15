@@ -262,6 +262,14 @@ async function ensureCommunityServerTables() {
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     )`,
     `CREATE INDEX IF NOT EXISTS apple_2fa_challenges_expiry_idx ON apple_2fa_challenges(expires_at)`,
+    `CREATE TABLE IF NOT EXISTS nexus_chat_mention_notifications (
+      id BIGSERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(user_id, message_id)
+    )`,
+    `CREATE INDEX IF NOT EXISTS nexus_chat_mentions_user_idx ON nexus_chat_mention_notifications(user_id, id)`,
   ];
   for (const statement of statements) await db.execute(sql.raw(statement));
 }
@@ -1335,6 +1343,24 @@ export async function registerRoutes(
       replyContext = target;
       replyToId = requestedReplyToId;
     }
+    const rawContent = String(input.content || "");
+    const explicitMentionIds = Array.from(rawContent.matchAll(/<@(\d+)>/g), match => Number(match[1]));
+    const hasEveryoneMention = rawContent.includes("<!everyone>");
+    if (hasEveryoneMention && !input.groupId) return res.status(400).json({ message: "@everyone can only be used in a group channel." });
+    let mentionRecipientIds = Array.from(new Set(explicitMentionIds)).filter(id => id !== Number(req.session.userId!));
+    if (input.groupId && (mentionRecipientIds.length || hasEveryoneMention)) {
+      const members = await db.select({ userId: groupChatMembers.userId }).from(groupChatMembers)
+        .where(eq(groupChatMembers.groupId, input.groupId));
+      const memberIds = new Set(members.map(member => Number(member.userId)));
+      if (mentionRecipientIds.some(id => !Number.isInteger(id) || !memberIds.has(id))) {
+        return res.status(400).json({ message: "One of those mentions is not a member of this group." });
+      }
+      if (hasEveryoneMention) mentionRecipientIds = Array.from(memberIds).filter(id => id !== Number(req.session.userId!));
+    } else if (input.recipientId) {
+      mentionRecipientIds = mentionRecipientIds.filter(id => id === Number(input.recipientId));
+    } else if (mentionRecipientIds.length) {
+      return res.status(400).json({ message: "Mentions are only available in DMs and group channels." });
+    }
     const message = await storage.createMessage({
       senderId: req.session.userId!,
       recipientId: input.recipientId,
@@ -1344,6 +1370,14 @@ export async function registerRoutes(
       mediaType: input.mediaType ?? null,
       replyToId,
     });
+    if (mentionRecipientIds.length) {
+      await pool.query(
+        `INSERT INTO nexus_chat_mention_notifications (user_id, message_id)
+         SELECT recipient_id, $1 FROM unnest($2::int[]) AS recipient_id
+         ON CONFLICT (user_id, message_id) DO NOTHING`,
+        [message.id, mentionRecipientIds],
+      );
+    }
     // Return the reply preview immediately as well as through the history query.
     // The optimistic client can therefore render the quoted message on first send.
     res.status(201).json({
@@ -1353,6 +1387,31 @@ export async function registerRoutes(
       replyToContent: replyContext?.content ?? null,
       replyToSenderName: replyContext?.senderName ?? null,
     });
+  });
+
+  app.get("/api/chat/mentions/poll", requireAuth, async (req, res) => {
+    const result = await pool.query(
+      `WITH pending AS (
+         SELECT n.id, n.message_id, m.content, m.sender_id, u.username AS sender_name,
+                u.display_name AS sender_display_name, u.nickname AS sender_nickname
+         FROM nexus_chat_mention_notifications n
+         JOIN messages m ON m.id = n.message_id
+         JOIN users u ON u.id = m.sender_id
+         WHERE n.user_id = $1
+         ORDER BY n.id ASC
+         LIMIT 30
+         FOR UPDATE OF n SKIP LOCKED
+       )
+       DELETE FROM nexus_chat_mention_notifications n
+       USING pending p
+       WHERE n.id = p.id
+       RETURNING p.message_id AS "messageId", p.content, p.sender_id AS "senderId",
+                 p.sender_name AS "senderName", p.sender_display_name AS "senderDisplayName",
+                 p.sender_nickname AS "senderNickname"`,
+      [Number(req.session.userId!)],
+    );
+    res.setHeader("Cache-Control", "no-store");
+    return res.json(result.rows);
   });
 
   // Fetch interaction state for the currently open chat. Message visibility is
