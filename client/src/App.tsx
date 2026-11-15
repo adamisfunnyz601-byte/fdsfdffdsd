@@ -1,4 +1,4 @@
-import { Switch, Route, Redirect, useLocation } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -35,7 +35,7 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
 }
 function Home(){const {user,isLoading}=useAuth();if(nativeApp)return <Login/>;if(isLoading)return <div className="flex min-h-screen items-center justify-center bg-background"><Loader2 className="h-8 w-8 animate-spin text-primary"/></div>;return user?<Proxy/>:<Landing/>;}
 function Router(){return <Switch>
- <Route path="/" component={() => <Redirect to="/sign-in"/>}/>
+ <Route path="/" component={Home}/>
  <Route path="/sign-in" component={Login}/>
  <Route path="/sign-up" component={Login}/>
  <Route path="/signup" component={Login}/>
