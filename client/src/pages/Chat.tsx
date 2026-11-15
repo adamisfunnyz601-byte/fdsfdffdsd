@@ -720,7 +720,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
   // --- SOUNDBOARD STATE ---
   const [customSounds, setCustomSounds] = useState<SoundEntry[]>([]);
   const [sounds, setSounds] = useState<SoundEntry[]>(DEFAULT_SOUNDS);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(() => typeof window !== "undefined" && window.matchMedia("(min-width: 1181px)").matches);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches);
   const [searchTerm, setSearchTerm] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [isRecordingPaused, setIsRecordingPaused] = useState(false);
@@ -2346,7 +2346,17 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
             ====================================================== */}
         <AnimatePresence>
           {isSidebarOpen && (
-            <motion.div initial={{ x: -320 }} animate={{ x: 0 }} exit={{ x: -320 }}
+            <>
+              <motion.button
+                type="button"
+                aria-label="Close conversations sidebar"
+                className="chat-sidebar-backdrop"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsSidebarOpen(false)}
+              />
+              <motion.div initial={{ x: -320 }} animate={{ x: 0 }} exit={{ x: -320 }}
               className="chat-conversation-sidebar w-72 flex-shrink-0 flex flex-col bg-black border border-violet-500/20 overflow-hidden">
               <div className="p-4 border-b border-violet-500/20 bg-violet-500/5">
                 <div className="flex items-center justify-between">
@@ -2423,7 +2433,8 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
                   <div className="text-[8px] text-violet-200/30 font-mono">ONLINE</div>
                 </div>
               </div>
-            </motion.div>
+              </motion.div>
+            </>
           )}
         </AnimatePresence>
 
