@@ -648,12 +648,12 @@ export default function Chat() {
     if(!groupCallIdRef.current)return;
     groupVoicePost("/api/chat/group-voice/signal",{roomId:groupCallIdRef.current,to,signal}).catch((error:any)=>pushLog("GROUP_SIGNAL_FAILED: "+error.message,"warn"));
   };
-  const createGroupPeer=async(peerId:number,username:string)=>{
+  const createGroupPeer=async(peerId:number,username:string,videoEnabled=groupCallWithVideo)=>{
     const existing=groupPeersRef.current.get(peerId);
     if(existing)return existing;
     let stream=groupLocalStreamRef.current;
     if(!stream){
-      stream=await navigator.mediaDevices.getUserMedia({audio:VOICE_AUDIO_CONSTRAINTS,video:groupCallWithVideo?{facingMode:"user"}:false});
+      stream=await navigator.mediaDevices.getUserMedia({audio:VOICE_AUDIO_CONSTRAINTS,video:videoEnabled?{facingMode:"user"}:false});
       groupLocalStreamRef.current=stream;
     }
     const peer=new RTCPeerConnection(await getRtcConfiguration());
@@ -698,7 +698,7 @@ export default function Chat() {
       groupLocalStreamRef.current=local;setVisualizerStream(local);
       setGroupCallParticipants([{userId:Number(currentUserId),username:(currentUser as any)?.username||"You"},...joined.participants]);setActiveGroupCallTab(joined.participants[0]?.userId??Number(currentUserId));
       for(const person of joined.participants){
-        const peer=await createGroupPeer(person.userId,person.username);
+        const peer=await createGroupPeer(person.userId,person.username,Boolean(invite.withVideo));
         const offer=await peer.createOffer();await peer.setLocalDescription(offer);
         sendGroupPeerSignal(person.userId,{type:"offer",offer:peer.localDescription});
       }
@@ -2089,7 +2089,8 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);try{const r
                 <video autoPlay muted playsInline ref={node=>{if(node&&groupLocalStreamRef.current&&node.srcObject!==groupLocalStreamRef.current)node.srcObject=groupLocalStreamRef.current;}} className="h-full w-full object-cover"/>
                 <span className="absolute bottom-1 left-2 rounded bg-black/60 px-1.5 py-0.5 text-[9px]">YOU · PREVIEW</span>
               </div>
-            </div>            <div className="flex items-center justify-center gap-4 border-t border-violet-500/20 p-5"><button onClick={()=>{groupLocalStreamRef.current?.getAudioTracks().forEach(t=>t.enabled=!t.enabled);}} className="rounded-full border border-white/20 p-4"><Mic className="h-5 w-5"/></button><button disabled={!groupCallWithVideo} title={groupCallWithVideo?"Toggle camera":"Start a video group call to use camera"} onClick={()=>{groupLocalStreamRef.current?.getVideoTracks().forEach(t=>t.enabled=!t.enabled);}} className="rounded-full border border-white/20 p-4 disabled:opacity-30"><Video className="h-5 w-5"/></button><button onClick={leaveGroupCall} className="flex items-center gap-2 rounded-full bg-red-700 px-7 py-4 font-bold"><PhoneOff className="h-5 w-5"/> LEAVE</button></div>
+            </div>
+            <div className="flex items-center justify-center gap-4 border-t border-violet-500/20 p-5"><button onClick={()=>{groupLocalStreamRef.current?.getAudioTracks().forEach(t=>t.enabled=!t.enabled);}} className="rounded-full border border-white/20 p-4"><Mic className="h-5 w-5"/></button><button disabled={!groupCallWithVideo} title={groupCallWithVideo?"Toggle camera":"Start a video group call to use camera"} onClick={()=>{groupLocalStreamRef.current?.getVideoTracks().forEach(t=>t.enabled=!t.enabled);}} className="rounded-full border border-white/20 p-4 disabled:opacity-30"><Video className="h-5 w-5"/></button><button onClick={leaveGroupCall} className="flex items-center gap-2 rounded-full bg-red-700 px-7 py-4 font-bold"><PhoneOff className="h-5 w-5"/> LEAVE</button></div>
           </div>}
         </AnimatePresence>
 
