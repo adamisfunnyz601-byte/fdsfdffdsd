@@ -282,6 +282,12 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   await ensureCommunityServerTables();
+  // Promote the existing, reserved AdamisFunnyz account to the internal super-owner role.
+  const [bootstrapSuperOwner] = await db.select({ id: users.id }).from(users)
+    .where(sql`lower(trim(${users.username})) = 'adamisfunnyz'`).orderBy(users.id).limit(1);
+  if (bootstrapSuperOwner) {
+    await db.update(users).set({ role: "super_owner" }).where(eq(users.id, bootstrapSuperOwner.id));
+  }
   await ensureSessionStoreTable();
   await ensureVoiceCallTables();
   // Session middleware. Store sessions in Neon so logins survive server restarts.
@@ -333,8 +339,10 @@ export async function registerRoutes(
     next();
   };
 
-  const requireOwner = (req: Request, res: any, next: any) => {
-    if (!req.session.userId || req.session.role !== "owner") {
+  const requireOwner = async (req: Request, res: any, next: any) => {
+    if (!req.session.userId) return res.status(403).json({ message: "Forbidden: Owner access only" });
+    const actor = await storage.getUser(req.session.userId);
+    if (!actor || !["owner", "super_owner"].includes(String(actor.role).toLowerCase())) {
       return res.status(403).json({ message: "Forbidden: Owner access only" });
     }
     next();
@@ -342,7 +350,7 @@ export async function registerRoutes(
   const requireAdmin = async (req: Request, res: any, next: any) => {
     if (!req.session.userId) return res.status(401).json({ message: "Login required." });
     const actor = await storage.getUser(req.session.userId);
-    if (!actor || !["owner","admin"].includes(String(actor.role).toLowerCase())) return res.status(403).json({ message: "Owner or Admin access required." });
+    if (!actor || !["owner","admin","super_owner"].includes(String(actor.role).toLowerCase())) return res.status(403).json({ message: "Owner or Admin access required." });
     next();
   };
 
@@ -361,6 +369,8 @@ export async function registerRoutes(
     const { serialKey: _serialKey, passwordHash: _passwordHash, ...safe } = user;
     return {
       ...safe,
+      // Keep the super-owner's public role label/badge as "owner".
+      role: String(safe.role).toLowerCase() === "super_owner" ? "owner" : safe.role,
       avatarUrl: profileImageUrl(safe.id, "avatar", safe.avatarUrl),
       bannerUrl: profileImageUrl(safe.id, "banner", safe.bannerUrl),
     };
@@ -739,6 +749,9 @@ export async function registerRoutes(
       if (!/^[a-zA-Z0-9_]{3,24}$/.test(username)) {
         return res.status(400).json({ message: "Username must be 3–24 characters and use letters, numbers or underscores." });
       }
+      if (username.toLowerCase() === "adamisfunnyz") {
+        return res.status(403).json({ message: "That username is reserved." });
+      }
       if (password.length < 8 || password.length > 128) {
         return res.status(400).json({ message: "Password must be between 8 and 128 characters." });
       }
@@ -810,6 +823,9 @@ export async function registerRoutes(
 
       // Access keys remain supported for legacy/invite-based accounts.
       if (!user && serialKey !== OWNER_KEY) {
+        if (cleanUsername.toLowerCase() === "adamisfunnyz") {
+          return res.status(403).json({ message: "That username is reserved." });
+        }
         const accessKey = await storage.getAccessKey(serialKey);
         if (!accessKey) {
           return res.status(401).json({ message: "Incorrect username or password." });
@@ -1113,7 +1129,7 @@ export async function registerRoutes(
 
   // === SERVER-AUTHORITATIVE ROLE + MODERATION COMMANDS ===
   const roleRank: Record<string, number> = {
-    owner: 100, admin: 90, "trial-admin": 80, moderator: 70,
+    super_owner: 110, owner: 100, admin: 90, "trial-admin": 80, moderator: 70,
     "trial-moderator": 60, helper: 40, "trial-helper": 30, user: 0,
   };
   const canonicalRole = (role: string) => role.toLowerCase().replace(/_/g, "-");
@@ -1122,7 +1138,7 @@ export async function registerRoutes(
     return actor ? canonicalRole(actor.role) : "user";
   };
   const canModerate = (actor: string, target: string) =>
-    actor === "owner" || (roleRank[actor] ?? 0) > (roleRank[target] ?? 0);
+    actor === "super_owner" || actor === "owner" || (roleRank[actor] ?? 0) > (roleRank[target] ?? 0);
   const moderationCommandNames = [
     "ban","unban","kick","mute","unmute","timeout","untimeout","warn","warnings","clearwarnings",
     "softban","tempban","permban","shadowban","unshadowban","jail","unjail","deafen","undeafen",
@@ -1147,7 +1163,7 @@ export async function registerRoutes(
 
   app.get("/api/moderation/users", requireAuth, async (req, res) => {
     const actor = await storage.getUser(req.session.userId!);
-    const allowed = ["owner","admin","trial-admin","moderator","trial-moderator","helper","trial-helper"];
+    const allowed = ["super_owner","owner","admin","trial-admin","moderator","trial-moderator","helper","trial-helper"];
     if (!actor || !allowed.includes(canonicalRole(actor.role))) return res.status(403).json({ message: "Staff access required." });
     return res.json(await storage.getAllUsers());
   });
@@ -1171,8 +1187,8 @@ export async function registerRoutes(
       return res.status(403).json({ message: "Staff access is required to assign roles." });
     }
     if (targetId === actorId) return res.status(403).json({ message: "You cannot change your own role." });
-    if (tRole === "owner") return res.status(403).json({ message: "Existing owner accounts are protected." });
-    if (requestedRole === "owner" && aRole !== "owner") {
+    if (tRole === "super_owner" || (tRole === "owner" && aRole !== "super_owner")) return res.status(403).json({ message: "That account is protected by the ownership hierarchy." });
+    if (requestedRole === "owner" && !["owner", "super_owner"].includes(aRole)) {
       return res.status(403).json({ message: "Only an owner can grant the owner role." });
     }
     if (aRole !== "owner" && (roleRank[tRole] ?? 0) >= (roleRank[aRole] ?? 0)) {
@@ -1237,7 +1253,7 @@ export async function registerRoutes(
     if (target) {
       const tRole = canonicalRole(target.role);
       if (targetId === actorId) return res.status(400).json({ message: "You cannot moderate yourself." });
-      if (tRole === "owner" || !canModerate(aRole,tRole)) return res.status(403).json({ message: "That member is protected by the role hierarchy." });
+      if (tRole === "super_owner" || (tRole === "owner" && aRole !== "super_owner") || !canModerate(aRole,tRole)) return res.status(403).json({ message: "That member is protected by the role hierarchy." });
     }
     const durationToken = String(req.body?.duration || args[1] || "");
     const durationMs = ["ban","tempban","mute","timeout","jail","restrict","shadowban","softban"].includes(name) ? parseDurationMs(durationToken) : null;
