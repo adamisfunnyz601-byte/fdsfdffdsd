@@ -1,22 +1,7 @@
-
 name: Retrieve Apple Personal Team ID
 
 on:
   workflow_dispatch:
-    inputs:
-      verification_method:
-        description: "How should Apple send your verification code?"
-        required: true
-        type: choice
-        options:
-          - trusted_device
-          - sms
-        default: trusted_device
-
-      apple_2fa_code:
-        description: "Enter the Apple verification code"
-        required: true
-        type: string
 
 permissions:
   contents: read
@@ -41,84 +26,59 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
           FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }}
-          APPLE_TRUSTED_PHONE_NUMBER: ${{ secrets.APPLE_TRUSTED_PHONE_NUMBER }}
-          APPLE_2FA_CODE: ${{ inputs.apple_2fa_code }}
-          VERIFICATION_METHOD: ${{ inputs.verification_method }}
+          APPLE_2FA_CODE: ${{ secrets.APPLE_2FA_CODE }}
           LANG: en_US.UTF-8
           LC_ALL: en_US.UTF-8
-
         run: |
           set -euo pipefail
 
+          # Mask the short-lived code before any command can print it.
+          if [[ -n "${APPLE_2FA_CODE:-}" ]]; then
+            echo "::add-mask::${APPLE_2FA_CODE}"
+          fi
+
           if [[ -z "${APPLE_ID:-}" ]]; then
-            echo "::error::Missing APPLE_ID secret."
+            echo "::error::Missing APPLE_ID repository secret."
             exit 1
           fi
 
           if [[ -z "${FASTLANE_PASSWORD:-}" && -z "${FASTLANE_SESSION:-}" ]]; then
-            echo "::error::Missing FASTLANE_PASSWORD or FASTLANE_SESSION secret."
+            echo "::error::Add FASTLANE_PASSWORD or FASTLANE_SESSION as a repository secret."
             exit 1
           fi
 
           if [[ ! "${APPLE_2FA_CODE:-}" =~ ^[0-9]{4,6}$ ]]; then
-            echo "::error::Enter a valid Apple verification code."
+            echo "::error::Add a fresh 4–6 digit code as the temporary APPLE_2FA_CODE repository secret, then rerun."
             exit 1
-          fi
-
-          if [[ "$VERIFICATION_METHOD" == "sms" ]]; then
-            if [[ -z "${APPLE_TRUSTED_PHONE_NUMBER:-}" ]]; then
-              echo "::error::Add APPLE_TRUSTED_PHONE_NUMBER as a repository secret."
-              exit 1
-            fi
-
-            export SPACESHIP_2FA_SMS_DEFAULT_PHONE_NUMBER="$APPLE_TRUSTED_PHONE_NUMBER"
-            echo "SMS verification selected."
-          else
-            unset SPACESHIP_2FA_SMS_DEFAULT_PHONE_NUMBER || true
-            echo "Trusted-device verification selected."
           fi
 
           ruby <<'RUBY'
           require "spaceship"
 
+          # Supply the one-time code when Spaceship requests its 2FA challenge.
           module Spaceship
             class Client
-              def ask_for_2fa_code(prompt)
-                code = ENV["APPLE_2FA_CODE"].to_s.strip
-
-                unless code.match?(/\A\d{4,6}\z/)
-                  raise "Missing or invalid Apple verification code."
-                end
-
-                puts "Using the verification code supplied for this run."
-                code
+              def ask_for_2fa_code(_prompt)
+                ENV.fetch("APPLE_2FA_CODE")
               end
             end
           end
 
           begin
-            puts "Connecting to Apple Developer Portal..."
-
-            password = ENV["FASTLANE_PASSWORD"]
-
-            client =
-              if password && !password.empty?
-                Spaceship::Portal.login(ENV.fetch("APPLE_ID"), password)
-              else
-                Spaceship::Portal.login(ENV.fetch("APPLE_ID"))
-              end
+            puts "Signing in to Apple Developer Portal..."
+            password = ENV["FASTLANE_PASSWORD"].to_s
+            client = if password.empty?
+              Spaceship::Portal.login(ENV.fetch("APPLE_ID"))
+            else
+              Spaceship::Portal.login(ENV.fetch("APPLE_ID"), password)
+            end
 
             teams = client.teams
-
             if teams.empty?
-              abort "Apple returned no Developer Portal teams. Check whether your Personal Team has been provisioned."
+              abort "Apple returned no Developer Portal teams. The free Personal Team may not be provisioned for this account."
             end
 
             found = false
-
-            puts ""
-            puts "Apple Developer teams:"
-
             teams.each do |team|
               team_id = team["teamId"]
               next if team_id.to_s.empty?
@@ -126,7 +86,6 @@ jobs:
               found = true
               name = team["name"] || "Unnamed team"
               type = team["type"] || "Team"
-
               puts "#{name} (#{type}): #{team_id}"
 
               File.open(ENV.fetch("GITHUB_STEP_SUMMARY"), "a") do |summary|
@@ -137,11 +96,9 @@ jobs:
               end
             end
 
-            abort "No Team IDs were returned." unless found
-
+            abort "Apple returned no Team IDs." unless found
           rescue => error
-            warn "Apple authentication or team lookup failed."
-            warn "#{error.class}: #{error.message}"
+            warn "Apple sign-in or team lookup failed (#{error.class}). Check the credentials and use a fresh verification code."
             exit 1
           end
           RUBY
