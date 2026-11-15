@@ -2609,7 +2609,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
 
           {/* Input */}
           <div className="chat-composer relative flex-shrink-0 border-t border-violet-300/10 p-3">
-            <form onSubmit={handleTransmit} className="flex items-center gap-2">
+            <form onSubmit={handleTransmit} className="chat-composer-form flex min-w-0 flex-wrap items-center gap-2">
               <button type="button" onClick={() => fileInputRef.current?.click()}
                 className={cn("w-10 h-10 rounded flex items-center justify-center transition-all flex-shrink-0",
                   uploadFile ? "bg-fuchsia-600/20 text-fuchsia-300" : "text-muted-foreground hover:bg-secondary hover:text-foreground")}>
