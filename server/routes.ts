@@ -154,6 +154,30 @@ async function ensureSessionStoreTable() {
   `));
 }
 
+async function ensureVoiceCallTables() {
+  await db.execute(sql.raw(`
+    CREATE TABLE IF NOT EXISTS nexus_voice_calls (
+      call_id TEXT PRIMARY KEY,
+      caller_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      callee_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      with_video BOOLEAN NOT NULL DEFAULT FALSE,
+      status TEXT NOT NULL DEFAULT 'ringing',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '45 seconds')
+    )
+  `));
+  await db.execute(sql.raw(`
+    CREATE TABLE IF NOT EXISTS nexus_voice_signals (
+      id BIGSERIAL PRIMARY KEY,
+      recipient_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      call_id TEXT,
+      payload JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `));
+  await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS nexus_voice_signals_recipient_idx ON nexus_voice_signals(recipient_id, id)`));
+}
+
 async function ensureCommunityServerTables() {
   // These idempotent DDL statements keep fresh deployments from exposing
   // server screens whose backing tables were never created by a manual db:push.
@@ -248,6 +272,7 @@ export async function registerRoutes(
 ): Promise<Server> {
   await ensureCommunityServerTables();
   await ensureSessionStoreTable();
+  await ensureVoiceCallTables();
   // Session middleware. Store sessions in Neon so logins survive server restarts.
   // The table is created automatically on first boot by connect-pg-simple.
   const sessionSecret = process.env.SESSION_SECRET;
@@ -1957,23 +1982,34 @@ export async function registerRoutes(
   // Signals and call sessions are process-local; run one server instance unless these
   // maps are moved to shared storage/pub-sub (Redis or the database).
   interface CallSession { callerId: number; calleeId: number; withVideo: boolean; }
-  const signals = new Map<number, any[]>();
-  const callSessions = new Map<string, CallSession>();
   const activeCalls = new Map<string, Set<number>>();
 
-  const pushVoiceSignal = (userId: number, signal: any) => {
-    const queue = signals.get(userId) || [];
-    queue.push({ ...signal, createdAt: Date.now() });
-    // Bound memory if a client stops polling.
-    if (queue.length > 200) queue.splice(0, queue.length - 200);
-    signals.set(userId, queue);
+  // Call invites and WebRTC signals live in Neon, not process memory. This is
+  // essential when the caller and recipient hit different API instances or
+  // when the server restarts while a call is ringing.
+  const pushVoiceSignal = async (userId: number, signal: any) => {
+    await pool.query(
+      `INSERT INTO nexus_voice_signals (recipient_id, call_id, payload) VALUES ($1, $2, $3::jsonb)`,
+      [userId, typeof signal.callId === "string" ? signal.callId : null, JSON.stringify({ ...signal, createdAt: Date.now() })],
+    );
   };
 
-  const getCallPeer = (callId: unknown, userId: number) => {
-    if (typeof callId !== 'string' || !callId) return null;
-    const call = callSessions.get(callId);
-    if (!call || (call.callerId !== userId && call.calleeId !== userId)) return null;
-    return { call, peerId: call.callerId === userId ? call.calleeId : call.callerId };
+  const getCallPeer = async (callId: unknown, userId: number) => {
+    if (typeof callId !== "string" || !callId) return null;
+    const result = await pool.query(
+      `SELECT call_id, caller_id, callee_id, with_video, status
+       FROM nexus_voice_calls
+       WHERE call_id = $1 AND (caller_id = $2 OR callee_id = $2)
+         AND (status = 'active' OR expires_at > NOW())
+       LIMIT 1`,
+      [callId, userId],
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    return {
+      call: { callId: row.call_id, callerId: Number(row.caller_id), calleeId: Number(row.callee_id), withVideo: Boolean(row.with_video), status: row.status },
+      peerId: Number(row.caller_id) === userId ? Number(row.callee_id) : Number(row.caller_id),
+    };
   };
 
   // Authenticated WebRTC mesh signalling for the shared Block Blast voice room.
@@ -2040,58 +2076,68 @@ export async function registerRoutes(
     if (await blockedEitherWay(callerId, calleeId)) return res.status(403).json({ message: 'This user is unavailable' });
 
     const callId = `call-${Date.now()}-${randomBytes(8).toString('hex')}`;
-    callSessions.set(callId, { callerId, calleeId, withVideo });
+    await pool.query(
+      `INSERT INTO nexus_voice_calls (call_id, caller_id, callee_id, with_video, status, expires_at)
+       VALUES ($1, $2, $3, $4, 'ringing', NOW() + INTERVAL '45 seconds')`,
+      [callId, callerId, calleeId, withVideo],
+    );
     const caller = await storage.getUser(callerId);
-    pushVoiceSignal(calleeId, {
+    await pushVoiceSignal(calleeId, {
       type: 'incoming', callId, fromId: callerId,
       fromName: caller?.username || `User_${callerId}`, withVideo,
     });
     res.json({ callId });
   });
 
-  app.post('/api/chat/voice/accept', requireAuth, (req, res) => {
+  app.post('/api/chat/voice/accept', requireAuth, async (req, res) => {
     const callId = req.body?.callId;
-    const call = typeof callId === 'string' ? callSessions.get(callId) : null;
+    const result = await pool.query(
+      `UPDATE nexus_voice_calls SET status = 'active'
+       WHERE call_id = $1 AND callee_id = $2 AND status = 'ringing'
+         AND expires_at > NOW()
+       RETURNING caller_id`,
+      [callId, Number(req.session.userId!)],
+    );
+    const call = result.rows[0];
     if (!call) return res.status(404).json({ message: 'Call not found or expired' });
-    if (call.calleeId !== req.session.userId!) return res.status(403).json({ message: 'Only the invited recipient can accept this call' });
-    pushVoiceSignal(call.callerId, { type: 'accepted', callId });
+    await pushVoiceSignal(Number(call.caller_id), { type: 'accepted', callId });
     res.json({ success: true });
   });
 
-  app.post('/api/chat/voice/offer', requireAuth, (req, res) => {
+  app.post('/api/chat/voice/offer', requireAuth, async (req, res) => {
     const { callId, recipientId, offer } = req.body || {};
-    const peer = getCallPeer(callId, Number(req.session.userId!));
+    const peer = await getCallPeer(callId, Number(req.session.userId!));
     if (!peer || peer.peerId !== Number(recipientId)) return res.status(403).json({ message: 'Invalid call participant' });
     if (!offer || typeof offer.sdp !== 'string' || !['offer'].includes(String(offer.type))) {
       return res.status(400).json({ message: 'Invalid WebRTC offer' });
     }
-    pushVoiceSignal(peer.peerId, { type: 'offer', callId, from: req.session.userId!, offer });
+    await pushVoiceSignal(peer.peerId, { type: 'offer', callId, from: req.session.userId!, offer });
     res.json({ success: true });
   });
 
-  app.post('/api/chat/voice/answer', requireAuth, (req, res) => {
+  app.post('/api/chat/voice/answer', requireAuth, async (req, res) => {
     const { callId, recipientId, answer } = req.body || {};
-    const peer = getCallPeer(callId, Number(req.session.userId!));
+    const peer = await getCallPeer(callId, Number(req.session.userId!));
     if (!peer || peer.peerId !== Number(recipientId)) return res.status(403).json({ message: 'Invalid call participant' });
     if (!answer || typeof answer.sdp !== 'string' || answer.type !== 'answer') {
       return res.status(400).json({ message: 'Invalid WebRTC answer' });
     }
-    pushVoiceSignal(peer.peerId, { type: 'answer', callId, from: req.session.userId!, answer });
+    await pushVoiceSignal(peer.peerId, { type: 'answer', callId, from: req.session.userId!, answer });
     res.json({ success: true });
   });
 
-  app.post('/api/chat/voice/ice', requireAuth, (req, res) => {
+  app.post('/api/chat/voice/ice', requireAuth, async (req, res) => {
     const { callId, recipientId, candidate } = req.body || {};
-    const peer = getCallPeer(callId, Number(req.session.userId!));
+    const peer = await getCallPeer(callId, Number(req.session.userId!));
     if (!peer || peer.peerId !== Number(recipientId)) return res.status(403).json({ message: 'Invalid call participant' });
     if (!candidate || typeof candidate.candidate !== 'string') return res.status(400).json({ message: 'Invalid ICE candidate' });
-    pushVoiceSignal(peer.peerId, { type: 'ice', callId, from: req.session.userId!, candidate });
+    await pushVoiceSignal(peer.peerId, { type: 'ice', callId, from: req.session.userId!, candidate });
     res.json({ success: true });
   });
 
   app.post('/api/chat/voice/emote', requireAuth, async (req, res) => {
     const userId = Number(req.session.userId!);
-    const peer = getCallPeer(req.body?.callId, userId);
+    const peer = await getCallPeer(req.body?.callId, userId);
     if (!peer) return res.status(403).json({ message: "You must be in an active call to send an emote." });
     const emoteId = Number(req.body?.emoteId);
     const inventory = await storage.getUserInventory(userId);
@@ -2100,34 +2146,46 @@ export async function registerRoutes(
     let styles:any = {};
     try { styles = typeof item.cssStyles === "string" ? JSON.parse(item.cssStyles) : (item.cssStyles || {}); } catch {}
     if (!styles.audioUrl || !item.imageUrl) return res.status(400).json({ message: "This emote is incomplete." });
-    pushVoiceSignal(peer.peerId, { type: "emote", callId: req.body.callId, from: userId, emote: { name: item.name, gifUrl: item.imageUrl, audioUrl: styles.audioUrl, duration: Math.min(20, Number(styles.duration) || 3) } });
+    await pushVoiceSignal(peer.peerId, { type: "emote", callId: req.body.callId, from: userId, emote: { name: item.name, gifUrl: item.imageUrl, audioUrl: styles.audioUrl, duration: Math.min(20, Number(styles.duration) || 3) } });
     res.json({ success: true });
   });
 
-  app.post('/api/chat/voice/decline', requireAuth, (req, res) => {
+  app.post('/api/chat/voice/decline', requireAuth, async (req, res) => {
     const callId = req.body?.callId;
-    const call = typeof callId === 'string' ? callSessions.get(callId) : null;
+    const result = await pool.query(
+      `SELECT caller_id, callee_id FROM nexus_voice_calls WHERE call_id = $1 LIMIT 1`,
+      [callId],
+    );
+    const call = result.rows[0];
     if (!call) return res.json({ success: true });
-    if (call.calleeId !== req.session.userId!) return res.status(403).json({ message: 'Only the invited recipient can decline this call' });
-    pushVoiceSignal(call.callerId, { type: 'declined', callId });
-    callSessions.delete(callId);
+    if (Number(call.callee_id) !== Number(req.session.userId!)) return res.status(403).json({ message: 'Only the invited recipient can decline this call' });
+    await pushVoiceSignal(Number(call.caller_id), { type: 'declined', callId });
+    await pool.query(`DELETE FROM nexus_voice_calls WHERE call_id = $1`, [callId]);
     res.json({ success: true });
   });
 
-  app.post('/api/chat/voice/end', requireAuth, (req, res) => {
+  app.post('/api/chat/voice/end', requireAuth, async (req, res) => {
     const callId = req.body?.callId;
-    const peer = getCallPeer(callId, Number(req.session.userId!));
+    const peer = await getCallPeer(callId, Number(req.session.userId!));
     if (!peer) return res.json({ success: true });
-    pushVoiceSignal(peer.peerId, { type: 'ended', callId });
-    callSessions.delete(String(callId));
+    await pushVoiceSignal(peer.peerId, { type: 'ended', callId });
+    await pool.query(`DELETE FROM nexus_voice_calls WHERE call_id = $1`, [callId]);
     res.json({ success: true });
   });
 
-  app.get('/api/chat/voice/poll', requireAuth, (req, res) => {
+  app.get('/api/chat/voice/poll', requireAuth, async (req, res) => {
     const userId = Number(req.session.userId!);
-    const queue = signals.get(userId) || [];
-    signals.set(userId, []);
-    res.json(queue);
+    const result = await pool.query(
+      `DELETE FROM nexus_voice_signals
+       WHERE id IN (
+         SELECT id FROM nexus_voice_signals
+         WHERE recipient_id = $1 AND created_at > NOW() - INTERVAL '2 minutes'
+         ORDER BY id LIMIT 250
+       )
+       RETURNING payload`,
+      [userId],
+    );
+    res.set('Cache-Control', 'no-store').json(result.rows.map(row => row.payload));
   });
 
   // Optional group-call presence endpoints retained for existing clients.
