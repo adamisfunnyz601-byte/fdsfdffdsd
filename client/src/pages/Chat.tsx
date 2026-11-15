@@ -806,7 +806,6 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
   const staffRoles = ['owner','admin','trial-admin','moderator','trial-moderator','helper','trial-helper'];
   const isStaff = staffRoles.includes(String(currentUserRole || '').toLowerCase().replace(/_/g,'-'));
   const canUseAdminCommand = (_name: string) => ADMIN_COMMANDS_CONFIG.enabled && isStaff;
-  const canGiftDihhro = ["owner","admin"].includes(String(currentUserRole || "").toLowerCase());
   // Treat configured owner IDs and owner-role accounts as immune to automatic chat filtering
   // and to moderation commands. The server MUST enforce the same rule independently.
   const isProtectedOwner = (user: any) => {
@@ -2040,21 +2039,6 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     setInputContent(prev => prev.replace(/(?:^|\s)@([^\s@]*)$/, match => `${match.slice(0, match.lastIndexOf("@"))}@${username} `));
   };
 
-  const createDihhroGift = async () => {
-    try {
-      const rawMonths = window.prompt("Gift Dihtro for how many months? (1–24)", "1");
-      if (rawMonths === null) return;
-      const months = Number(rawMonths);
-      if (!Number.isInteger(months) || months < 1 || months > 24) throw new Error("Choose a duration from 1 to 24 months.");
-      const response = await apiFetch("/api/dihtro/gifts", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ months }), credentials:"include" });
-      const data = await response.json().catch(()=>({}));
-      if (!response.ok) throw new Error(data.message || "Could not create gift link");
-      sendMessage.mutate({ content: `🎁 You got gifted Dihtro for ${months} month${months === 1 ? "" : "s"}! CLAIM YOUR FREE DIHTRO PRESENT 🎁 ${data.claimUrl}`, recipientId: selectedRecipientId ?? undefined, groupId: selectedGroupId ?? undefined } as any);
-      toast({ title:"Dihtro gift link created", description:"A single-use gift link has been sent to this chat." });
-    } catch (error:any) {
-      toast({ title:"Gift link failed", description:error.message || "Could not create gift link", variant:"destructive" });
-    }
-  };
 
   // ============================================================
   // RENDER
@@ -2690,7 +2674,6 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
                 )}
               </div>
 
-              {canGiftDihhro && <button type="button" onClick={createDihhroGift} title="Gift one month of Dihhro" className="h-10 w-10 flex-shrink-0 rounded-lg border border-fuchsia-400/30 bg-fuchsia-500/10 text-fuchsia-200 hover:bg-fuchsia-500/20 transition"><Gift className="mx-auto h-4 w-4"/></button>}
               <div className="relative flex-shrink-0">
                 <button type="button" onClick={() => setShowChatEmotePicker(v => !v)} title="Send an owned emote" className={cn("h-10 px-3 rounded-lg flex items-center justify-center gap-1.5 flex-shrink-0 border transition-all", showChatEmotePicker ? "border-fuchsia-400/50 bg-fuchsia-500/20 text-fuchsia-200" : "border-violet-400/20 bg-violet-500/5 text-violet-200 hover:bg-fuchsia-500/15 hover:border-fuchsia-400/40")}><Sparkles className="h-4 w-4"/><span className="text-[10px] font-bold tracking-wider">EMOTE</span></button>
                 {showChatEmotePicker && <div className="absolute bottom-full right-0 z-[100] mb-2 w-[min(88vw,360px)] rounded-xl border border-violet-400/30 bg-[#10091b]/[.98] p-3 shadow-2xl"><div className="mb-2 flex items-center justify-between"><span className="text-xs font-bold uppercase tracking-widest text-violet-200">Your emotes</span><button type="button" onClick={()=>setShowChatEmotePicker(false)} className="text-violet-200/60 hover:text-white"><X className="h-4 w-4"/></button></div><div className="grid max-h-56 grid-cols-3 gap-2 overflow-y-auto">{callEmoteInventory.filter((item:any)=>item.type==="emote").map((item:any)=><button key={item.id} type="button" onClick={()=>sendChatEmote(item)} className="rounded-lg border border-violet-400/20 bg-violet-500/10 p-2 text-center transition hover:border-fuchsia-400/50 hover:bg-fuchsia-500/15"><img src={item.imageUrl} alt={item.name} className="mx-auto h-14 w-14 object-contain"/><span className="mt-1 block truncate text-[10px] font-semibold text-violet-100">{item.name}</span></button>)}</div>{!callEmoteInventory.some((item:any)=>item.type==="emote") && <p className="py-5 text-center text-xs text-violet-100/60">You don’t own any emotes yet. Buy some in the Shop!</p>}</div>}
