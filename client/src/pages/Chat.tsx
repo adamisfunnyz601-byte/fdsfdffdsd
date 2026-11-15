@@ -2869,20 +2869,14 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
               </button>
 
               <button type="button" onClick={() => { setPollQuestion(""); setPollOptions(["", ""]); setShowPollComposer(true); }} title="Create a poll" aria-label="Create a poll" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-violet-300/15 bg-violet-400/[.06] text-violet-200/75 transition hover:border-violet-300/35 hover:bg-violet-400/15 hover:text-white"><BarChart3 className="h-4 w-4"/></button>
-              <div className="relative min-w-0 flex-1 basis-0">
-                <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-[1] flex h-10 items-center overflow-hidden rounded-xl border border-transparent px-4 pr-12 text-sm leading-5 whitespace-pre text-foreground">
-                  <span className="min-w-0 overflow-hidden text-ellipsis">
-                    {inputContent ? getMentionDraftParts(inputContent, users || []).map((part, index) => part.kind === "text"
-                      ? <span key={index}>{part.text}</span>
-                      : <span key={index} className="mx-px rounded-md border border-violet-300/35 bg-violet-500/25 px-1 py-0.5 font-semibold text-violet-100">{part.text}</span>) : <span className="text-muted-foreground">Message... (type / for commands)</span>}
-                  </span>
-                </div>
+              <div className="relative flex h-10 min-h-10 min-w-0 flex-1 basis-0 items-center">
                 <input
                   value={inputContent}
                   onChange={e => setInputContent(e.target.value)}
                   onKeyDown={handleComposerKeyDown}
-                  placeholder=""
-                  className="relative z-[2] w-full h-10 bg-input/90 border border-border rounded-xl px-4 pr-12 text-sm leading-5 text-transparent caret-white selection:bg-violet-400/30 placeholder:text-transparent shadow-inner transition-all duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-violet-400/30 focus:border-violet-400/60 focus:shadow-[0_0_22px_rgba(139,92,246,0.12)]"
+                  placeholder="Message... (type / for commands)"
+                  aria-label="Write a message"
+                  className="block box-border h-10 min-h-10 w-full min-w-0 rounded-xl border border-border bg-input/90 px-4 text-sm leading-5 text-foreground caret-white placeholder:text-muted-foreground shadow-inner outline-none transition-colors focus:border-violet-400/60 focus:ring-2 focus:ring-violet-400/30"
                 />
                 {showCommandMenu && (
                   <div className="chat-command-menu absolute bottom-12 left-0 right-0 z-50 max-h-[min(64vh,520px)] overflow-hidden rounded-2xl border border-violet-300/25 bg-[#10091b]/[.98] shadow-[0_18px_65px_rgba(0,0,0,.55),0_0_34px_rgba(139,92,246,.17)] backdrop-blur-2xl">
