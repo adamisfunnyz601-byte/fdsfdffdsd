@@ -1814,3 +1814,12 @@ body {
 .nexus-landing-final{position:relative;margin:35px 24px 80px;padding:90px 20px;text-align:center;border:1px solid rgba(164,145,255,.18);border-radius:24px;background:radial-gradient(ellipse at 50% 0%,rgba(124,99,255,.18),transparent 65%),linear-gradient(145deg,#111426,#0b0d17)}.nexus-landing-final p{margin:17px 0 27px;color:rgba(231,231,247,.48);font-size:14px}.nexus-landing-footer{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:25px clamp(20px,6vw,90px);border-top:1px solid rgba(255,255,255,.07);color:rgba(255,255,255,.34);font-size:11px}.nexus-landing-footer>a:last-child{color:rgba(255,255,255,.55);text-decoration:none}.nexus-landing-footer>a:last-child:hover{color:white}
 @media(max-width:680px){.nexus-landing-hero{min-height:690px;padding-top:80px;padding-bottom:75px}.nexus-landing-preview-wrap{margin-top:65px}.nexus-landing-preview-body{min-height:250px}.nexus-landing-preview-content{flex-direction:column;align-items:stretch;padding:24px 17px}.nexus-landing-preview-cards{max-width:none}.nexus-landing-preview-cards div{min-width:0;padding:10px}.nexus-landing-preview-top{padding:0 11px}.nexus-landing-preview-lock{font-size:0}.nexus-landing-section{padding:75px 21px}.nexus-landing-feature-grid{grid-template-columns:1fr}.nexus-landing-feature{min-height:185px}.nexus-landing-step{grid-template-columns:37px 1fr 35px;gap:10px}.nexus-landing-step-icon{width:34px;height:34px}.nexus-landing-final{margin:10px 15px 55px;padding:70px 16px}.nexus-landing-footer{flex-wrap:wrap}.nexus-landing-footer>span{order:3;width:100%}}
 @media(prefers-reduced-motion:reduce){.nexus-landing *{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
+
+
+/* Hide the browser/WebKit's oversized media-play overlay in live call video. */
+.nexus-call-video { pointer-events: none; background: #000; object-fit: cover; -webkit-appearance: none; }
+.nexus-call-video::-webkit-media-controls,
+.nexus-call-video::-webkit-media-controls-enclosure,
+.nexus-call-video::-webkit-media-controls-panel,
+.nexus-call-video::-webkit-media-controls-overlay-play-button,
+.nexus-call-video::-webkit-media-controls-start-playback-button { display: none !important; opacity: 0 !important; -webkit-appearance: none !important; }
