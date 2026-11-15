@@ -1878,6 +1878,33 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
   }, []);
 
 
+  // Play a short repeating ringtone while the incoming-call prompt is visible.
+  useEffect(() => {
+    if (callState !== "incoming") return;
+    let context: AudioContext | null = null;
+    let timer: number | null = null;
+    const ringOnce = () => {
+      try {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        context ||= new AudioContextClass();
+        if (context.state === "suspended") void context.resume();
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        oscillator.type = "sine";
+        oscillator.frequency.setValueAtTime(880, context.currentTime);
+        oscillator.frequency.setValueAtTime(660, context.currentTime + 0.22);
+        gain.gain.setValueAtTime(0.0001, context.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.12, context.currentTime + 0.025);
+        gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.48);
+        oscillator.connect(gain); gain.connect(context.destination);
+        oscillator.start(); oscillator.stop(context.currentTime + 0.5);
+      } catch { /* The visual incoming-call prompt still works if audio is blocked. */ }
+    };
+    ringOnce();
+    timer = window.setInterval(ringOnce, 1100);
+    return () => { if (timer !== null) window.clearInterval(timer); void context?.close().catch(() => {}); };
+  }, [callState]);
+
   // Group-call invitations and peer-to-peer mesh signalling.
   useEffect(()=>{
     let active=true,busy=false;
