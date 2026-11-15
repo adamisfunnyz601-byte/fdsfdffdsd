@@ -1553,6 +1553,31 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     pushLog('CALL_TERMINATED', 'crit');
   };
 
+  // Keep the remote camera visible in a system mini-player while the user switches apps.
+  // Chromium/Electron uses standard Picture-in-Picture; iOS WKWebView/Safari exposes
+  // the WebKit presentation-mode API on supported video elements.
+  const openMiniCall = async () => {
+    const video = remoteVideoRef.current;
+    if (!video || !remoteStreamRef.current?.getVideoTracks().some(track => track.readyState === "live")) {
+      toast({ title: "Camera not available", description: "The other person needs to enable their camera first." });
+      return;
+    }
+    try {
+      const webkitVideo = video as HTMLVideoElement & { webkitSetPresentationMode?: (mode: string) => void; webkitPresentationMode?: string };
+      if (document.pictureInPictureElement === video && document.exitPictureInPicture) {
+        await document.exitPictureInPicture();
+      } else if (document.pictureInPictureEnabled && video.requestPictureInPicture) {
+        await video.requestPictureInPicture();
+      } else if (webkitVideo.webkitSetPresentationMode) {
+        webkitVideo.webkitSetPresentationMode(webkitVideo.webkitPresentationMode === "picture-in-picture" ? "inline" : "picture-in-picture");
+      } else {
+        toast({ title: "Mini call unavailable", description: "This app or device does not expose system picture-in-picture for live WebRTC video." });
+      }
+    } catch (error: any) {
+      toast({ title: "Could not open mini call", description: error?.message || "Picture-in-picture was blocked by the platform." });
+    }
+  };
+
   const toggleMute = () => {
     const nextMuted = !isMuted;
     localStreamRef.current?.getAudioTracks().forEach(track => { track.enabled = !nextMuted; });
@@ -2246,6 +2271,13 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
                   onClick={shareScreen}
                   className={cn("h-11 w-11 rounded-full flex shrink-0 items-center justify-center border-2 transition-all sm:h-14 sm:w-14", isSharingScreen ? "bg-fuchsia-600 border-fuchsia-400 text-black" : "border-white/20 hover:border-fuchsia-400")}
                   title="Share screen"
+                >
+                  <MonitorUp className="w-6 h-6" />
+                </button>
+                <button
+                  onClick={openMiniCall}
+                  className="h-11 w-11 rounded-full flex shrink-0 items-center justify-center border-2 border-white/20 transition-all hover:border-cyan-400 sm:h-14 sm:w-14"
+                  title="Open mini call (picture-in-picture)"
                 >
                   <MonitorUp className="w-6 h-6" />
                 </button>
