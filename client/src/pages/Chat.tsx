@@ -2080,7 +2080,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
         {/* ======================================================
             INCOMING CALL OVERLAY
             ====================================================== */}
-        <AnimatePresence>
+        {createPortal(<AnimatePresence>
           {callState === 'incoming' && incomingCall && (
             <div className="fixed inset-0 z-[900] !visible pointer-events-auto flex items-center justify-center bg-[#08040f]/90 backdrop-blur-xl backdrop-blur-sm">
               <motion.div
@@ -2104,7 +2104,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
               </motion.div>
             </div>
           )}
-        </AnimatePresence>
+        </AnimatePresence>, document.body)}
 
         {/* ======================================================
             ACTIVE CALL OVERLAY — rendered at document root so fixed positioning
