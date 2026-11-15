@@ -70,7 +70,8 @@ export default function Login() {
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       setLocation("/chat");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Passkey sign-in failed.");
+      const message = cause instanceof Error ? cause.message : "Passkey sign-in failed.";
+      setError(message.includes("no passkeys saved") ? message + " Your password sign-in is still available above." : message);
     } finally { setPasskeyBusy(false); }
   };
 
