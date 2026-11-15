@@ -19,6 +19,8 @@ import connectPgSimple from "connect-pg-simple";
 import { createCipheriv, createDecipheriv, createHash, randomBytes, scryptSync, timingSafeEqual } from "crypto";
 import sharp from "sharp";
 import { rateLimit } from "express-rate-limit";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 
 const hashAccountPassword = (password: string) => {
   const salt = randomBytes(16).toString("hex");
@@ -42,6 +44,7 @@ type ProfileImageKind = "avatar" | "banner";
 type ProfileImageVariant = "thumbnail" | "full";
 const PROFILE_IMAGE_DATA_URL = /^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/]+={0,2})$/i;
 const PROFILE_THUMBNAIL_CACHE_LIMIT = 32;
+const CHAT_MEDIA_DIR = process.env.NEXUS_MEDIA_DIR || join(process.cwd(), "data", "chat-media");
 const profileThumbnailCache = new Map<string, Buffer>();
 const profileThumbnailJobs = new Map<string, Promise<Buffer>>();
 
@@ -1262,6 +1265,39 @@ export async function registerRoutes(
     if(recent?.createdAt && Date.now()-recent.createdAt.getTime()<3000) return res.status(429).json({message:"Please wait before submitting another run."});
     await db.insert(blockBlastScores).values({userId,score,monthKey:monthKeyFor()}); res.status(201).json({success:true,score,month:monthKeyFor()});
   });
+  // Download a selected GIPHY GIF and persist its bytes as a real attachment file.
+  // Only the opaque file reference is written to the messages table; GIF bytes stay on disk.
+  app.post("/api/chat/gifs/prepare", requireAuth, async (req, res) => {
+    try {
+      const source = typeof req.body?.url === "string" ? req.body.url : "";
+      let parsed: URL;
+      try { parsed = new URL(source); } catch { return res.status(400).json({ message: "Invalid GIF source." }); }
+      const isGiphyHost = (host: string) => host === "giphy.com" || host.endsWith(".giphy.com");
+      if (parsed.protocol !== "https:" || !isGiphyHost(parsed.hostname.toLowerCase())) {
+        return res.status(400).json({ message: "GIFs must come directly from GIPHY." });
+      }
+      const upstream = await fetch(parsed.toString(), { headers: { Accept: "image/gif" }, signal: AbortSignal.timeout(15000) });
+      if (!upstream.ok || !isGiphyHost(new URL(upstream.url).hostname.toLowerCase())) {
+        return res.status(502).json({ message: "Could not download this GIF." });
+      }
+      const contentType = (upstream.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+      const declaredSize = Number(upstream.headers.get("content-length") || 0);
+      if (contentType !== "image/gif") return res.status(415).json({ message: "The selected item is not a GIF image." });
+      if (declaredSize > 8 * 1024 * 1024) return res.status(413).json({ message: "GIFs must be 8 MB or smaller." });
+      const bytes = Buffer.from(await upstream.arrayBuffer());
+      if (!bytes.length || bytes.length > 8 * 1024 * 1024 || bytes.toString("ascii", 0, 6) !== "GIF87a" && bytes.toString("ascii", 0, 6) !== "GIF89a") {
+        return res.status(415).json({ message: "The downloaded file is not a valid GIF or is too large." });
+      }
+      await mkdir(CHAT_MEDIA_DIR, { recursive: true });
+      const filename = randomBytes(20).toString("hex") + ".gif";
+      await writeFile(join(CHAT_MEDIA_DIR, filename), bytes, { flag: "wx" });
+      return res.status(201).json({ mediaUrl: "file:" + filename, mediaType: "image" });
+    } catch (error: any) {
+      console.error("[chat-gif] Save failed:", error?.message || error);
+      return res.status(502).json({ message: "Could not save this GIF as a chat attachment." });
+    }
+  });
+
   // === CHAT ===
   app.get(api.chat.list.path, requireAuth, async (req, res) => {
     const recipientId = req.query.recipientId ? Number(req.query.recipientId) : undefined;
@@ -1284,7 +1320,8 @@ export async function registerRoutes(
       const mediaUrl = input.mediaUrl;
       const dataMatch = /^data:(image\/(?:png|jpeg|gif|webp|avif)|video\/[a-z0-9.+-]+|audio\/[a-z0-9.+-]+)(?:;[a-z0-9._=-]+)*;base64,([A-Za-z0-9+/]*={0,2})$/i.exec(mediaUrl);
       const isHttpUrl = /^https:\/\//i.test(mediaUrl) && mediaUrl.length <= 2048;
-      if (!dataMatch && !isHttpUrl) return res.status(400).json({ message: "Unsupported attachment format." });
+      const isSavedGif = /^file:[a-f0-9]{40}\.gif$/i.test(mediaUrl);
+      if (!dataMatch && !isHttpUrl && !isSavedGif) return res.status(400).json({ message: "Unsupported attachment format." });
       if (dataMatch && Math.floor(dataMatch[2].length * 3 / 4) > 8 * 1024 * 1024) {
         return res.status(413).json({ message: "Attachments must be 8 MB or smaller." });
       }
@@ -1576,7 +1613,39 @@ export async function registerRoutes(
     if (allowed && await blockedEitherWay(req.session.userId!, message.senderId)) allowed = false;
     if (!allowed) return res.status(403).json({ message: 'Attachment unavailable' });
 
-    res.json({ mediaUrl: message.mediaUrl, mediaType: message.mediaType });
+    res.json({
+      mediaUrl: message.mediaUrl.startsWith("file:")
+        ? `/api/chat/messages/${messageId}/media/file`
+        : message.mediaUrl,
+      mediaType: message.mediaType,
+    });
+  });
+
+  app.get('/api/chat/messages/:id/media/file', requireAuth, async (req, res) => {
+    const messageId = Number(req.params.id);
+    if (!Number.isInteger(messageId)) return res.status(400).json({ message: "Invalid message" });
+    const [message] = await db.select({
+      senderId: messages.senderId, recipientId: messages.recipientId,
+      groupId: messages.groupId, mediaUrl: messages.mediaUrl,
+    }).from(messages).where(eq(messages.id, messageId)).limit(1);
+    if (!message?.mediaUrl || !/^file:[a-f0-9]{40}\\.gif$/i.test(message.mediaUrl)) return res.status(404).json({ message: "Attachment not found" });
+    let allowed = !message.recipientId && !message.groupId;
+    if (message.recipientId) allowed = message.senderId === req.session.userId || message.recipientId === req.session.userId;
+    if (message.groupId) {
+      const [membership] = await db.select({ id: groupChatMembers.id }).from(groupChatMembers)
+        .where(and(eq(groupChatMembers.groupId, message.groupId), eq(groupChatMembers.userId, req.session.userId!))).limit(1);
+      allowed = !!membership;
+    }
+    if (allowed && await blockedEitherWay(req.session.userId!, message.senderId)) allowed = false;
+    if (!allowed) return res.status(403).json({ message: "Attachment unavailable" });
+    try {
+      const filename = message.mediaUrl.slice(5);
+      const bytes = await readFile(join(CHAT_MEDIA_DIR, filename));
+      res.set({ "Content-Type": "image/gif", "Content-Length": String(bytes.length), "Cache-Control": "private, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff" });
+      return res.send(bytes);
+    } catch {
+      return res.status(404).json({ message: "Saved GIF file is missing." });
+    }
   });
 
   app.delete('/api/chat/messages/:id', requireAuth, async (req, res) => {
