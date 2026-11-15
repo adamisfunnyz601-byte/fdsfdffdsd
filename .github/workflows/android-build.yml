@@ -153,6 +153,8 @@ jobs:
               public void start(PluginCall call) {
                   try {
                       Intent intent = new Intent(getContext(), CallAudioService.class);
+                      String name = call.getString("name");
+                      intent.putExtra("call_name", name == null || name.trim().isEmpty() ? "NEXUS call" : name);
                       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) getContext().startForegroundService(intent);
                       else getContext().startService(intent);
                       call.resolve();
@@ -207,9 +209,11 @@ jobs:
                   Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                       ? new Notification.Builder(this, CHANNEL_ID)
                       : new Notification.Builder(this);
+                  String callName = intent == null ? "NEXUS call" : intent.getStringExtra("call_name");
+                  if (callName == null || callName.trim().isEmpty()) callName = "NEXUS call";
                   builder.setSmallIcon(android.R.drawable.sym_call_incoming)
-                      .setContentTitle("NEXUS call in progress")
-                      .setContentText("Your call stays connected while you use other apps.")
+                      .setContentTitle("NEXUS · " + callName)
+                      .setContentText("Call in progress · Tap to return to NEXUS")
                       .setCategory(Notification.CATEGORY_CALL)
                       .setOngoing(true)
                       .setOnlyAlertOnce(true);
