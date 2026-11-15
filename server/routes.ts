@@ -83,7 +83,7 @@ function profileImageUrl(
   const match = PROFILE_IMAGE_DATA_URL.exec(value);
   if (!match) return value;
   const version = createHash("sha256").update(value).digest("hex").slice(0, 24);
-  return `${(process.env.PUBLIC_API_URL || process.env.APP_ORIGIN || "https://nexuss.devs.li").replace(/[/]+$/, "")}/api/profile-images/${userId}/${kind}/${variant}/${version}`;
+  return `${(process.env.APP_ORIGIN || process.env.PUBLIC_API_URL || "https://nexuss.devs.li").replace(/[/]+$/, "")}/api/profile-images/${userId}/${kind}/${variant}/${version}`;
 }
 
 function isProfileImageProxyUrl(value: unknown, userId: number, kind: ProfileImageKind): boolean {
