@@ -2,7 +2,9 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
 import { registerNotificationWorker } from "./lib/platform-notifications";
+import { installApiFetchBridge } from "./lib/api-url";
 
+installApiFetchBridge();
 void registerNotificationWorker();
 
 // Keep the app aligned with the real visible area when the iOS/Android

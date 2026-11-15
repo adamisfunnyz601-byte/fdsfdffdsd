@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { Globe, MessageSquare, History, ShieldAlert, LogOut, Menu, X, Cpu, Settings, Blocks, UserRound, ShoppingBag, Gamepad2, Users, ScrollText, Server, Sparkles, Command } from "lucide-react";
+import { Globe, MessageSquare, History, ShieldAlert, LogOut, Menu, X, Settings, Blocks, UserRound, ShoppingBag, Gamepad2, Users, ScrollText, Server, Sparkles, Command } from "lucide-react";
 import { useEffect, useState } from "react";
 import { applyNexusAppearance, readNexusAppearance } from "@/lib/appearance";
 import { motion, AnimatePresence } from "framer-motion";
@@ -44,7 +44,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <button className="nexus-brand-mark" onClick={() => setIsMobileMenuOpen(v => !v)} aria-label="Toggle navigation">
           {isMobileMenuOpen ? <X size={19}/> : <Menu size={19}/>}
         </button>
-        <div className="flex items-center gap-2"><span className="nexus-brand-orb"><Cpu size={17}/></span><span className="font-black tracking-[.18em] text-sm">NEXUS</span></div>
+        <div className="flex items-center gap-2"><span className="nexus-brand-orb"><img src="/nexus-icon.svg" alt="NEXUS" className="h-5 w-5 object-contain"/></span><span className="font-black tracking-[.18em] text-sm">NEXUS</span></div>
         <span className="nexus-live-pill"><i/> LIVE</span>
       </header>
 
@@ -55,7 +55,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         className={cn("nexus-sidebar fixed inset-y-0 left-0 z-[60] flex w-[278px] flex-col md:relative md:translate-x-0", isMobileMenuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0")}
       >
         <div className="nexus-brand">
-          <div className="nexus-brand-orb"><Cpu size={20}/><span/></div>
+          <div className="nexus-brand-orb"><img src="/nexus-icon.svg" alt="NEXUS" className="h-6 w-6 object-contain"/><span/></div>
           <div className="min-w-0"><div className="nexus-brand-name">NEXUS<span>OS</span></div><div className="nexus-brand-sub">YOUR DIGITAL UNIVERSE</div></div>
           <div className="ml-auto"><span className="nexus-version">2.6</span></div>
         </div>
