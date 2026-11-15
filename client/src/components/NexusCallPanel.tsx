@@ -71,6 +71,24 @@ export function NexusCallPanel({targetId,targetName}:Props) {
     if(video){video.srcObject=remoteStream;void video.play().catch(()=>{});}
   },[remoteStream,call]);
 
+  // Audible website ringtone while the incoming-call card is waiting for an answer.
+  useEffect(()=>{
+    if(!incoming)return;
+    let context:AudioContext|undefined;
+    const ring=()=>{
+      try{
+        context ||= new AudioContext();
+        if(context.state==="suspended")void context.resume();
+        const oscillator=context.createOscillator(),gain=context.createGain();
+        oscillator.type="sine";oscillator.frequency.setValueAtTime(880,context.currentTime);oscillator.frequency.setValueAtTime(660,context.currentTime+.22);
+        gain.gain.setValueAtTime(.0001,context.currentTime);gain.gain.exponentialRampToValueAtTime(.1,context.currentTime+.025);gain.gain.exponentialRampToValueAtTime(.0001,context.currentTime+.48);
+        oscillator.connect(gain);gain.connect(context.destination);oscillator.start();oscillator.stop(context.currentTime+.5);
+      }catch{}
+    };
+    ring();const timer=window.setInterval(ring,1100);
+    return()=>{window.clearInterval(timer);void context?.close();};
+  },[incoming?.callId]);
+
   const createPeer=useCallback(async(active:ActiveCall,stream:MediaStream)=>{
     const pc=new RTCPeerConnection(await getRtcConfiguration());
     pcRef.current=pc;
