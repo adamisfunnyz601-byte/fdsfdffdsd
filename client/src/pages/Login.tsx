@@ -77,6 +77,7 @@ export default function Login() {
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
+    if (nativeApp && !permissionsReady) { setError("Allow notifications and call permissions before signing in."); return; }
     const cleanUsername = username.trim();
     if (mode === "login") {
       login({ username: cleanUsername, serialKey: password });
