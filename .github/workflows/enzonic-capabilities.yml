@@ -1,0 +1,38 @@
+name: Inspect Enzonic integration capabilities
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: List safe Enzonic tool metadata
+        env:
+          ENZONIC_CLOUD_TOKEN: ${{ secrets.ENZONIC_CLOUD_TOKEN }}
+        run: |
+          node --input-type=module <<'NODE'
+          const endpoint = "https://panel.enzonic.com/api/cloud/mcp";
+          const token = process.env.ENZONIC_CLOUD_TOKEN;
+          if (!token) throw new Error("Missing ENZONIC_CLOUD_TOKEN.");
+          const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json, text/event-stream", "MCP-Protocol-Version": "2025-03-26" };
+          let session;
+          async function rpc(payload) {
+            const h = { ...headers, ...(session ? { "Mcp-Session-Id": session } : {}) };
+            const r = await fetch(endpoint, { method: "POST", headers: h, body: JSON.stringify(payload) });
+            const b = await r.text();
+            if (!r.ok) throw new Error(`Enzonic HTTP ${r.status}`);
+            session = r.headers.get("mcp-session-id") || session;
+            if (!b.trim()) return {};
+            try { return JSON.parse(b); } catch { const line = b.split("\n").find(x => x.startsWith("data:")); return line ? JSON.parse(line.slice(5).trim()) : {}; }
+          }
+          await rpc({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "nexus-capability-check", version: "1.0.0" } } });
+          await rpc({ jsonrpc: "2.0", method: "notifications/initialized" });
+          const listed = await rpc({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
+          if (listed.error) throw new Error(listed.error.message);
+          const tools = listed.result?.tools || [];
+          console.log(JSON.stringify(tools.map(t => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })), null, 2));
+          NODE
