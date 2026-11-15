@@ -30,6 +30,8 @@ export default function ModerationPanel() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [targetId, setTargetId] = useState("");
+  const [selectedRole, setSelectedRole] = useState("user");
+  const [roleBusy, setRoleBusy] = useState(false);
   const [duration, setDuration] = useState("1h");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -121,6 +123,32 @@ export default function ModerationPanel() {
   }), [users, search]);
   const target = users.find((u:any) => String(u.id) === targetId);
   const protectedTarget = target && String(target.role).toLowerCase() === "owner";
+  const roleRank: Record<string, number> = { owner: 100, admin: 90, "trial-admin": 80, moderator: 70, "trial-moderator": 60, helper: 40, "trial-helper": 30, user: 0 };
+  const assignableRoles = Object.keys(roleRank).filter(candidate =>
+    role === "owner" ? candidate !== "owner" || true : roleRank[candidate] < (roleRank[role] ?? -1)
+  );
+
+  const assignRole = async () => {
+    if (!target) { toast({ title: "Choose a member first", variant: "destructive" }); return; }
+    if (protectedTarget || String(target.id) === String(user?.id)) {
+      toast({ title: "This account is protected", description: "You cannot change this member's role.", variant: "destructive" });
+      return;
+    }
+    setRoleBusy(true);
+    try {
+      const response = await fetch("/api/admin/users/" + target.id + "/role", {
+        method: "PATCH", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: selectedRole }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || "Could not assign role.");
+      toast({ title: "Role updated", description: "@" + target.username + " is now " + selectedRole.replace(/-/g, " ") + "." });
+      await refetch();
+    } catch (error: any) {
+      toast({ title: "Role update failed", description: error.message || "Try again.", variant: "destructive" });
+    } finally { setRoleBusy(false); }
+  };
 
   const grantDihCoins = async () => {
     if (!target) { toast({ title: "Choose a member first", variant: "destructive" }); return; }
@@ -205,13 +233,21 @@ export default function ModerationPanel() {
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
         <section className="rounded-xl border border-border bg-card/70 p-4">
           <div className="relative mb-3"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search members by username or ID…" className="w-full rounded-lg border border-border bg-background py-2.5 pl-9 pr-3 text-sm outline-none focus:border-primary"/></div>
-          {isLoading ? <p className="p-5 text-sm text-muted-foreground">Loading members…</p> : <div className="max-h-[620px] space-y-1 overflow-y-auto">{visible.map((member:any)=><button key={member.id} onClick={()=>setTargetId(String(member.id))} className={"flex w-full items-center justify-between rounded-lg border px-3 py-3 text-left transition "+(targetId===String(member.id)?"border-primary/50 bg-primary/10":"border-transparent hover:border-border hover:bg-secondary/50")}><span className="min-w-0"><span className="block truncate text-sm font-semibold">{member.displayName || member.nickname || member.username}</span><span className="block text-xs text-muted-foreground">@{member.username} · #{member.id}</span></span><span className="ml-2 shrink-0 text-[10px] font-bold uppercase text-muted-foreground">{String(member.role).replace(/-/g," ")}</span></button>)}</div>}
+          {isLoading ? <p className="p-5 text-sm text-muted-foreground">Loading members…</p> : <div className="max-h-[620px] space-y-1 overflow-y-auto">{visible.map((member:any)=><button key={member.id} onClick={()=>{setTargetId(String(member.id));setSelectedRole(String(member.role || "user").toLowerCase().replace(/_/g,"-"));}} className={"flex w-full items-center justify-between rounded-lg border px-3 py-3 text-left transition "+(targetId===String(member.id)?"border-primary/50 bg-primary/10":"border-transparent hover:border-border hover:bg-secondary/50")}><span className="min-w-0"><span className="block truncate text-sm font-semibold">{member.displayName || member.nickname || member.username}</span><span className="block text-xs text-muted-foreground">@{member.username} · #{member.id}</span></span><span className="ml-2 shrink-0 text-[10px] font-bold uppercase text-muted-foreground">{String(member.role).replace(/-/g," ")}</span></button>)}</div>}
         </section>
         <section className="space-y-4 rounded-xl border border-border bg-card/70 p-4">
           <div><h2 className="font-bold">Member actions</h2><p className="mt-1 text-xs text-muted-foreground">{target ? "Selected: @"+target.username : "Select a member from the list."}</p></div>
           <label className="block text-xs font-medium text-muted-foreground">Duration (for timed actions)<input value={duration} onChange={e=>setDuration(e.target.value)} placeholder="1h, 30m, 2d…" className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary"/></label>
           <label className="block text-xs font-medium text-muted-foreground">Reason (optional)<textarea value={reason} onChange={e=>setReason(e.target.value)} rows={3} maxLength={240} placeholder="Reason for this action…" className="mt-1 w-full resize-none rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary"/></label>
-          {protectedTarget && <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-300">Owner accounts are protected from moderation.</p>}
+          {protectedTarget && <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-300">Owner accounts are protected from moderation and role changes.</p>}
+          {target && <div className="rounded-lg border border-primary/25 bg-primary/5 p-3">
+            <h3 className="text-sm font-bold">Assign staff role</h3>
+            <p className="mt-1 text-[11px] text-muted-foreground">{role === "owner" ? "Owners can grant owner and any lower role." : "You can assign roles below your own rank only."}</p>
+            <select value={selectedRole} onChange={e=>setSelectedRole(e.target.value)} disabled={roleBusy || !!protectedTarget || String(target.id) === String(user?.id)} className="mt-3 w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground disabled:opacity-50">
+              {assignableRoles.map(option=><option key={option} value={option}>{option.replace(/-/g," ").replace(/\\b\\w/g, letter=>letter.toUpperCase())}</option>)}
+            </select>
+            <button disabled={roleBusy || !target || !!protectedTarget || String(target.id) === String(user?.id) || selectedRole === String(target.role).toLowerCase().replace(/_/g,"-")} onClick={assignRole} className="mt-2 w-full rounded-lg bg-primary px-3 py-2.5 text-sm font-bold text-primary-foreground disabled:opacity-40">{roleBusy ? "Saving role…" : "Save role"}</button>
+          </div>}
           <div className="grid grid-cols-2 gap-2">{actions.map(a=><button key={a.id} disabled={busy || !target || !!protectedTarget} onClick={()=>runAction(a.id, "timed" in a && Boolean(a.timed))} className="flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-2 py-2.5 text-xs font-semibold transition hover:border-primary/50 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-40"><a.icon className="h-4 w-4"/>{a.label}</button>)}</div>
           <div className="border-t border-border pt-4">
             <h3 className="text-sm font-bold">All moderation commands</h3>
