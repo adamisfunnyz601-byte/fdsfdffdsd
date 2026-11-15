@@ -764,6 +764,12 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
   const soundFileInputRef = useRef<HTMLInputElement>(null);
   const callIdRef = useRef<string | null>(null);
   const callStateRef = useRef<CallState>('idle');
+  // Keep the polling loop's ref in sync immediately; a React effect can lag
+  // behind a fast incoming/accepted signal and incorrectly discard it.
+  const updateCallState = (next: CallState) => {
+    callStateRef.current = next;
+    setCallState(next);
+  };
   const autoDeclineTimerRef = useRef<NodeJS.Timeout | null>(null);
   const hasInitializedSfxRef = useRef(false);
 
@@ -1331,7 +1337,6 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
   };
 
   // Keep callStateRef in sync so the unified poll closure has fresh state
-  useEffect(() => { callStateRef.current = callState; }, [callState]);
 
   // ============================================================
   // CALLING SYSTEM — WebRTC peer-to-peer audio/video
@@ -1495,7 +1500,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     callPeerIdRef.current = targetId;
     callInitiatorRef.current = true;
     setCallTargetName(targetName);
-    setCallState('requesting');
+    updateCallState('requesting');
     setIsVideoOn(withVideo);
     pushLog(`CALL_REQUESTING: ${targetName}`, 'warn');
     try {
@@ -1506,7 +1511,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
       toast({ title: 'CALL_FAILED', description: error?.message || 'Could not start the call.', variant: 'destructive' });
       callIdRef.current = null;
       callPeerIdRef.current = null;
-      setCallState('idle');
+      updateCallState('idle');
     }
   };
 
@@ -1520,7 +1525,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     setIsVideoOn(Boolean(call.withVideo));
     if (autoDeclineTimerRef.current) { clearTimeout(autoDeclineTimerRef.current); autoDeclineTimerRef.current = null; }
     setIncomingCall(null);
-    setCallState('connected');
+    updateCallState('connected');
     try {
       await postVoiceSignal('/api/chat/voice/accept', { callId: call.callId });
       pushLog(`CALL_ACCEPTED: ${call.fromName}`, 'info');
@@ -1540,7 +1545,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     callIdRef.current = null;
     stopAllCallMedia();
     stopNativeCallAudio().catch(() => {});
-    setCallState('idle');
+    updateCallState('idle');
     setIncomingCall(null);
     setCallTargetName('');
     pushLog('CALL_TERMINATED', 'crit');
@@ -1796,7 +1801,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
             callPeerIdRef.current = signal.fromId;
             callInitiatorRef.current = false;
             setIncomingCall({ fromId: signal.fromId, fromName: signal.fromName, callId: signal.callId, withVideo: Boolean(signal.withVideo) });
-            setCallState('incoming');
+            updateCallState('incoming');
             pushLog(`INCOMING_CALL: ${signal.fromName}`, 'warn');
             if (autoDeclineTimerRef.current) clearTimeout(autoDeclineTimerRef.current);
             autoDeclineTimerRef.current = setTimeout(() => {
@@ -1805,7 +1810,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
                 setIncomingCall(null);
                 callIdRef.current = null;
                 callPeerIdRef.current = null;
-                setCallState('idle');
+                updateCallState('idle');
                 toast({ title: 'Missed call', description: 'The incoming call timed out.' });
               }
             }, 30000);
@@ -1820,7 +1825,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
             // Previously we only changed the UI state here, so neither peer ever
             // received an SDP offer and the call sat on the two empty video tiles.
             try {
-              setCallState('connected');
+              updateCallState('connected');
               const peer = await createPeerConnection();
               const offer = await peer.createOffer();
               await peer.setLocalDescription(offer);
