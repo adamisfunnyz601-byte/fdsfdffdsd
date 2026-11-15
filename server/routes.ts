@@ -434,7 +434,8 @@ export async function registerRoutes(
       "INSERT INTO dihtro_gifts (code, created_by, months) VALUES ($1, $2, $3) RETURNING code, months, created_at",
       [code, Number(req.session.userId!), months],
     );
-    return res.status(201).json({ ...result.rows[0], claimPath: `/dihtro/claim/${code}`, claimUrl: `https://nexus-api-rcmi.onrender.com/dihtro/claim/${code}` });
+    const appOrigin = (process.env.APP_ORIGIN || "https://nexuss.devs.li").replace(/\\/+$/, "");
+    return res.status(201).json({ ...result.rows[0], claimPath: `/dihtro/claim/${code}`, claimUrl: `${appOrigin}/dihtro/claim/${code}` });
   });
 
   app.get("/api/dihtro/gifts/:code", requireAuth, async (req, res) => {
