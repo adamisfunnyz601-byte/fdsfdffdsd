@@ -1158,7 +1158,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     const imageUrl = typeof gif?.url === "string" ? gif.url : "";
     let parsedUrl: URL | null = null;
     try { parsedUrl = new URL(imageUrl); } catch {}
-    if (!parsedUrl || parsedUrl.protocol !== "https:" || !/(^|\\.)giphy\\.com$/i.test(parsedUrl.hostname) || !parsedUrl.pathname.toLowerCase().endsWith(".gif")) {
+    if (!parsedUrl || parsedUrl.protocol !== "https:" || !/(^|\.)giphy\.com$/i.test(parsedUrl.hostname) || !parsedUrl.pathname.toLowerCase().endsWith(".gif")) {
       toast({ title: "GIF unavailable", description: "This GIF doesn't have a valid direct image URL.", variant: "destructive" });
       return;
     }
