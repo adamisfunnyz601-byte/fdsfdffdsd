@@ -1396,7 +1396,11 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
       }
       // getUserMedia has now granted microphone access; promote the live call
       // to an Android microphone foreground service before the user backgrounds the app.
-      await startNativeCallAudio(callTargetName || "NEXUS call");
+      // Native call indicators are best-effort: a plugin/OS notification failure
+      // must never prevent the actual WebRTC call from connecting.
+      await startNativeCallAudio(callTargetName || "NEXUS call").catch(error =>
+        pushLog(`NATIVE_CALL_INDICATOR_FAILED: ${error?.message || error}`, 'warn')
+      );
       localStreamRef.current = stream;
       setVisualizerStream(stream);
       if (localVideoRef.current) {
