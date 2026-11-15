@@ -56,7 +56,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="nexus-shell min-h-screen flex flex-col md:flex-row">
-      <header className="nexus-mobilebar flex md:hidden">
+      <header className="nexus-mobilebar flex lg:hidden">
         <button className="nexus-brand-mark" onClick={() => setIsMobileMenuOpen(v => !v)} aria-label="Toggle navigation">
           {isMobileMenuOpen ? <X size={19}/> : <Menu size={19}/>}
         </button>
@@ -68,7 +68,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {isMobileMenuOpen && <motion.button aria-label="Close navigation" className="nexus-mobile-scrim md:hidden" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} onClick={closeMenu}/>}
       </AnimatePresence>
       <aside
-        className={cn("nexus-sidebar fixed inset-y-0 left-0 z-[60] flex w-[278px] flex-col md:relative md:translate-x-0", isMobileMenuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0")}
+        className={cn("nexus-sidebar fixed inset-y-0 left-0 z-[60] flex w-[278px] flex-col lg:relative lg:translate-x-0", isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0")}
       >
         <div className="nexus-brand">
           <div className="nexus-brand-orb"><img src="/nexus-icon.svg" alt="NEXUS" className="h-6 w-6 object-contain"/><span/></div>
@@ -121,7 +121,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {canGiftDihtro && <button type="button" onClick={() => void giftDihtro()} title="Gift Dihtro" aria-label="Gift Dihtro" className="fixed bottom-5 right-5 z-[90] flex h-14 w-14 items-center justify-center rounded-full border border-fuchsia-300/40 bg-gradient-to-br from-fuchsia-500 to-violet-600 text-white shadow-[0_8px_32px_rgba(168,85,247,.45)] transition hover:scale-105"><Gift size={23}/></button>}\n      <main className="nexus-main flex min-w-0 flex-1 flex-col">
-        <header className="nexus-topbar hidden h-[58px] shrink-0 items-center justify-between px-7 md:flex">
+        <header className="nexus-topbar hidden h-[58px] shrink-0 items-center justify-between px-7 lg:flex">
           <div className="flex items-center gap-3"><span className="nexus-breadcrumb-dot"/><span className="text-[11px] font-semibold uppercase tracking-[.16em] text-white/45">Nexus Network</span><span className="text-white/15">/</span><span className="text-[11px] font-semibold text-white/85">{navItems.find(item => item.href === location)?.label || (location === "/profile" ? "My Profile" : "Workspace")}</span></div>
           <div className="flex items-center gap-4"><span className="nexus-encryption"><span/> AES-256 SESSION</span><span className="h-4 w-px bg-white/10"/><span className="inline-flex items-center gap-2 text-[10px] tracking-widest text-white/30"><img src="/nexus-icon.svg" alt="NEXUS" className="h-4 w-4 object-contain"/> NEXUS / 02.06</span></div>
         </header>
