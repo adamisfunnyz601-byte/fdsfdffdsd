@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Globe, MessageSquare, History, ShieldAlert, LogOut, Menu, X, Settings, Blocks, UserRound, ShoppingBag, Gamepad2, Users, ScrollText, Server, Sparkles, Command } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Gift } from "lucide-react";
 import { applyNexusAppearance, readNexusAppearance } from "@/lib/appearance";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
     navItems.push({ href: "/admin", label: "Admin Console", icon: Command, section: "Staff" });
   const sections = Array.from(new Set(navItems.map(item => item.section)));
   const closeMenu = () => setIsMobileMenuOpen(false);
+  const canGiftDihtro = ["owner", "admin"].includes(role);
+  const giftDihtro = async () => {
+    const raw = window.prompt("How many months of Dihtro should this gift contain? (1–24)", "1");
+    if (raw === null) return;
+    const months = Number(raw);
+    if (!Number.isInteger(months) || months < 1 || months > 24) { window.alert("Choose a duration from 1 to 24 months."); return; }
+    try {
+      const response = await fetch("/api/dihtro/gifts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ months }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || "Could not create gift.");
+      await navigator.clipboard?.writeText(data.claimUrl);
+      window.alert("CLAIM YOUR FREE DIHTRO PRESENT 🎁\\n\\n" + data.claimUrl + "\\n\\nThe claim link has been copied.");
+    } catch (error) { window.alert(error instanceof Error ? error.message : "Could not create gift."); }
+  };
   useEffect(() => {
     const apply = () => applyNexusAppearance(readNexusAppearance());
     apply();
@@ -104,7 +119,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="nexus-main flex min-w-0 flex-1 flex-col">
+      {canGiftDihtro && <button type="button" onClick={() => void giftDihtro()} title="Gift Dihtro" aria-label="Gift Dihtro" className="fixed bottom-5 right-5 z-[90] flex h-14 w-14 items-center justify-center rounded-full border border-fuchsia-300/40 bg-gradient-to-br from-fuchsia-500 to-violet-600 text-white shadow-[0_8px_32px_rgba(168,85,247,.45)] transition hover:scale-105"><Gift size={23}/></button>}\n      <main className="nexus-main flex min-w-0 flex-1 flex-col">
         <header className="nexus-topbar hidden h-[58px] shrink-0 items-center justify-between px-7 md:flex">
           <div className="flex items-center gap-3"><span className="nexus-breadcrumb-dot"/><span className="text-[11px] font-semibold uppercase tracking-[.16em] text-white/45">Nexus Network</span><span className="text-white/15">/</span><span className="text-[11px] font-semibold text-white/85">{navItems.find(item => item.href === location)?.label || (location === "/profile" ? "My Profile" : "Workspace")}</span></div>
           <div className="flex items-center gap-4"><span className="nexus-encryption"><span/> AES-256 SESSION</span><span className="h-4 w-px bg-white/10"/><span className="text-[10px] tracking-widest text-white/30">NEXUS / 02.06</span></div>

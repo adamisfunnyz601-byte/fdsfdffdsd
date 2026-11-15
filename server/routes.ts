@@ -1,6 +1,6 @@
 
 import { db, pool } from "./db";
-import { users, accessKeys, searchHistory, messages, groupChats, groupChatMembers, customEmojis, friendRequests, blocks, moderationLogs, blockBlastScores, communityServers, communityServerMembers, communityServerCategories, communityServerChannels, communityServerMessages, chatMessageReactions, chatPolls, chatPollOptions, chatPollVotes, passkeyCredentials } from "@shared/schema";
+import { users, accessKeys, searchHistory, messages, groupChats, groupChatMembers, customEmojis, friendRequests, blocks, moderationLogs, blockBlastScores, dihhroAwards, communityServers, communityServerMembers, communityServerCategories, communityServerChannels, communityServerMessages, chatMessageReactions, chatPolls, chatPollOptions, chatPollVotes, passkeyCredentials } from "@shared/schema";
 import { eq, desc, and, or, gt, sql, inArray } from "drizzle-orm";
 import type { Express, Request } from "express";
 import type { Server } from "http";
@@ -201,6 +201,23 @@ async function ensureCommunityServerTables() {
       transports JSONB NOT NULL DEFAULT '[]'::jsonb,
       created_at TIMESTAMP DEFAULT NOW()
     )`,
+    `CREATE TABLE IF NOT EXISTS dihtro_gifts (
+      id SERIAL PRIMARY KEY,
+      code TEXT NOT NULL UNIQUE,
+      created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      months INTEGER NOT NULL CHECK (months BETWEEN 1 AND 24),
+      claimed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      claimed_at TIMESTAMP,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS dihhro_awards (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      month_key TEXT NOT NULL UNIQUE,
+      score INTEGER NOT NULL,
+      expires_at TIMESTAMP NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`,
     `CREATE TABLE IF NOT EXISTS community_server_messages (
       id SERIAL PRIMARY KEY,
       server_id INTEGER NOT NULL REFERENCES community_servers(id) ON DELETE CASCADE,
@@ -301,6 +318,57 @@ export async function registerRoutes(
       bannerUrl: profileImageUrl(safe.id, "banner", safe.bannerUrl),
     };
   };
+
+  // Dihtro subscription status and single-use gift links.
+  app.get("/api/dihtro/me", requireAuth, async (req, res) => {
+    const account = await storage.getUser(Number(req.session.userId!));
+    if (!account) return res.status(404).json({ message: "Account not found." });
+    const until = account.dihhroUntil ? new Date(account.dihhroUntil) : null;
+    const active = ["owner", "admin"].includes(String(account.role).toLowerCase()) || Boolean(until && until.getTime() > Date.now());
+    return res.json({ active, until: until?.toISOString() || null, isStaff: ["owner", "admin"].includes(String(account.role).toLowerCase()) });
+  });
+
+  app.post("/api/dihtro/gifts", requireAdmin, async (req, res) => {
+    const months = Number(req.body?.months);
+    if (!Number.isInteger(months) || months < 1 || months > 24) return res.status(400).json({ message: "Gift duration must be between 1 and 24 months." });
+    const code = randomBytes(24).toString("base64url");
+    const result = await pool.query(
+      "INSERT INTO dihtro_gifts (code, created_by, months) VALUES ($1, $2, $3) RETURNING code, months, created_at",
+      [code, Number(req.session.userId!), months],
+    );
+    return res.status(201).json({ ...result.rows[0], claimPath: `/dihtro/claim/${code}`, claimUrl: `https://nexus-api-rcmi.onrender.com/dihtro/claim/${code}` });
+  });
+
+  app.get("/api/dihtro/gifts/:code", requireAuth, async (req, res) => {
+    const result = await pool.query(
+      "SELECT code, months, claimed_at, created_at FROM dihtro_gifts WHERE code = $1 LIMIT 1",
+      [String(req.params.code)],
+    );
+    if (!result.rows.length) return res.status(404).json({ message: "This Dihtro gift link is invalid." });
+    const gift = result.rows[0];
+    return res.json({ months: gift.months, claimed: Boolean(gift.claimed_at), createdAt: gift.created_at });
+  });
+
+  app.post("/api/dihtro/gifts/:code/claim", requireAuth, async (req, res) => {
+    const code = String(req.params.code || "");
+    const claimed = await pool.query(
+      "UPDATE dihtro_gifts SET claimed_by = $1, claimed_at = NOW() WHERE code = $2 AND claimed_at IS NULL RETURNING months",
+      [Number(req.session.userId!), code],
+    );
+    if (!claimed.rows.length) {
+      const exists = await pool.query("SELECT claimed_at FROM dihtro_gifts WHERE code = $1 LIMIT 1", [code]);
+      if (!exists.rows.length) return res.status(404).json({ message: "This Dihtro gift link is invalid." });
+      return res.status(409).json({ message: "This Dihtro gift has already been redeemed." });
+    }
+    const account = await storage.getUser(Number(req.session.userId!));
+    const now = new Date();
+    const currentExpiry = account?.dihhroUntil ? new Date(account.dihhroUntil) : now;
+    const start = currentExpiry > now ? currentExpiry : now;
+    const until = new Date(start);
+    until.setUTCMonth(until.getUTCMonth() + Number(claimed.rows[0].months));
+    await db.update(users).set({ dihhroUntil: until }).where(eq(users.id, Number(req.session.userId!)));
+    return res.json({ success: true, months: Number(claimed.rows[0].months), until: until.toISOString() });
+  });
 
   // Passkey registration and authentication use WebAuthn challenges stored in the session.
   const getWebAuthnSettings = (req: Request) => {
@@ -940,11 +1008,35 @@ export async function registerRoutes(
   // Block Blast monthly leaderboard.
   const monthKeyFor = (d = new Date()) => d.getUTCFullYear() + "-" + String(d.getUTCMonth()+1).padStart(2,"0");
   app.get("/api/blockblast/leaderboard", requireAuth, async (req,res) => {
+    await awardPreviousMonthChampion();
     const month = typeof req.query.month === "string" && /^\d{4}-\d{2}$/.test(req.query.month) ? req.query.month : monthKeyFor();
     const rows = await db.select({userId:blockBlastScores.userId,score:blockBlastScores.score,username:users.username,displayName:users.displayName}).from(blockBlastScores).innerJoin(users,eq(users.id,blockBlastScores.userId)).where(eq(blockBlastScores.monthKey,month)).orderBy(desc(blockBlastScores.score)).limit(100);
     const best = new Map<number,typeof rows[number]>(); rows.forEach(row=>{const old=best.get(row.userId);if(!old||row.score>old.score)best.set(row.userId,row);});
     res.json({month,entries:Array.from(best.values()).sort((a,b)=>b.score-a.score).map((row,index)=>({...row,rank:index+1}))});
   });
+  // When a new month starts, award the previous month's Block Blast champion once.
+  const awardPreviousMonthChampion = async () => {
+    const current = new Date();
+    const previous = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() - 1, 1));
+    const previousMonth = monthKeyFor(previous);
+    const [champion] = await db.select({ userId: blockBlastScores.userId, score: blockBlastScores.score })
+      .from(blockBlastScores).where(eq(blockBlastScores.monthKey, previousMonth))
+      .orderBy(desc(blockBlastScores.score), desc(blockBlastScores.createdAt)).limit(1);
+    if (!champion) return;
+    const expiry = new Date();
+    expiry.setUTCMonth(expiry.getUTCMonth() + 1);
+    const inserted = await db.insert(dihhroAwards).values({
+      userId: champion.userId, monthKey: previousMonth, score: champion.score, expiresAt: expiry,
+    }).onConflictDoNothing().returning({ id: dihhroAwards.id });
+    if (!inserted.length) return;
+    const [winner] = await db.select({ coins: users.coins, dihhroUntil: users.dihhroUntil }).from(users).where(eq(users.id, champion.userId)).limit(1);
+    const balance = Math.max(0, Number(winner?.coins || 0));
+    const now = new Date();
+    const oldExpiry = winner?.dihhroUntil && new Date(winner.dihhroUntil) > now ? new Date(winner.dihhroUntil) : now;
+    const until = new Date(oldExpiry); until.setUTCMonth(until.getUTCMonth() + 1);
+    await db.update(users).set({ coins: String(Math.min(2147483647, balance + 500)), dihhroUntil: until }).where(eq(users.id, champion.userId));
+  };
+
   const ensureBlockBlastChatRoom = async (userId:number) => {
     const inviteCode = "blockblast-public-room";
     let [room] = await db.select().from(groupChats).where(eq(groupChats.inviteCode,inviteCode)).limit(1);
@@ -1369,6 +1461,8 @@ export async function registerRoutes(
         if (customFont && rawFont.length > 400000) return res.status(413).json({ message: "Uploaded fonts must be 256 KB or smaller." });
         if (!fonts.includes(rawFont) && !customText && !customFont) return res.status(400).json({message:"Unsupported font or text gradient."});
         const current = await storage.getUser(req.session.userId!);
+        const hasDihtro = ["owner", "admin"].includes(String(current?.role || "").toLowerCase()) || Boolean(current?.dihhroUntil && new Date(current.dihhroUntil) > new Date());
+        if ((rawFont === "comic-sans" || rawFont.startsWith("custom-")) && !hasDihtro) return res.status(403).json({ message: "This font and custom text styling require active Dihtro." });
         const fontName = customText ? rawFont.split("|")[1] : rawFont;
 
         update.usernameFont = rawFont || null;
@@ -1388,6 +1482,8 @@ export async function registerRoutes(
         );
         if ((!gradients.includes(selectedGradient) && !customProfile) || !validStyle2) return res.status(400).json({message:"Invalid profile gradient settings."});
         const current = await storage.getUser(req.session.userId!);
+        const hasDihtro = ["owner", "admin"].includes(String(current?.role || "").toLowerCase()) || Boolean(current?.dihhroUntil && new Date(current.dihhroUntil) > new Date());
+        if ((selectedGradient === "custom" || customProfile || isStyle2) && !hasDihtro) return res.status(403).json({ message: "Custom profile gradients require active Dihtro." });
 
         update.profileGradient = selectedGradient === "none" && !isStyle2 ? null : rawGradient;
       }

@@ -351,7 +351,7 @@ export function ProfileModal({
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.message || "Could not gift Dihhro");
-      toast({ title: "DIHHRO_GIFTED", description: "One month has been added." });
+      await navigator.clipboard?.writeText(data.claimUrl);\n      toast({ title: "CLAIM YOUR FREE DIHTRO PRESENT 🎁", description: data.claimUrl });
       await qc.invalidateQueries({ queryKey: ["/api/user/profile", userId] });
     } catch (error: any) {
       toast({ title: "GIFT_FAILED", description: error.message || "Could not gift Dihhro", variant: "destructive" });
@@ -551,7 +551,7 @@ export function ProfileModal({
                       )}
                     </div>
                     {["owner","admin"].includes(String(viewer?.role || "").toLowerCase()) && !isOwn && (
-                      <button onClick={giftDihhro} className="mt-2 rounded border border-fuchsia-400/40 px-2 py-1 text-[9px] font-mono text-fuchsia-300 hover:bg-fuchsia-400/10">✦ GIFT 1 MONTH DIHHRO</button>
+                      <button onClick={giftDihhro} className="mt-2 rounded border border-fuchsia-400/40 px-2 py-1 text-[9px] font-mono text-fuchsia-300 hover:bg-fuchsia-400/10">✦ CREATE DIHTRO GIFT</button>
                     )}
                     {canEditProfile && !editing && (
                       <button

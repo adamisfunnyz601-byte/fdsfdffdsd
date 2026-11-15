@@ -21,6 +21,7 @@ import ModerationPanel from "@/pages/ModerationPanel";
 import Chat from "@/pages/Chat";
 import UpdatesPage from "@/pages/Updates";
 import ServersPage from "@/pages/Servers";
+import Dihtro from "@/pages/Dihtro";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
  const {user,isLoading}=useAuth();
@@ -38,7 +39,7 @@ function Router(){return <Switch>
  <Route path="/history"><ProtectedRoute component={History}/></Route>
  <Route path="/moderation"><ProtectedRoute component={ModerationPanel}/></Route>
  <Route path="/admin"><ProtectedRoute component={Admin}/></Route>
- <Route path="/shop"><ProtectedRoute component={Shop}/></Route>
+ <Route path="/shop"><ProtectedRoute component={Shop}/></Route>\n <Route path="/dihtro"><ProtectedRoute component={Dihtro}/></Route>\n <Route path="/dihtro/claim/:code">{params => <ProtectedRoute component={() => <Dihtro code={params.code}/>} />}</Route>
  <Route path="/profile"><ProtectedRoute component={MyProfile}/></Route>
  <Route path="/settings"><ProtectedRoute component={SettingsPage}/></Route>
  <Route path="/block-blast"><ProtectedRoute component={BlockBlast}/></Route>
