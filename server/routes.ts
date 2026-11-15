@@ -1032,8 +1032,8 @@ export async function registerRoutes(
     const target = await storage.getUser(targetId);
     if (!target) return res.status(404).json({ message: "Account not found." });
     const targetRole = String(target.role).toLowerCase();
-    if (targetRole === "super_owner" || (actorRole === "owner" && ["owner", "admin", "trial-admin"].includes(targetRole))) {
-      return res.status(403).json({ message: actorRole === "super_owner" ? "The active super-owner account cannot be deleted by this action." : "Owners cannot delete admin or owner accounts." });
+    if (actorRole === "owner" && ["super_owner", "owner", "admin", "trial-admin"].includes(targetRole)) {
+      return res.status(403).json({ message: "Owners cannot delete admin or owner accounts." });
     }
 
     await db.transaction(async tx => {
@@ -1165,7 +1165,7 @@ export async function registerRoutes(
     const actor = await storage.getUser(req.session.userId!);
     const allowed = ["super_owner","owner","admin","trial-admin","moderator","trial-moderator","helper","trial-helper"];
     if (!actor || !allowed.includes(canonicalRole(actor.role))) return res.status(403).json({ message: "Staff access required." });
-    return res.json(await storage.getAllUsers());
+    return res.json((await storage.getAllUsers()).map(safeUser));
   });
 
   app.get("/api/chat/commands", requireAuth, (_req, res) => {
