@@ -1696,3 +1696,100 @@ body {
     flex: 1 0 auto;
   }
 }
+
+
+/* NEXUS chat composer: stable touch layout for Android, iPhone, iPad and narrow windows.
+   Keep the text field on its own row and distribute every action control evenly. */
+.nexus-page-chat .chat-composer {
+  min-width: 0;
+  padding-bottom: max(.75rem, env(safe-area-inset-bottom));
+}
+.nexus-page-chat .chat-composer form {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: .5rem;
+}
+.nexus-page-chat .chat-composer form > .flex-1 {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.nexus-page-chat .chat-composer form > button,
+.nexus-page-chat .chat-composer form > div:not(.flex-1) {
+  min-width: 0;
+  flex: 0 0 auto;
+}
+.nexus-page-chat .chat-composer form > .flex-1 input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  font-size: 16px;
+}
+.nexus-page-chat .chat-composer button {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+@media (max-width: 640px) {
+  .nexus-page-chat .chat-composer {
+    padding: .65rem max(.6rem, env(safe-area-inset-right)) max(.65rem, env(safe-area-inset-bottom)) max(.6rem, env(safe-area-inset-left)) !important;
+  }
+  .nexus-page-chat .chat-composer form {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    justify-content: space-between;
+    gap: .45rem !important;
+  }
+  .nexus-page-chat .chat-composer form > .flex-1 {
+    order: -1;
+    flex: 1 0 100% !important;
+    width: 100%;
+    min-width: 0;
+  }
+  .nexus-page-chat .chat-composer form > .flex-1 input {
+    height: 44px !important;
+    min-height: 44px;
+    padding-inline: .85rem;
+    font-size: 16px !important;
+  }
+  .nexus-page-chat .chat-composer form > button,
+  .nexus-page-chat .chat-composer form > div:not(.flex-1) {
+    height: 40px;
+    min-width: 0;
+    flex: 1 1 0 !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .nexus-page-chat .chat-composer form > button {
+    width: auto;
+    min-height: 40px;
+    padding-inline: .35rem;
+  }
+  .nexus-page-chat .chat-composer form > div:not(.flex-1) > button {
+    width: 100%;
+    min-width: 0;
+    height: 40px;
+    min-height: 40px;
+    padding-inline: .25rem;
+  }
+  .nexus-page-chat .chat-composer form > div:not(.flex-1) > button span {
+    display: none;
+  }
+  .nexus-page-chat .chat-composer form > div:not(.flex-1) > button svg,
+  .nexus-page-chat .chat-composer form > button svg {
+    flex: 0 0 auto;
+  }
+}
+@media (min-width: 641px) and (max-width: 900px) {
+  .nexus-page-chat .chat-composer {
+    padding-inline: .75rem;
+  }
+  .nexus-page-chat .chat-composer form {
+    gap: .4rem;
+  }
+  .nexus-page-chat .chat-composer form > div:not(.flex-1) > button {
+    padding-inline: .55rem;
+  }
+}
