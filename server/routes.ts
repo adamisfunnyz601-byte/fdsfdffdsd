@@ -732,6 +732,10 @@ export async function registerRoutes(
     try {
       const username = String(req.body?.username || "").trim();
       const password = String(req.body?.password || "");
+      const acceptedTermsVersion = String(req.body?.acceptedTermsVersion || "");
+      if (acceptedTermsVersion !== "2026-11-15") {
+        return res.status(400).json({ message: "Please read and accept the current NEXUS Terms and Conditions before creating an account." });
+      }
       if (!/^[a-zA-Z0-9_]{3,24}$/.test(username)) {
         return res.status(400).json({ message: "Username must be 3–24 characters and use letters, numbers or underscores." });
       }
@@ -742,12 +746,22 @@ export async function registerRoutes(
         .where(sql`lower(${users.username}) = ${username.toLowerCase()}`).limit(1);
       if (existing) return res.status(409).json({ message: "That username is already taken." });
 
-      const [created] = await db.insert(users).values({
-        username,
-        serialKey: "NEXUS_ACCOUNT_" + randomBytes(32).toString("hex"),
-        passwordHash: hashAccountPassword(password),
-        role: "user",
-      }).returning();
+      await db.execute(sql`CREATE TABLE IF NOT EXISTS nexus_terms_acceptances (
+        user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        terms_version text NOT NULL,
+        accepted_at timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY (user_id, terms_version)
+      )`);
+      const created = await db.transaction(async tx => {
+        const [account] = await tx.insert(users).values({
+          username,
+          serialKey: "NEXUS_ACCOUNT_" + randomBytes(32).toString("hex"),
+          passwordHash: hashAccountPassword(password),
+          role: "user",
+        }).returning();
+        await tx.execute(sql`INSERT INTO nexus_terms_acceptances (user_id, terms_version) VALUES (${account.id}, '2026-11-15')`);
+        return account;
+      });
       return res.status(201).json({ message: "Account created.", user: safeUser(created) });
     } catch (error) {
       console.error("Account registration failed:", error);
