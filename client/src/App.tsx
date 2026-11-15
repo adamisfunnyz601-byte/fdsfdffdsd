@@ -5,7 +5,9 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
+import { Capacitor } from "@capacitor/core";
 import Login from "@/pages/Login";
+import Landing from "@/pages/Landing";
 import Proxy from "@/pages/Proxy";
 import History from "@/pages/History";
 import Admin from "@/pages/Admin";
@@ -23,15 +25,22 @@ import UpdatesPage from "@/pages/Updates";
 import ServersPage from "@/pages/Servers";
 import Dihtro from "@/pages/Dihtro";
 
+const nativeApp = Capacitor.isNativePlatform() || window.location.protocol === "file:";
+
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
  const {user,isLoading}=useAuth();
  if(isLoading)return <div className="flex min-h-screen items-center justify-center bg-background"><div className="flex flex-col items-center gap-4"><Loader2 className="h-10 w-10 animate-spin text-primary"/><span className="text-xs tracking-widest text-primary">LOADING NEXUS</span></div></div>;
  if(!user)return <Login/>;
  return <Component/>;
 }
+function Home(){const {user,isLoading}=useAuth();if(nativeApp)return <Login/>;if(isLoading)return <div className="flex min-h-screen items-center justify-center bg-background"><Loader2 className="h-8 w-8 animate-spin text-primary"/></div>;return user?<Proxy/>:<Landing/>;}
 function Router(){return <Switch>
- <Route path="/" component={Login}/><Route path="/signup" component={Login}/>
+ <Route path="/" component={Home}/>
+ <Route path="/sign-in" component={Login}/>
+ <Route path="/sign-up" component={Login}/>
+ <Route path="/signup" component={Login}/>
  <Route path="/invite/:code">{params=><Invite code={params.code}/>}</Route>
+ <Route path="/main-page"><ProtectedRoute component={Proxy}/></Route>
  <Route path="/proxy"><ProtectedRoute component={Proxy}/></Route>
  <Route path="/chat" component={()=>null}/>
  <Route path="/servers"><ProtectedRoute component={ServersPage}/></Route>
