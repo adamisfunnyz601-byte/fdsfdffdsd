@@ -755,6 +755,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const peerSetupPromiseRef = useRef<Promise<RTCPeerConnection> | null>(null);
   const offerCreationCallIdRef = useRef<string | null>(null);
+  const offerCreationPromiseRef = useRef<Promise<void> | null>(null);
   const callPeerIdRef = useRef<number | null>(null);
   const callInitiatorRef = useRef(false);
   const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
@@ -1497,6 +1498,40 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     } catch (error:any) { toast({ title: "Emote failed", description: error.message || "Could not send emote.", variant: "destructive" }); }
   };
 
+  const createAndSendCallOffer = async (callId: string) => {
+    if (offerCreationCallIdRef.current === callId && offerCreationPromiseRef.current) return offerCreationPromiseRef.current;
+    if (offerCreationCallIdRef.current === callId && peerConnectionRef.current?.localDescription?.type === "offer") return;
+    offerCreationCallIdRef.current = callId;
+    const operation = (async () => {
+      const peer = await createPeerConnection();
+      if (callIdRef.current !== callId) throw new Error("Call ended before the offer was ready");
+      if (peer.signalingState !== "stable") {
+        if (peer.localDescription?.type === "offer") return;
+        throw new Error(`Cannot create offer: WebRTC signalling state is ${peer.signalingState}`);
+      }
+      const offer = await peer.createOffer();
+      if (callIdRef.current !== callId) throw new Error("Call ended while creating the offer");
+      await peer.setLocalDescription(offer);
+      const localDescription = peer.localDescription;
+      if (!localDescription?.sdp || localDescription.type !== "offer") {
+        throw new Error("The browser did not produce a valid local SDP offer");
+      }
+      await postVoiceSignal("/api/chat/voice/offer", {
+        callId,
+        recipientId: callPeerIdRef.current,
+        offer: { type: localDescription.type, sdp: localDescription.sdp },
+      });
+      pushLog("WEBRTC_OFFER_SENT", "info");
+    })();
+    offerCreationPromiseRef.current = operation;
+    try { await operation; }
+    catch (error) {
+      if (offerCreationCallIdRef.current === callId) offerCreationCallIdRef.current = null;
+      offerCreationPromiseRef.current = null;
+      throw error;
+    }
+  };
+
   const startCall = async (targetId: number, targetName: string, withVideo: boolean) => {
     if (callStateRef.current !== 'idle' || groupCallIdRef.current) return;
     callPeerIdRef.current = targetId;
@@ -1687,44 +1722,9 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
   };
 
   // The callee creates an answer when the caller's offer arrives; the caller creates the offer after acceptance.
-  useEffect(() => {
-    if (callState !== 'connected') return;
-    let active = true;
-    (async () => {
-      try {
-        const peer = await createPeerConnection();
-        if (!active) { peer.close(); return; }
-        if (callInitiatorRef.current) {
-          const activeCallId = callIdRef.current;
-          // A call may cause multiple renders (or duplicate acceptance events).
-          // Only ever create/send one local SDP offer for a given call.
-          if (!activeCallId || offerCreationCallIdRef.current === activeCallId) return;
-          if (peer.signalingState !== 'stable' || peer.localDescription) {
-            throw new Error(`Cannot create offer while signalling state is ${peer.signalingState}`);
-          }
-          offerCreationCallIdRef.current = activeCallId;
-          try {
-            const offer = await peer.createOffer();
-            if (!active || peer.signalingState !== 'stable') return;
-            await peer.setLocalDescription(offer);
-            await postVoiceSignal('/api/chat/voice/offer', {
-              callId: activeCallId,
-              recipientId: callPeerIdRef.current,
-              offer: peer.localDescription,
-            });
-            pushLog('WEBRTC_OFFER_SENT', 'info');
-          } catch (offerError) {
-            if (offerCreationCallIdRef.current === activeCallId) offerCreationCallIdRef.current = null;
-            throw offerError;
-          }
-        }
-      } catch (error: any) {
-        toast({ title: 'CALL_MEDIA_ERROR', description: error?.message || 'Could not start microphone/camera.', variant: 'destructive' });
-        endCall(true);
-      }
-    })();
-    return () => { active = false; };
-  }, [callState]);
+  // The accepted signal below owns offer creation; this avoids a competing
+  // effect negotiating simultaneously on native WebViews and desktop browsers.
+
 
   // ============================================================
   // AUDIO RECORDING (VOICE MESSAGE) — stop to preview, send explicitly
@@ -1862,10 +1862,15 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
             if (emote.audioUrl) { const audio = new Audio(emote.audioUrl); audio.play().catch(() => {}); }
             window.setTimeout(() => setRemoteCallEmote((current:any) => current?.name === emote.name ? null : current), duration * 1000);
           } else if (signal.type === 'accepted' && state === 'requesting' && signal.callId === callIdRef.current) {
-            // One owner creates the offer: the connected-state effect below.
-            // Creating it here as well races that effect and makes setLocalDescription
-            // fail with an invalid signalling state on native WebViews.
             updateCallState('connected');
+            try {
+              await createAndSendCallOffer(signal.callId);
+            } catch (error: any) {
+              const peer = peerConnectionRef.current;
+              pushLog(`WEBRTC_OFFER_ERROR: ${error?.message || error}; state=${peer?.signalingState || "no-peer"}`, 'warn');
+              toast({ title: 'Call offer failed', description: error?.message || 'Could not create the live call offer.', variant: 'destructive' });
+              endCall(true);
+            }
           } else if ((signal.type === 'declined' || signal.type === 'ended') && signal.callId === callIdRef.current) {
             if (signal.type === 'declined') toast({ title: 'Call declined.' });
             endCall(true);
