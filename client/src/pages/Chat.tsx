@@ -1152,31 +1152,38 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
   useEffect(() => () => gifSearchAbortRef.current?.abort(), []);
 
   const sendGif = async (gif: any) => {
-    // GIPHY returns a direct CDN image URL here (not the public GIPHY page URL).
-    // Store only this lightweight URL reference in the message row; the GIF bytes
-    // are loaded by the recipient's <img> element and are never uploaded to our DB.
-    const imageUrl = typeof gif?.url === "string" ? gif.url : "";
-    let parsedUrl: URL | null = null;
-    try { parsedUrl = new URL(imageUrl); } catch {}
-    if (!parsedUrl || parsedUrl.protocol !== "https:" || !/(^|\.)giphy\.com$/i.test(parsedUrl.hostname) || !parsedUrl.pathname.toLowerCase().endsWith(".gif")) {
-      toast({ title: "GIF unavailable", description: "This GIF doesn't have a valid direct image URL.", variant: "destructive" });
+    const sourceUrl = typeof gif?.url === "string" ? gif.url : "";
+    if (!sourceUrl) {
+      toast({ title: "GIF unavailable", description: "This GIF has no downloadable image.", variant: "destructive" });
       return;
     }
     try {
+      // The server downloads the GIF bytes and saves a real .gif attachment file.
+      // Only the opaque file reference is stored on the message row, never image bytes.
+      const prepareResponse = await apiFetch("/api/chat/gifs/prepare", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: sourceUrl }),
+      });
+      const prepared = await prepareResponse.json().catch(() => ({}));
+      if (!prepareResponse.ok || typeof prepared.mediaUrl !== "string") {
+        throw new Error(prepared.message || "Could not save this GIF as an image.");
+      }
       await sendMessage.mutateAsync({
         content: "",
         recipientId: selectedRecipientId ?? undefined,
         groupId: selectedGroupId ?? undefined,
-        mediaUrl: imageUrl,
+        mediaUrl: prepared.mediaUrl,
         mediaType: "image",
         replyToId: replyTarget?.id ?? null,
       } as any);
       setReplyTarget(null);
       setShowGifPicker(false);
       setGifSearch("");
-      toast({ title: "GIF sent", description: "Your GIF was sent as an inline image." });
-    } catch {
-      // The mutation owns the error toast; keep the picker open so it can be retried.
+      toast({ title: "GIF sent", description: "The saved GIF image was sent to this chat." });
+    } catch (error: any) {
+      toast({ title: "GIF not sent", description: error?.message || "Could not send this GIF.", variant: "destructive" });
     }
   };
 
