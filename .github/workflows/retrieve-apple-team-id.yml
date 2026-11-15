@@ -1,0 +1,81 @@
+name: Retrieve Apple Personal Team ID
+
+on:
+  workflow_dispatch:
+    inputs:
+      apple_2fa_code:
+        description: "Enter the current 6-digit Apple verification code"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  retrieve-team-id:
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+
+      - name: Install Fastlane
+        run: gem install fastlane --no-document
+
+      - name: Sign in and retrieve Team ID
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
+          APPLE_2FA_CODE: ${{ inputs.apple_2fa_code }}
+          LANG: en_US.UTF-8
+          LC_ALL: en_US.UTF-8
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$APPLE_2FA_CODE"
+
+          if [[ -z "${APPLE_ID:-}" || -z "${FASTLANE_PASSWORD:-}" ]]; then
+            echo "::error::Missing APPLE_ID or FASTLANE_PASSWORD repository secret."
+            exit 1
+          fi
+
+          if ! [[ "${APPLE_2FA_CODE:-}" =~ ^[0-9]{6}$ ]]; then
+            echo "::error::Enter the current 6-digit Apple verification code."
+            exit 1
+          fi
+
+          ruby <<'RUBY'
+          require "spaceship"
+
+          module WorkflowTwoFactorCode
+            def ask_for_2fa_code(_prompt)
+              ENV.fetch("APPLE_2FA_CODE")
+            end
+          end
+          Spaceship::Client.prepend(WorkflowTwoFactorCode)
+
+          client = Spaceship::Portal.login(
+            ENV.fetch("APPLE_ID"),
+            ENV.fetch("FASTLANE_PASSWORD")
+          )
+
+          teams = client.teams
+          abort "Apple returned no Developer Portal teams for this account." if teams.empty?
+
+          found = false
+          teams.each do |team|
+            team_id = team["teamId"]
+            next if team_id.to_s.empty?
+
+            found = true
+            name = team["name"] || "Apple Developer Team"
+            puts "#{name}: #{team_id}"
+            File.open(ENV.fetch("GITHUB_STEP_SUMMARY"), "a") do |summary|
+              summary.puts "- #{name}: #{team_id}"
+            end
+          end
+
+          abort "Apple returned teams, but no Team ID was present." unless found
+          RUBY
