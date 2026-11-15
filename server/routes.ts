@@ -1359,7 +1359,14 @@ export async function registerRoutes(
     } else if (input.recipientId) {
       mentionRecipientIds = mentionRecipientIds.filter(id => id === Number(input.recipientId));
     } else if (mentionRecipientIds.length) {
-      return res.status(400).json({ message: "Mentions are only available in DMs and group channels." });
+      // Global chat supports direct @user pings too. Resolve IDs against real
+      // accounts so stale suggestions never block sending the message.
+      const mentionedUsers = await db.select({ id: users.id }).from(users)
+        .where(inArray(users.id, mentionRecipientIds));
+      const validIds = new Set(mentionedUsers.map(user => Number(user.id)));
+      mentionRecipientIds = mentionRecipientIds.filter(id =>
+        Number.isInteger(id) && id !== Number(req.session.userId!) && validIds.has(id)
+      );
     }
     const message = await storage.createMessage({
       senderId: req.session.userId!,
