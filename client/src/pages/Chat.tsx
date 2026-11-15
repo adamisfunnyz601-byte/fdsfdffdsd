@@ -1358,6 +1358,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     peerConnectionRef.current = null;
     peerSetupPromiseRef.current = null;
     offerCreationCallIdRef.current = null;
+    offerCreationPromiseRef.current = null;
     pendingIceCandidatesRef.current = [];
     screenShareTrackRef.current?.stop();
     screenShareTrackRef.current = null;
@@ -1833,7 +1834,10 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
       polling = true;
       try {
         const response = await apiFetch('/api/chat/voice/poll', { cache: 'no-store', credentials: 'include' });
-        if (!response.ok) return;
+        if (!response.ok) {
+          pushLog(`CALL_SIGNAL_POLL_HTTP_${response.status}`, 'warn');
+          return;
+        }
         const signals: any[] = await response.json();
         for (const signal of signals) {
           const state = callStateRef.current;
