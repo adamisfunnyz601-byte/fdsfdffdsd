@@ -1151,24 +1151,33 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
 
   useEffect(() => () => gifSearchAbortRef.current?.abort(), []);
 
-  const sendGif = (gif: any) => {
-    const url = gif?.url;
-    if (!url) {
-      toast({ title: "GIF unavailable", description: "This GIF doesn't have a usable embed URL.", variant: "destructive" });
+  const sendGif = async (gif: any) => {
+    // GIPHY returns a direct CDN image URL here (not the public GIPHY page URL).
+    // Store only this lightweight URL reference in the message row; the GIF bytes
+    // are loaded by the recipient's <img> element and are never uploaded to our DB.
+    const imageUrl = typeof gif?.url === "string" ? gif.url : "";
+    let parsedUrl: URL | null = null;
+    try { parsedUrl = new URL(imageUrl); } catch {}
+    if (!parsedUrl || parsedUrl.protocol !== "https:" || !/(^|\\.)giphy\\.com$/i.test(parsedUrl.hostname) || !parsedUrl.pathname.toLowerCase().endsWith(".gif")) {
+      toast({ title: "GIF unavailable", description: "This GIF doesn't have a valid direct image URL.", variant: "destructive" });
       return;
     }
-    sendMessage.mutate({
-      content: "",
-      recipientId: selectedRecipientId ?? undefined,
-      groupId: selectedGroupId ?? undefined,
-      mediaUrl: url,
-      mediaType: "image",
-      replyToId: replyTarget?.id ?? null,
-    } as any);
-    setReplyTarget(null);
-    setShowGifPicker(false);
-    setGifSearch("");
-    toast({ title: "GIF sent", description: "Your GIF was added to the chat." });
+    try {
+      await sendMessage.mutateAsync({
+        content: "",
+        recipientId: selectedRecipientId ?? undefined,
+        groupId: selectedGroupId ?? undefined,
+        mediaUrl: imageUrl,
+        mediaType: "image",
+        replyToId: replyTarget?.id ?? null,
+      } as any);
+      setReplyTarget(null);
+      setShowGifPicker(false);
+      setGifSearch("");
+      toast({ title: "GIF sent", description: "Your GIF was sent as an inline image." });
+    } catch {
+      // The mutation owns the error toast; keep the picker open so it can be retried.
+    }
   };
 
   const toggleMessageReaction = async (messageId: number, emoji: string) => {
