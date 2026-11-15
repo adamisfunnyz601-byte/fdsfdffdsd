@@ -57,7 +57,6 @@ export default function Login() {
   };
 
   const signInWithPasskey = async () => {
-    if !permissionsReady { setError("Allow notifications and call permissions before signing in."); return; }
     const cleanUsername = username.trim();
     if (!cleanUsername) { setError("Enter your NEXUS username before using your passkey."); return; }
     setPasskeyBusy(true); setError("");
@@ -86,7 +85,6 @@ export default function Login() {
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
-    if (nativeApp && !permissionsReady) { setError("Allow notifications and call permissions before signing in."); return; }
     const cleanUsername = username.trim();
     if (mode === "login") {
       login({ username: cleanUsername, serialKey: password });
@@ -141,11 +139,11 @@ export default function Login() {
               {mode === "register" && <p className="text-xs text-muted-foreground">Use 3–24 characters for your username and at least 8 for your password.</p>}
             </div>
             {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-            <CyberButton type="submit" className="w-full mt-2" isLoading={isLoggingIn || registering} disabled={!username.trim() || password.length < 8 || isLoggingIn || registering || (nativeApp && !permissionsReady)}>
+            <CyberButton type="submit" className="w-full mt-2" isLoading={isLoggingIn || registering} disabled={!username.trim() || password.length < 8 || isLoggingIn || registering}>
               {mode === "login" ? <><Lock className="w-4 h-4" /> Sign In</> : <><UserRoundPlus className="w-4 h-4" /> Create Account</>}
             </CyberButton>
           </form>
-          {mode === "login" && <button type="button" disabled={passkeyBusy || !username.trim() || (nativeApp && !permissionsReady)} onClick={() => void signInWithPasskey()} className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-violet-300/20 bg-violet-500/10 px-4 py-3 text-sm font-semibold text-violet-100 transition hover:bg-violet-500/20 disabled:opacity-40">{passkeyBusy ? "Waiting for passkey…" : "Sign in with a passkey"}</button>}
+          {mode === "login" && <button type="button" disabled={passkeyBusy || !username.trim()} onClick={() => void signInWithPasskey()} className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-violet-300/20 bg-violet-500/10 px-4 py-3 text-sm font-semibold text-violet-100 transition hover:bg-violet-500/20 disabled:opacity-40">{passkeyBusy ? "Waiting for passkey…" : "Sign in with a passkey"}</button>}
         </div>
       </section>
     </main>
