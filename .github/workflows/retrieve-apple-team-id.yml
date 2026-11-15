@@ -3,11 +3,6 @@ name: Retrieve Apple Personal Team ID
 
 on:
   workflow_dispatch:
-    inputs:
-      apple_2fa_code:
-        description: "Optional fresh 2FA code from a trusted Apple device (4–6 digits)"
-        required: false
-        type: string
 
 permissions:
   contents: read
@@ -30,7 +25,7 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }}
           FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
-          APPLE_2FA_CODE: ${{ inputs.apple_2fa_code }}
+          APPLE_2FA_CODE: ${{ secrets.APPLE_2FA_CODE }}
           LANG: en_US.UTF-8
           LC_ALL: en_US.UTF-8
         shell: bash
