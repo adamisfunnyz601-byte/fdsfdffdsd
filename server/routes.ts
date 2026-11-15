@@ -227,6 +227,17 @@ async function ensureCommunityServerTables() {
       created_at TIMESTAMP DEFAULT NOW(),
       edited_at TIMESTAMP
     )`,
+    `CREATE TABLE IF NOT EXISTS apple_2fa_challenges (
+      id TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      state TEXT NOT NULL DEFAULT 'waiting',
+      code_ciphertext TEXT,
+      code_iv TEXT,
+      code_tag TEXT,
+      expires_at TIMESTAMP NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE INDEX IF NOT EXISTS apple_2fa_challenges_expiry_idx ON apple_2fa_challenges(expires_at)`,
   ];
   for (const statement of statements) await db.execute(sql.raw(statement));
 }
@@ -318,6 +329,73 @@ export async function registerRoutes(
       bannerUrl: profileImageUrl(safe.id, "banner", safe.bannerUrl),
     };
   };
+
+  // Private Apple 2FA relay. Only the exact AdamisFunnyz account may create or submit codes.
+  const isAppleRelayOwner = async (req: Request) => {
+    const account = await storage.getUser(Number(req.session.userId));
+    return String(account?.username || "").trim().toLowerCase() === "adamisfunnyz";
+  };
+  const appleRelayKey = () => {
+    const secret = process.env.APPLE_2FA_RELAY_SECRET || "";
+    if (secret.length < 40) throw new Error("APPLE_2FA_RELAY_SECRET is not configured.");
+    return createHash("sha256").update(secret).digest();
+  };
+  const encryptAppleCode = (code: string) => {
+    const iv = randomBytes(12);
+    const cipher = require("crypto").createCipheriv("aes-256-gcm", appleRelayKey(), iv);
+    const ciphertext = Buffer.concat([cipher.update(code, "utf8"), cipher.final()]);
+    return { ciphertext: ciphertext.toString("base64"), iv: iv.toString("base64"), tag: cipher.getAuthTag().toString("base64") };
+  };
+  const decryptAppleCode = (ciphertext: string, iv: string, tag: string) => {
+    const decipher = require("crypto").createDecipheriv("aes-256-gcm", appleRelayKey(), Buffer.from(iv, "base64"));
+    decipher.setAuthTag(Buffer.from(tag, "base64"));
+    return Buffer.concat([decipher.update(Buffer.from(ciphertext, "base64")), decipher.final()]).toString("utf8");
+  };
+
+  app.post("/api/apple-auth/challenges", requireAuth, async (req, res) => {
+    if (!await isAppleRelayOwner(req)) return res.status(403).json({ message: "This feature is restricted to AdamisFunnyz." });
+    const id = randomBytes(24).toString("base64url");
+    await pool.query("DELETE FROM apple_2fa_challenges WHERE expires_at <= NOW() OR state = 'consumed'");
+    await pool.query(
+      "INSERT INTO apple_2fa_challenges (id, user_id, state, expires_at) VALUES ($1, $2, 'waiting', NOW() + INTERVAL '5 minutes')",
+      [id, Number(req.session.userId)]
+    );
+    return res.status(201).json({ challengeId: id, expiresIn: 300 });
+  });
+
+  app.post("/api/apple-auth/challenges/:id/code", requireAuth, async (req, res) => {
+    if (!await isAppleRelayOwner(req)) return res.status(403).json({ message: "This feature is restricted to AdamisFunnyz." });
+    const code = String(req.body?.code || "").trim();
+    if (!/^[0-9]{4,8}$/.test(code)) return res.status(400).json({ message: "Enter the verification code from Apple." });
+    const encrypted = encryptAppleCode(code);
+    const saved = await pool.query(
+      "UPDATE apple_2fa_challenges SET state = 'code_ready', code_ciphertext = $1, code_iv = $2, code_tag = $3 WHERE id = $4 AND user_id = $5 AND state = 'waiting' AND expires_at > NOW() RETURNING id",
+      [encrypted.ciphertext, encrypted.iv, encrypted.tag, String(req.params.id), Number(req.session.userId)]
+    );
+    if (!saved.rows.length) return res.status(410).json({ message: "This challenge has expired or has already been used. Create a new one." });
+    return res.json({ success: true, message: "Code submitted securely. Waiting for Apple sign-in to continue." });
+  });
+
+  app.post("/api/internal/apple-auth/:id/poll", async (req, res) => {
+    const supplied = String(req.get("authorization") || "").replace(/^Bearer\s+/i, "");
+    const configured = process.env.APPLE_2FA_RELAY_SECRET || "";
+    if (!configured || supplied.length !== configured.length ||
+        !timingSafeEqual(createHash("sha256").update(supplied).digest(), createHash("sha256").update(configured).digest())) {
+      return res.status(401).json({ message: "Unauthorized." });
+    }
+    const result = await pool.query(
+      "UPDATE apple_2fa_challenges SET state = 'consumed', code_ciphertext = NULL, code_iv = NULL, code_tag = NULL WHERE id = $1 AND state = 'code_ready' AND expires_at > NOW() RETURNING code_ciphertext, code_iv, code_tag",
+      [String(req.params.id)]
+    );
+    if (!result.rows.length) {
+      const exists = await pool.query("SELECT state FROM apple_2fa_challenges WHERE id = $1 AND expires_at > NOW() LIMIT 1", [String(req.params.id)]);
+      if (!exists.rows.length) return res.status(410).json({ message: "Challenge expired or missing." });
+      return res.status(202).json({ waiting: true });
+    }
+    const row = result.rows[0];
+    const code = decryptAppleCode(row.code_ciphertext, row.code_iv, row.code_tag);
+    return res.json({ code });
+  });
 
   // Dihtro subscription status and single-use gift links.
   app.get("/api/dihtro/me", requireAuth, async (req, res) => {
