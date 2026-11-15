@@ -1396,3 +1396,28 @@ body {
     width: clamp(92px, 17vw, 148px) !important;
   }
 }
+
+
+/* Responsive conversations drawer: tablets, phones and narrow desktop windows. */
+.chat-sidebar-backdrop { display:none; }
+@media (max-width: 1180px) {
+  .nexus-page-chat { min-width:0; min-height:0; height:calc(100dvh - 112px)!important; }
+  .chat-sidebar-backdrop {
+    display:block; position:absolute; inset:0; z-index:40;
+    width:100%; height:100%; border:0; border-radius:inherit;
+    background:rgba(2,2,10,.72); backdrop-filter:blur(3px);
+  }
+  .chat-conversation-sidebar {
+    position:absolute!important; z-index:45; left:8px; top:8px; bottom:8px;
+    width:min(288px,calc(100% - 16px))!important; height:auto!important;
+    max-height:calc(100% - 16px); box-shadow:18px 0 48px rgba(0,0,0,.55);
+  }
+  .chat-main-panel { min-width:0; width:100%; }
+}
+@media (max-width: 640px) {
+  .nexus-page-chat { height:calc(100dvh - 126px)!important; padding:5px!important; gap:0!important; border-radius:12px!important; }
+  .chat-channel-header { gap:8px; padding:10px!important; }
+  .chat-channel-header h2 { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px!important; letter-spacing:.12em!important; }
+  .chat-channel-header > div { min-width:0; }
+  .chat-conversation-sidebar { left:5px; top:5px; bottom:5px; width:min(310px,calc(100% - 10px))!important; max-height:calc(100% - 10px); }
+}
