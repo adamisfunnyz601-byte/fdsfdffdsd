@@ -17,8 +17,8 @@ function isIosDevice() {
 }
 
 export function getNotificationSupport(): NotificationSupport {
-  if (typeof window === "undefined" || !("Notification" in window) || !("serviceWorker" in navigator)) {
-    return { supported: false, permission: "unsupported", description: "This browser does not expose service-worker notifications." };
+  if (typeof window === "undefined" || !("Notification" in window)) {
+    return { supported: false, permission: "unsupported", description: "This device does not expose notifications in this app. You can still sign in and use calls." };
   }
   const permission = Notification.permission;
   if (isIosDevice() && !isStandaloneApp()) {
@@ -43,15 +43,19 @@ export async function enableBrowserNotifications() {
   if (isIosDevice() && !isStandaloneApp()) throw new Error("Install NEXUS to your Home Screen first, then enable notifications from the installed app.");
   const permission = await Notification.requestPermission();
   if (permission !== "granted") throw new Error(permission === "denied" ? "Permission was denied. Change it in your browser or device settings." : "Notification permission was not granted.");
-  const registration = await registerNotificationWorker();
-  if (!registration) throw new Error("The notification service worker could not be installed. Make sure the site uses HTTPS.");
+  // Service workers are available on HTTPS websites and installed PWAs, but not
+  // inside Electron file:// windows. Notification permission still works there.
+  if ("serviceWorker" in navigator) await registerNotificationWorker();
   return permission;
 }
 
 export async function showTestNotification() {
   if (!("Notification" in window) || Notification.permission !== "granted") throw new Error("Enable notifications on this device first.");
-  const registration = await navigator.serviceWorker.ready;
-  await registration.showNotification("NEXUS notifications are working", {
-    body: "This device can display NEXUS notifications.", icon: "/favicon.png", badge: "/favicon.png", tag: "nexus-notification-test",
-  });
+  const options: NotificationOptions = { body: "This device can display NEXUS notifications.", icon: "/favicon.png", tag: "nexus-notification-test" };
+  if ("serviceWorker" in navigator) {
+    const registration = await navigator.serviceWorker.ready;
+    await registration.showNotification("NEXUS notifications are working", { ...options, badge: "/favicon.png" });
+  } else {
+    new Notification("NEXUS notifications are working", options);
+  }
 }
