@@ -11,7 +11,8 @@
     "db:push": "drizzle-kit push",
     "desktop": "electron .",
     "desktop:dist": "node ./node_modules/electron-builder/cli.js --win nsis",
-    "desktop:dir": "node ./node_modules/electron-builder/cli.js --win dir"
+    "desktop:dir": "node ./node_modules/electron-builder/cli.js --win dir",
+    "start:enzonic": "npm run build && node dist/index.cjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
