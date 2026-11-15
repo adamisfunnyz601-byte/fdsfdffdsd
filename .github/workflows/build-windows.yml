@@ -77,3 +77,13 @@ jobs:
           retention-days: 14
 
 # Rebuild latest NEXUS source after the WebAuthn TypeScript fix.
+
+      - name: Publish directly downloadable Windows installer
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nexus-windows-${{ github.run_number }}-${{ github.run_attempt }}
+          name: NEXUS Windows ${{ github.run_number }}
+          body: Windows installer built from commit ${{ github.sha }}.
+          prerelease: true
+          files: dist-electron/*.exe
+          fail_on_unmatched_files: true
