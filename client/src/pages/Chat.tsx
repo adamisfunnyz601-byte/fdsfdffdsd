@@ -683,7 +683,7 @@ export default function Chat() {
       groupCallIdRef.current=created.roomId;setGroupCallId(created.roomId);setGroupCallGroupId(selectedGroupId);groupCallActiveRef.current=true;
       setGroupCallParticipants([{userId:Number(currentUserId),username:(currentUser as any)?.username||"You"}]);setActiveGroupCallTab(Number(currentUserId));
       const local=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:withVideo?{facingMode:"user"}:false});
-      await startNativeCallAudio("NEXUS group call", Boolean(joined.withVideo));
+      await startNativeCallAudio("NEXUS group call", Boolean(withVideo));
       groupLocalStreamRef.current=local;setVisualizerStream(local);setCallTime(0);
       pushLog("GROUP_CALL_STARTED","info");
     }catch(error:any){toast({title:"GROUP_CALL_FAILED",description:error.message||"Could not start group call.",variant:"destructive"});await leaveGroupCall();}
@@ -695,7 +695,7 @@ export default function Chat() {
       const joined=await groupVoicePost("/api/chat/group-voice/join",{roomId:invite.roomId});
       groupCallIdRef.current=joined.roomId;setGroupCallId(joined.roomId);setGroupCallGroupId(Number(invite.groupId));groupCallActiveRef.current=true;setIncomingGroupCall(null);
       const local=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:joined.withVideo?{facingMode:"user"}:false});
-      await startNativeCallAudio();
+      await startNativeCallAudio("NEXUS group call", Boolean(joined.withVideo));
       groupLocalStreamRef.current=local;setVisualizerStream(local);
       setGroupCallParticipants([{userId:Number(currentUserId),username:(currentUser as any)?.username||"You"},...joined.participants]);setActiveGroupCallTab(joined.participants[0]?.userId??Number(currentUserId));
       for(const person of joined.participants){
