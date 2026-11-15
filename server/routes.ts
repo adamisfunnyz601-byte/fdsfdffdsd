@@ -2370,7 +2370,7 @@ export async function registerRoutes(
 
   // === GROUP VOICE / VIDEO ROOMS ===
   // Mesh WebRTC signalling. Each participant maintains one peer connection per other participant.
-  interface GroupVoiceRoom { id: string; groupId: number; ownerId: number; withVideo: boolean; participants: Map<number,string>; createdAt: number; }
+  interface GroupVoiceRoom { id: string; groupId: number | null; ownerId: number; withVideo: boolean; participants: Map<number,string>; invited: Set<number>; createdAt: number; }
   const groupVoiceRooms = new Map<string,GroupVoiceRoom>();
   const groupVoiceSignals = new Map<number,any[]>();
   const pushGroupVoiceSignal = (userId:number, payload:any) => {
@@ -2397,11 +2397,35 @@ export async function registerRoutes(
     if(!group) return res.status(404).json({message:"Group not found."});
     const user=await storage.getUser(userId);
     const roomId="group-call-"+Date.now()+"-"+randomBytes(8).toString("hex");
-    const room:GroupVoiceRoom={id:roomId,groupId,ownerId:userId,withVideo:Boolean(req.body?.withVideo),participants:new Map([[userId,user?.username||("User_"+userId)]]),createdAt:Date.now()};
+    const room:GroupVoiceRoom={id:roomId,groupId,ownerId:userId,withVideo:Boolean(req.body?.withVideo),participants:new Map([[userId,user?.username||("User_"+userId)]]),invited:new Set(),createdAt:Date.now()};
     groupVoiceRooms.set(roomId,room);
     res.json({roomId,participants:[]});
   });
 
+  const areAcceptedFriends = async (firstId:number,secondId:number) => {
+    const [friendship] = await db.select({id:friendRequests.id}).from(friendRequests).where(and(
+      eq(friendRequests.status,"accepted"),
+      or(
+        and(eq(friendRequests.requesterId,firstId),eq(friendRequests.addresseeId,secondId)),
+        and(eq(friendRequests.requesterId,secondId),eq(friendRequests.addresseeId,firstId)),
+      ),
+    )).limit(1);
+    return !!friendship;
+  };
+  app.post("/api/chat/group-voice/direct-start",requireAuth,async(req,res)=>{
+    const userId=Number(req.session.userId!),targetId=Number(req.body?.calleeId);
+    if(!Number.isInteger(targetId)||targetId<=0||targetId===userId) return res.status(400).json({message:"Choose a valid friend to call."});
+    if(!await areAcceptedFriends(userId,targetId)) return res.status(403).json({message:"You can only call someone who is already your friend."});
+    if(await blockedEitherWay(userId,targetId)) return res.status(403).json({message:"This person is unavailable."});
+    const target=await storage.getUser(targetId),caller=await storage.getUser(userId);
+    if(!target) return res.status(404).json({message:"Friend not found."});
+    const roomId="friend-call-"+Date.now()+"-"+randomBytes(8).toString("hex");
+    const withVideo=Boolean(req.body?.withVideo);
+    const room:GroupVoiceRoom={id:roomId,groupId:null,ownerId:userId,withVideo,participants:new Map([[userId,caller?.username||("User_"+userId)]]),invited:new Set([targetId]),createdAt:Date.now()};
+    groupVoiceRooms.set(roomId,room);
+    pushGroupVoiceSignal(targetId,{type:"group-invite",roomId,groupId:null,groupName:"Friend call",directCall:true,fromId:userId,fromName:caller?.username||"A friend",withVideo});
+    res.json({roomId,participants:[],withVideo});
+  });
   app.get("/api/chat/group-voice/members",requireAuth,async(req,res)=>{
     const userId=Number(req.session.userId!),groupId=Number(req.query.groupId);
     if(!Number.isInteger(groupId)||groupId<=0||!await isGroupChatMember(groupId,userId)) return res.status(403).json({message:"You are not a member of this group."});
@@ -2413,25 +2437,38 @@ export async function registerRoutes(
     const userId=Number(req.session.userId!), targetId=Number(req.body?.userId), room=getGroupVoiceRoom(req.body?.roomId,userId);
     if(!room) return res.status(403).json({message:"You are not in this group call."});
     if(!Number.isInteger(targetId)||targetId<=0||targetId===userId) return res.status(400).json({message:"Choose a valid person to invite."});
-    if(!await isGroupChatMember(room.groupId,targetId)) return res.status(403).json({message:"That person is not a member of this group chat."});
-    if(room.participants.has(targetId)) return res.status(409).json({message:"That person is already in the call."});
+    if(!await areAcceptedFriends(userId,targetId)) return res.status(403).json({message:"You can only invite someone who is already your friend."});
+    if(room.participants.has(targetId)||room.invited.has(targetId)) return res.status(409).json({message:"That friend is already in or invited to the call."});
     const target=await storage.getUser(targetId);
     if(!target) return res.status(404).json({message:"User not found."});
     if(await blockedEitherWay(userId,targetId)) return res.status(403).json({message:"This person is unavailable."});
-    const [group]=await db.select({name:groupChats.name}).from(groupChats).where(eq(groupChats.id,room.groupId)).limit(1);
+    const [group]=room.groupId ? await db.select({name:groupChats.name}).from(groupChats).where(eq(groupChats.id,room.groupId)).limit(1) : [];
     const inviter=await storage.getUser(userId);
-    pushGroupVoiceSignal(targetId,{type:"group-invite",roomId:room.id,groupId:room.groupId,groupName:group?.name||"Group chat",fromId:userId,fromName:inviter?.username||"A member",withVideo:room.withVideo});
+    room.invited.add(targetId);
+    pushGroupVoiceSignal(targetId,{type:"group-invite",roomId:room.id,groupId:room.groupId,groupName:group?.name||"Friend call",directCall:room.groupId===null,fromId:userId,fromName:inviter?.username||"A friend",withVideo:room.withVideo});
     res.json({success:true});
   });
   app.post("/api/chat/group-voice/join",requireAuth,async(req,res)=>{
     const userId=Number(req.session.userId!),roomId=req.body?.roomId;
     const room=typeof roomId==="string"?groupVoiceRooms.get(roomId):null;
     if(!room) return res.status(404).json({message:"This group call has ended."});
-    if(!await isGroupChatMember(room.groupId,userId)) return res.status(403).json({message:"You are not a member of this group."});
+    if(room.groupId!==null&&!await isGroupChatMember(room.groupId,userId)) return res.status(403).json({message:"You are not a member of this group."});
+    if(room.groupId===null&&!room.invited.has(userId)) return res.status(403).json({message:"You need a valid friend-call invitation to join."});
+    if(room.participants.has(userId)) return res.status(409).json({message:"You are already in this call."});
+    room.invited.delete(userId);
     const user=await storage.getUser(userId);
     room.participants.set(userId,user?.username||("User_"+userId));
     const participants=Array.from(room.participants.entries()).filter(([id])=>id!==userId).map(([userId,username])=>({userId,username}));
     res.json({roomId,withVideo:room.withVideo,participants});
+  });
+  app.post("/api/chat/group-voice/decline",requireAuth,(req,res)=>{
+    const userId=Number(req.session.userId!),roomId=req.body?.roomId;
+    const room=typeof roomId==="string"?groupVoiceRooms.get(roomId):null;
+    if(!room||!room.invited.has(userId)) return res.json({success:true});
+    room.invited.delete(userId);
+    const decliner=await storage.getUser(userId);
+    pushGroupVoiceSignal(room.ownerId,{type:"group-invite-declined",roomId:room.id,userId,username:decliner?.username||"Your friend"});
+    res.json({success:true});
   });
   app.post("/api/chat/group-voice/signal",requireAuth,(req,res)=>{
     const userId=Number(req.session.userId!),to=Number(req.body?.to),room=getGroupVoiceRoom(req.body?.roomId,userId),signal=req.body?.signal;
