@@ -534,8 +534,6 @@ export function ProfileModal({
                         <div className="inline-flex items-center gap-1 mt-1 rounded border border-fuchsia-500/40 bg-fuchsia-400/10 px-2 py-1 text-[9px] font-black tracking-wider text-fuchsia-300"><Sparkles className="w-2.5 h-2.5"/> DIHHRO</div>
                       )}
                     </div>
-                    {["owner","admin"].includes(String(viewer?.role || "").toLowerCase()) && !isOwn && (
-                    )}
                     {canEditProfile && !editing && (
                       <button
                         onClick={() => setEditing(true)}
