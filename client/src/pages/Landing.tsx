@@ -79,6 +79,15 @@ export default function Landing() {
         <Reveal><div className="nexus-landing-stack"><span><Code2/> React + TypeScript</span><span><Server/> Node.js + Express</span><span><Layers3/> PostgreSQL</span><span><Zap/> WebRTC</span></div></Reveal>
       </section>
 
+      <section id="downloads" className="nexus-landing-section nexus-landing-build">
+        <Reveal><div className="nexus-landing-kicker">TAKE NEXUS WITH YOU</div><h2>One account.<br/><span>Every device.</span></h2><p className="nexus-landing-section-lead">Install NEXUS on your computer or Android device, or keep using the website in your browser. Desktop and mobile installers contain the app only — not the backend source or database.</p></Reveal>
+        <div className="nexus-landing-feature-grid">
+          <Reveal><article className="nexus-landing-feature"><div className="nexus-landing-feature-icon"><Smartphone size={21}/></div><h3>Android APK</h3><p>Install the NEXUS Android app directly on a compatible Android device.</p><a className="nexus-landing-primary mt-5 inline-flex" href="https://github.com/adamisfunnyz601-byte/fdsfdffdsd/releases" target="_blank" rel="noreferrer">Get Android build <ArrowRight size={16}/></a></article></Reveal>
+          <Reveal><article className="nexus-landing-feature"><div className="nexus-landing-feature-icon"><Code2 size={21}/></div><h3>Windows installer</h3><p>Download the Windows setup installer and install NEXUS on your PC.</p><a className="nexus-landing-primary mt-5 inline-flex" href="https://github.com/adamisfunnyz601-byte/fdsfdffdsd/releases" target="_blank" rel="noreferrer">Get Windows setup <ArrowRight size={16}/></a></article></Reveal>
+          <Reveal><article className="nexus-landing-feature"><div className="nexus-landing-feature-icon"><Globe2 size={21}/></div><h3>Website</h3><p>Use the full NEXUS experience in your browser without installing anything.</p><a className="nexus-landing-primary mt-5 inline-flex" href="/sign-in">Open NEXUS <ArrowRight size={16}/></a></article></Reveal>
+        </div>
+      </section>
+
       <section className="nexus-landing-final">
         <Reveal><div className="nexus-landing-kicker">YOUR NEXT TAB STARTS HERE</div><h2>Ready to enter<br/><span>your NEXUS?</span></h2><p>Sign in and jump straight into your workspace.</p><Link href={destination} className="nexus-landing-primary">{user ? "Go to Main Page" : "Sign In to NEXUS"} <ArrowRight size={17}/></Link></Reveal>
       </section>
