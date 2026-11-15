@@ -12,7 +12,7 @@ import { PushNotifications } from "@capacitor/push-notifications";
 
 export default function Login() {
   const [mode, setMode] = useState<"login" | "register">(
-    () => window.location.pathname === "/signup" || new URLSearchParams(window.location.search).has("signup") ? "register" : "login"
+    () => window.location.pathname === "/sign-up" || window.location.pathname === "/signup" || new URLSearchParams(window.location.search).has("signup") ? "register" : "login"
   );
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -27,7 +27,7 @@ export default function Login() {
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    if (user) setLocation(window.location.pathname.startsWith("/dihtro/claim/") ? window.location.pathname : "/proxy");
+    if (user) setLocation(window.location.pathname.startsWith("/dihtro/claim/") ? window.location.pathname : (nativeApp ? "/chat" : "/main-page"));
   }, [user, setLocation]);
 
   if (user) return null;
@@ -68,7 +68,7 @@ export default function Login() {
       const verified = await verifyResponse.json().catch(() => ({}));
       if (!verifyResponse.ok || !verified.success) throw new Error(verified.message || "Passkey sign-in failed.");
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      setLocation("/chat");
+      setLocation(nativeApp ? "/chat" : "/main-page");
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "Passkey sign-in failed.";
       setError(message.includes("no passkeys saved") ? message + " Your password sign-in is still available above." : message);
@@ -117,8 +117,8 @@ export default function Login() {
         {nativeApp && !permissionsReady && <div className="mb-5 rounded-xl border border-fuchsia-400/30 bg-fuchsia-500/10 p-4"><p className="text-sm font-semibold text-foreground">Before you sign in</p><p className="mt-1 text-xs text-muted-foreground">Allow notifications, microphone and camera access so NEXUS calls and alerts can work on this device.</p><button type="button" onClick={() => void allowDevicePermissions()} disabled={permissionsBusy} className="mt-3 w-full rounded-lg bg-fuchsia-500 px-4 py-3 text-sm font-bold text-white disabled:opacity-50">{permissionsBusy ? "Requesting permissions…" : "ALLOW NOTIFICATIONS & CALLS"}</button></div>}
         {nativeApp && permissionsReady && <p className="mb-4 flex items-center gap-2 text-xs text-emerald-300"><span>✓</span> Device permissions enabled</p>}
         <div className="flex bg-secondary/60 rounded-lg p-1 mb-6">
-          <button type="button" onClick={() => { setMode("login"); setError(""); }} className={`flex-1 py-2 rounded-md text-sm font-medium ${mode === "login" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground"}`}>Sign In</button>
-          <button type="button" onClick={() => { setMode("register"); setError(""); }} className={`flex-1 py-2 rounded-md text-sm font-medium ${mode === "register" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground"}`}>Create Account</button>
+          <button type="button" onClick={() => { setMode("login"); setError(""); setLocation("/sign-in"); }} className={`flex-1 py-2 rounded-md text-sm font-medium ${mode === "login" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground"}`}>Sign In</button>
+          <button type="button" onClick={() => { setMode("register"); setError(""); setLocation("/sign-up"); }} className={`flex-1 py-2 rounded-md text-sm font-medium ${mode === "register" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground"}`}>Create Account</button>
         </div>
 
         <div className="bg-secondary/40 border border-border rounded-xl p-6 shadow-2xl">
