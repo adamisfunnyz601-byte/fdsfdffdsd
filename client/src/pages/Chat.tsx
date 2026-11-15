@@ -195,7 +195,7 @@ interface IncomingCall { fromId: number; fromName: string; callId: string; withV
 type CallState = 'idle' | 'requesting' | 'incoming' | 'connected';
 interface LogEntry { id: string; time: string; type: 'info' | 'warn' | 'crit'; msg: string; }
 
-function MessageContent({ content }: { content: string }) {
+function MessageContent({ content, users = [] }: { content: string; users?: any[] }) {
   const { data: customEmojis = [] } = useQuery<any[]>({
     queryKey: ["/api/emojis"],
     queryFn: async () => { const response = await apiFetch("/api/emojis", { credentials: "same-origin" }); if (!response.ok) return []; return response.json(); },
@@ -207,14 +207,20 @@ function MessageContent({ content }: { content: string }) {
   const customTokens = trimmed.match(/:[a-z0-9_+-]+:/gi) || [];
   const plainText = trimmed.replace(/:[a-z0-9_+-]+:/gi, "").replace(/[\p{Extended_Pictographic}\uFE0F\u200D\u{1F3FB}-\u{1F3FF}\s]/gu, "");
   const largeEmoji = !plainText && (unicodeCount + customTokens.length) >= 1 && (unicodeCount + customTokens.length) <= 5;
-  const parts = content.split(/(:[a-z0-9_+-]+:|@[a-zA-Z0-9_.-]+)/gi);
+  const userById = new Map((users || []).map((user: any) => [String(user.id), user]));
+  const parts = content.split(/(<@\d+>|<!everyone>|:[a-z0-9_+-]+:)/gi);
   return (
     <span className={largeEmoji ? "inline-flex flex-wrap items-center gap-1 text-[2.5rem] leading-tight" : "inline"}>
       {parts.map((part, index) => {
+        const mentionId = part.match(/^<@(\d+)>$/)?.[1];
+        if (mentionId) {
+          const mentioned = userById.get(mentionId) as any;
+          return mentioned ? <span key={index} title={mentioned.username} className="mx-0.5 inline-flex rounded-md border border-violet-300/35 bg-violet-500/25 px-1.5 py-0.5 font-semibold text-violet-100">@{mentioned.username}</span> : <span key={index}>{part}</span>;
+        }
+        if (part === "<!everyone>") return <span key={index} className="mx-0.5 inline-flex rounded-md border border-violet-300/40 bg-violet-500/30 px-1.5 py-0.5 font-bold text-violet-100">@everyone</span>;
         const emojiName = part.startsWith(":") && part.endsWith(":") ? part.slice(1,-1) : "";
         const emojiUrl = emojiName ? emojiMap.get(emojiName) : null;
         if (emojiUrl) return <img key={index} src={emojiUrl} alt={emojiName} title={part} className={largeEmoji ? "h-10 w-10 object-contain" : "inline-block h-5 w-5 align-[-4px] object-contain"} />;
-        if (part.startsWith("@")) return <span key={index} className="rounded bg-violet-500/10 px-0.5 font-semibold text-violet-200">{part}</span>;
         return <span key={index}>{part}</span>;
       })}
     </span>
@@ -341,9 +347,9 @@ const ChatPollCard = ({ poll, onVote }: { poll: any; onVote: (pollId: number, op
 };
 
 const TerminalMessage = ({
-  msg, isMe, currentUserId, onReply, onForward, onPurge, onMediaPreview, onProfileClick, emoteItem, shouldAutoplayEmote, reactions = [], poll, onToggleReaction, onVote
+  msg, isMe, currentUserId, users = [], onReply, onForward, onPurge, onMediaPreview, onProfileClick, emoteItem, shouldAutoplayEmote, reactions = [], poll, onToggleReaction, onVote
 }: {
-  msg: any; isMe: boolean; currentUserId: number; emoteItem?: any; shouldAutoplayEmote?: boolean; reactions?: any[]; poll?: any; onToggleReaction: (id: number, emoji: string) => void; onVote: (pollId: number, optionId: number) => void;
+  msg: any; isMe: boolean; currentUserId: number; users?: any[]; emoteItem?: any; shouldAutoplayEmote?: boolean; reactions?: any[]; poll?: any; onToggleReaction: (id: number, emoji: string) => void; onVote: (pollId: number, optionId: number) => void;
   onReply: (m: any) => void;
   onForward: (m: any) => void;
   onPurge: (id: number) => void;
@@ -490,7 +496,7 @@ const TerminalMessage = ({
             </div>
           </div>
         )}
-        {chatEmoteMatch ? <div className="mt-1 flex max-w-[240px] flex-col items-center gap-2 rounded-xl border border-violet-400/25 bg-violet-500/10 p-3">{emoteItem?.imageUrl ? <img src={emoteItem.imageUrl} alt={emoteItem.name || "Chat emote"} className="max-h-36 max-w-full object-contain"/> : <span className="text-xs text-violet-200/60">Loading emote…</span>}<span className="text-[10px] font-bold text-violet-100">{emoteItem?.name || "Emote"}</span></div> : displayContent && <div className="whitespace-pre-wrap leading-relaxed select-text break-words"><MessageContent content={displayContent} /></div>}
+        {chatEmoteMatch ? <div className="mt-1 flex max-w-[240px] flex-col items-center gap-2 rounded-xl border border-violet-400/25 bg-violet-500/10 p-3">{emoteItem?.imageUrl ? <img src={emoteItem.imageUrl} alt={emoteItem.name || "Chat emote"} className="max-h-36 max-w-full object-contain"/> : <span className="text-xs text-violet-200/60">Loading emote…</span>}<span className="text-[10px] font-bold text-violet-100">{emoteItem?.name || "Emote"}</span></div> : displayContent && <div className="whitespace-pre-wrap leading-relaxed select-text break-words"><MessageContent content={displayContent} users={users} /></div>}
         {dihhroGiftMatch && <a href={dihhroGiftMatch[0]} target="_blank" rel="noreferrer" className="mt-3 block max-w-sm rounded-xl border border-fuchsia-400/30 bg-gradient-to-r from-fuchsia-500/15 to-violet-500/10 p-3 no-underline transition hover:border-fuchsia-300/60"><div className="flex items-center gap-2 text-[10px] font-black tracking-[.18em] text-fuchsia-200"><Gift className="h-4 w-4"/> NEXUS DIHHRO GIFT</div><div className="mt-1 text-sm font-bold text-white">Claim Dihhro for 1 month!</div><div className="mt-1 text-[10px] text-fuchsia-100/60">Single-use gift · Open to claim</div></a>}
         {getMediaSection()}
         {msg.mediaType === "poll" && poll && <ChatPollCard poll={poll} onVote={onVote}/>}
@@ -558,6 +564,21 @@ export default function Chat() {
     recipientId: selectedRecipientId,
     groupId: selectedGroupId,
   });
+  const lastMentionNoticeId = useRef<number | null>(null);
+  useEffect(() => {
+    if (!messages?.length || !currentUser?.id) return;
+    const newestId = Math.max(...messages.map((message: any) => Number(message.id) || 0));
+    if (lastMentionNoticeId.current === null) { lastMentionNoticeId.current = newestId; return; }
+    const fresh = messages.filter((message: any) => Number(message.id) > Number(lastMentionNoticeId.current) && Number(message.senderId) !== Number(currentUser.id));
+    lastMentionNoticeId.current = Math.max(lastMentionNoticeId.current, newestId);
+    for (const message of fresh) {
+      const content = String(message.content || "");
+      if (!content.includes(`<@${currentUser.id}>`) && !content.includes("<!everyone>")) continue;
+      const sender = message.senderDisplayName || message.senderNickname || message.senderName || "Someone";
+      toast({ title: "You were mentioned", description: `${sender} mentioned you in NEXUS chat.` });
+      try { if ("Notification" in window && Notification.permission === "granted") new Notification("NEXUS · You were mentioned", { body: `${sender} mentioned you in chat.` }); } catch {}
+    }
+  }, [messages, currentUser?.id, toast]);
   const chatInteractionsKey = ["/api/chat/interactions", selectedRecipientId ?? null, selectedGroupId ?? null];
   const { data: chatInteractions = { reactions: {}, polls: {} } } = useQuery<any>({
     queryKey: chatInteractionsKey,
@@ -1286,8 +1307,24 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
       else mediaType = 'file';
     }
 
+    const mentionNames = new Map<string, number>();
+    for (const person of (users || [])) {
+      const username = String(person?.username || "").trim();
+      if (person?.id && person.id !== currentUser?.id && username.length >= 2) mentionNames.set(username, Number(person.id));
+    }
+    let encodedMessageContent = messageContent.replace(/(^|\\s)@everyone(?=$|\\s|[.,!?;:])/gi, "$1<!everyone>");
+    for (const [username, id] of Array.from(mentionNames.entries()).sort((a, b) => b[0].length - a[0].length)) {
+      const escaped = username.replace(/[.*+?^${}()|[\]\\]/g, "\\    sendMessage.mutate({
+      content: messageContent || (uploadFile ? '' : ''),");
+      const matcher = new RegExp(`(^|\\s)@${escaped}(?=$|[\\s.,!?;:])`, "gi");
+      encodedMessageContent = encodedMessageContent.replace(matcher, (_match, prefix) => `${prefix}<@${id}>`);
+    }
+    if (encodedMessageContent.includes("<!everyone>") && !selectedGroupId) {
+      toast({ title: "@everyone only works in group channels", description: "Choose a group channel to notify everyone.", variant: "destructive" });
+      return;
+    }
     sendMessage.mutate({
-      content: messageContent || (uploadFile ? '' : ''),
+      content: encodedMessageContent || (uploadFile ? '' : ''),
       recipientId: selectedRecipientId ?? undefined,
       groupId: selectedGroupId ?? undefined,
       mediaUrl,
@@ -2073,12 +2110,10 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
 
   });
   const filteredGroups = (groups as any[]).filter((g: any) => g.name.toLowerCase().includes(searchTerm.toLowerCase()));
-  const mentionMatch = inputContent.match(/(?:^|\s)@([^\s@]*)$/);
-  const mentionCandidates = mentionMatch
-    ? (users || []).filter((u: any) => {
-        const searchable = `${u.username} ${u.displayName || ""} ${u.nickname || ""}`.toLowerCase();
-        return u.id !== currentUser?.id && searchable.includes((mentionMatch[1] || "").toLowerCase());
-      }).slice(0, 6)
+  const mentionMatch = inputContent.match(/(?:^|\\s)@([^@]*)$/);
+  const mentionQuery = (mentionMatch?.[1] || "").trim().toLowerCase();
+  const mentionCandidates = mentionMatch && mentionQuery !== "everyone"
+    ? (users || []).filter((u: any) => u.id !== currentUser?.id && String(u.username || "").toLowerCase().includes(mentionQuery)).slice(0, 6)
     : [];
 
   const slashParts = inputContent.match(/^\/([^\s]*)(?:\s+(.*))?$/);
@@ -2179,7 +2214,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
   };
 
   const insertMention = (username: string) => {
-    setInputContent(prev => prev.replace(/(?:^|\s)@([^\s@]*)$/, match => `${match.slice(0, match.lastIndexOf("@"))}@${username} `));
+    setInputContent(prev => prev.replace(/(?:^|\\s)@([^@]*)$/, match => `${match.slice(0, match.lastIndexOf("@"))}@${username} `));
   };
 
 
@@ -2662,6 +2697,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
                 msg={msg as any}
                 isMe={msg.senderId === currentUser?.id}
                 currentUserId={currentUser?.id ?? -1}
+                users={users || []}
                 onReply={setReplyTarget}
                 onForward={m => setForwardState({ message: m, isOpen: true })}
                 onPurge={id => deleteMessageMutation.mutate(id)}
