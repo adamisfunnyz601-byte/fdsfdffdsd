@@ -6,7 +6,7 @@ import { useAdminKeys } from "@/hooks/use-admin";
 import { useAuth } from "@/hooks/use-auth";
 import {
   ShieldAlert, Plus, Trash2, Key, Star, Upload,
-  CheckCircle2, XCircle, Clock, Smile, Copy
+  CheckCircle2, XCircle, Clock, Smile, Copy, Users
 } from "lucide-react";
 import { format } from "date-fns";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -19,6 +19,29 @@ export default function Admin() {
   const { user } = useAuth();
   const { toast } = useToast();
   const { keys, generateKey, deleteKey } = useAdminKeys();
+  const isOwner = String(user?.role || "").toLowerCase() === "owner";
+  const { data: accounts = [], refetch: refetchAccounts } = useQuery<any[]>({
+    queryKey: ["/api/admin/users"],
+    queryFn: async () => {
+      const response = await fetch("/api/admin/users", { credentials: "include" });
+      if (!response.ok) throw new Error("Could not load accounts.");
+      return response.json();
+    },
+    enabled: isOwner,
+  });
+  const deleteAccount = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await fetch(`/api/admin/users/${id}`, { method: "DELETE", credentials: "include" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || "Could not delete account.");
+      return data;
+    },
+    onSuccess: async () => {
+      await refetchAccounts();
+      toast({ title: "Account deleted", description: "The account and its associated data have been removed." });
+    },
+    onError: (error: Error) => toast({ title: "Deletion failed", description: error.message, variant: "destructive" }),
+  });
   const [duration, setDuration] = useState("60");
   const [type, setType] = useState<"limited" | "permanent">("limited");
 
@@ -131,12 +154,52 @@ export default function Admin() {
         </div>
 
         <Tabs defaultValue="emojis" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-6">
+          <TabsList className={cn("grid w-full mb-6", isOwner ? "grid-cols-3" : "grid-cols-2")}>
             <TabsTrigger value="emojis" className="flex items-center gap-1">
               <Smile className="w-3 h-3" /> Emojis
             </TabsTrigger>
             <TabsTrigger value="shop">Shop</TabsTrigger>
+            {isOwner && <TabsTrigger value="accounts" className="flex items-center gap-1"><Users className="w-3 h-3" /> Accounts</TabsTrigger>}
           </TabsList>
+
+          {isOwner && <TabsContent value="accounts" className="space-y-4">
+            <div className="discord-card overflow-hidden">
+              <div className="border-b border-border p-4">
+                <h3 className="font-semibold text-foreground text-sm">Account management</h3>
+                <p className="mt-1 text-xs text-muted-foreground">Permanently delete accounts. This action cannot be undone.</p>
+              </div>
+              {accounts.length === 0 ? (
+                <div className="p-8 text-center text-sm text-muted-foreground">No accounts found.</div>
+              ) : (
+                <div className="divide-y divide-border/60">
+                  {accounts.map((account: any) => (
+                    <div key={account.id} className="flex flex-wrap items-center gap-3 p-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-semibold text-foreground">{account.username}</div>
+                        <div className="mt-1 text-[10px] text-muted-foreground">
+                          ID #{account.id} · {String(account.role || "user").replace(/-/g, " ")} · Joined {account.createdAt ? format(new Date(account.createdAt), "MMM d, yyyy") : "unknown"}
+                        </div>
+                      </div>
+                      {account.canDelete && (
+                        <CyberButton
+                          type="button"
+                          className="!min-h-9 !px-3 !py-2 !text-xs"
+                          disabled={deleteAccount.isPending}
+                          onClick={() => {
+                            if (window.confirm(`Permanently delete @${account.username}? Their account and associated data will be removed.`)) {
+                              deleteAccount.mutate(Number(account.id));
+                            }
+                          }}
+                        >
+                          <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete
+                        </CyberButton>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </TabsContent>}
 
           {/* Account access is open through username/password registration. */}
           {false && <TabsContent value="keys" className="space-y-6">
