@@ -15,7 +15,7 @@ jobs:
   inspect-enzonic:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect Enzonic projects and database tool schemas
+      - name: Create Nexus accounts database if missing
         env:
           ENZONIC_CLOUD_TOKEN: ${{ secrets.ENZONIC_CLOUD_TOKEN }}
         run: |
@@ -46,25 +46,38 @@ jobs:
           }
           const init = await rpc({
             jsonrpc: "2.0", id: 1, method: "initialize",
-            params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "nexus-github-actions", version: "1.1.0" } }
+            params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "nexus-github-actions", version: "1.2.0" } }
           });
           if (init.error) throw new Error(init.error.message);
           await rpc({ jsonrpc: "2.0", method: "notifications/initialized" });
           const listed = await rpc({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
           if (listed.error) throw new Error(listed.error.message);
-          const tools = listed.result?.tools || [];
-          for (const name of ["list_projects", "list_databases", "create_database", "get_database"]) {
-            const tool = tools.find(item => item.name === name);
-            console.log(`\n=== ${name} schema ===`);
-            console.log(JSON.stringify(tool || { missing: true }, null, 2));
+          const available = new Set((listed.result?.tools || []).map(tool => tool.name));
+          for (const name of ["list_databases", "create_database"]) {
+            if (!available.has(name)) throw new Error(`Enzonic tool unavailable: ${name}`);
           }
           async function callTool(id, name, args = {}) {
-            const result = await rpc({ jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: args } });
-            if (result.error) throw new Error(result.error.message);
-            return result.result;
+            const response = await rpc({ jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: args } });
+            if (response.error) throw new Error(response.error.message);
+            const result = response.result;
+            if (result?.isError) throw new Error(JSON.stringify(result.structuredContent || result.content || result));
+            return result;
           }
-          for (const name of ["list_projects", "list_databases"]) {
-            console.log(`\n=== Current ${name} ===`);
-            console.log(JSON.stringify(await callTool(name === "list_projects" ? 3 : 4, name), null, 2));
+          const existing = await callTool(3, "list_databases", { limit: 100 });
+          const databases = existing.structuredContent?.data || [];
+          const match = databases.find(db => (db.name || "").toLowerCase() === "nexus accounts");
+          if (match) {
+            console.log("Nexus Accounts database already exists; skipping creation.");
+            console.log(JSON.stringify({ id: match.id, name: match.name, engine: match.engine, status: match.status }, null, 2));
+          } else {
+            console.log("No Nexus Accounts database found. Creating free PostgreSQL in the US region...");
+            const created = await callTool(4, "create_database", {
+              name: "Nexus Accounts",
+              engine: "postgres",
+              region: "us",
+              size: "free"
+            });
+            console.log("Enzonic accepted the database creation request:");
+            console.log(JSON.stringify(created.structuredContent || created.content || created, null, 2));
           }
           NODE
