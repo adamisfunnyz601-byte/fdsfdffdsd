@@ -28,6 +28,9 @@ jobs:
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }}
+          SPACESHIP_ONLY_ALLOW_INTERACTIVE_2FA: "true"
+          LANG: en_US.UTF-8
+          LC_ALL: en_US.UTF-8
         shell: bash
         run: |
           set -euo pipefail
@@ -61,7 +64,8 @@ jobs:
               end
             end
           rescue => error
-            warn "Could not retrieve Apple teams. The Apple session may have expired or require fresh two-factor authentication."
+            warn "Could not retrieve Apple teams. Fastlane rejected the saved session or Apple requires a fresh sign-in."
+            warn "Check that FASTLANE_SESSION contains the complete YAML cookie output with real line breaks, and regenerate it from the same region as the GitHub runner if needed."
             warn "Error class: #{error.class}"
             exit 1
           end
