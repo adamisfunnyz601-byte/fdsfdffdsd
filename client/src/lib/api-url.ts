@@ -25,7 +25,7 @@ export function installApiFetchBridge(): void {
     const target = apiUrl(requestUrl);
     if (input instanceof Request) {
       const request = new Request(target, input);
-      return originalFetch(nativeShell ? new Request(request, { credentials: "include" }) : request, init);
+      return originalFetch(nativeShell ? new Request(request, { credentials: "include" }) : request, nativeShell ? { ...init, credentials: "include" } : init);
     }
     return originalFetch(target, {
       ...init,
