@@ -1043,7 +1043,7 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Invalid role" });
     }
     const aRole = canonicalRole(actor.role), tRole = canonicalRole(target.role);
-    if (!(aRole in roleRank) || (roleRank[aRole] ?? 0) < roleRank["trial-helper"]) {
+    if (!Object.prototype.hasOwnProperty.call(roleRank, aRole) || (roleRank[aRole] ?? 0) < roleRank["trial-helper"]) {
       return res.status(403).json({ message: "Staff access is required to assign roles." });
     }
     if (targetId === actorId) return res.status(403).json({ message: "You cannot change your own role." });
