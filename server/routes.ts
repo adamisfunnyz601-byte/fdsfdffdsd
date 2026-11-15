@@ -722,57 +722,65 @@ export async function registerRoutes(
   app.post(api.auth.login.path, authRateLimit, async (req, res) => {
     try {
       const { serialKey, username } = api.auth.login.input.parse(req.body);
+      const cleanUsername = typeof username === "string" ? username.trim() : "";
+      let user: any = null;
 
-      let user = await storage.getUserBySerial(serialKey);
-      if (!user && username) {
-        const [namedUser] = await db.select().from(users).where(eq(users.username, username)).limit(1);
-        if (namedUser?.passwordHash && verifyAccountPassword(serialKey, namedUser.passwordHash)) user = namedUser;
-        else if (namedUser) return res.status(401).json({ message: "Incorrect username or password." });
+      // Password accounts are always resolved by username first. A password
+      // must never be treated as a global account identifier or serial key.
+      if (cleanUsername) {
+        const [namedUser] = await db.select().from(users)
+          .where(sql`lower(${users.username}) = ${cleanUsername.toLowerCase()}`).limit(1);
+        if (namedUser) {
+          if (namedUser.passwordHash) {
+            if (!verifyAccountPassword(serialKey, namedUser.passwordHash)) {
+              return res.status(401).json({ message: "Incorrect username or password." });
+            }
+          } else if (namedUser.serialKey !== serialKey) {
+            return res.status(401).json({ message: "Incorrect username or password." });
+          }
+          user = namedUser;
+        }
+      } else {
+        // Preserve legacy access-key accounts that sign in without a username.
+        user = await storage.getUserBySerial(serialKey);
       }
 
-      // Check if it's the owner key
-      if (serialKey === OWNER_KEY) {
+      // Preserve owner-key sign-in without allowing a password to select a
+      // different account by matching its serial key.
+      if (!user && serialKey === OWNER_KEY) {
+        user = await storage.getUserBySerial(serialKey);
         if (!user) {
           user = await storage.createUser({
-            username: String(username || "Owner").trim().replace(/\s+/g, "_"),
+            username: String(cleanUsername || "Owner").replace(/\s+/g, "_"),
             serialKey,
             role: "owner",
           });
         }
-      } else {
-        // Standard user login via Access Key
-        if (!user) {
-          // Check if it's a valid access key
-          const accessKey = await storage.getAccessKey(serialKey);
-          if (!accessKey) {
-            return res.status(401).json({ message: "Invalid serial key" });
-          }
-          if (accessKey.isUsed && accessKey.type !== 'permanent') {
-             // If key is single-use and used (NOTE: Schema implies keys create accounts, 
-             // we might want to allow re-login if account exists. 
-             // But let's assume keys are "invites" to create an account OR purely reusable keys.
-             // For simplicity: keys map to Users. If User exists for key, they log in.
-             // If not, we create user.)
-          }
-
-          // Create the user
-          let expiresAt: Date | undefined;
-          if (accessKey.type === 'limited' && accessKey.durationMinutes) {
-            expiresAt = new Date(Date.now() + accessKey.durationMinutes * 60000);
-          }
-
-          user = await storage.createUser({
-            username: String(username || `User-${randomBytes(2).toString('hex')}`).trim().replace(/\s+/g, "_"),
-            serialKey,
-            role: "user",
-            expiresAt
-          });
-
-          await storage.markKeyAsUsed(accessKey.id);
-        }
       }
 
-      // Check expiration
+      // Access keys remain supported for legacy/invite-based accounts.
+      if (!user && serialKey !== OWNER_KEY) {
+        const accessKey = await storage.getAccessKey(serialKey);
+        if (!accessKey) {
+          return res.status(401).json({ message: "Incorrect username or password." });
+        }
+
+        let expiresAt: Date | undefined;
+        if (accessKey.type === "limited" && accessKey.durationMinutes) {
+          expiresAt = new Date(Date.now() + accessKey.durationMinutes * 60000);
+        }
+
+        user = await storage.createUser({
+          username: String(cleanUsername || `User-${randomBytes(2).toString("hex")}`).replace(/\s+/g, "_"),
+          serialKey,
+          role: "user",
+          expiresAt,
+        });
+        await storage.markKeyAsUsed(accessKey.id);
+      }
+
+      if (!user) return res.status(401).json({ message: "Incorrect username or password." });
+
       if (user.expiresAt && new Date() > user.expiresAt) {
         return res.status(401).json({ message: "Account expired" });
       }
@@ -783,10 +791,7 @@ export async function registerRoutes(
         return res.status(403).json({ message: "This account is currently banned." });
       }
 
-      // Rotate the session ID at login to prevent session fixation, then
-      // explicitly persist the authenticated identity before returning success.
-      // This avoids a fast follow-up profile/chat request arriving before the
-      // PostgreSQL session store has committed the new userId.
+      // Rotate and persist the authenticated session before responding.
       await regenerateSession(req);
       req.session.userId = user.id;
       req.session.role = user.role;
@@ -806,7 +811,6 @@ export async function registerRoutes(
       res.status(500).json({ message: "Login failed" });
     }
   });
-
   // Public invite-link validation. The key itself remains the credential used at signup.
   app.get("/api/invites/:key", async (req, res) => {
     try {
