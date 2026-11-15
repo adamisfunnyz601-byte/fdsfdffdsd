@@ -517,7 +517,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/profile-images/:id/:kind/:variant/:version", requireAuth, async (req, res) => {
+  app.get("/api/profile-images/:id/:kind/:variant/:version", async (req, res) => {
     const userId = Number(req.params.id);
     const kind = req.params.kind;
     const variant = req.params.variant;
