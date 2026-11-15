@@ -50,7 +50,7 @@ jobs:
             try {
               message = JSON.parse(body);
             } catch {
-              const dataLine = body.split("\\n").find(line => line.startsWith("data:"));
+              const dataLine = body.split("\n").find(line => line.startsWith("data:"));
               if (!dataLine) throw new Error("Enzonic returned an unrecognised MCP response.");
               message = JSON.parse(dataLine.slice(5).trim());
             }
@@ -69,7 +69,18 @@ jobs:
             }
           });
 
-          await rpc({ jsonrpc: "2.0", method: "notifications/initialized" }, init.sessionId);
+          const notifyResponse = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Content-Type": "application/json",
+              "Accept": "application/json, text/event-stream",
+              "MCP-Protocol-Version": "2025-03-26",
+              ...(init.sessionId ? { "Mcp-Session-Id": init.sessionId } : {})
+            },
+            body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })
+          });
+          if (!notifyResponse.ok) throw new Error(`MCP initialization notification failed: HTTP ${notifyResponse.status}`);
           const listed = await rpc({
             jsonrpc: "2.0",
             id: 2,
