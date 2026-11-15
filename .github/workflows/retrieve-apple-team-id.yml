@@ -3,8 +3,8 @@ name: Retrieve Apple Personal Team ID
 on:
   workflow_dispatch:
     inputs:
-      apple_2fa_code:
-        description: "Type the current Apple verification code"
+      challenge_id:
+        description: "Challenge ID created in the NEXUS Apple verification popup"
         required: true
         type: string
 
@@ -31,39 +31,70 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
           FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }}
-          APPLE_2FA_CODE: ${{ inputs.apple_2fa_code }}
+          APPLE_2FA_RELAY_SECRET: ${{ secrets.APPLE_2FA_RELAY_SECRET }}
+          APPLE_2FA_CHALLENGE_ID: ${{ inputs.challenge_id }}
           LANG: en_US.UTF-8
           LC_ALL: en_US.UTF-8
         run: |
           set -euo pipefail
 
-          # Mask the code before any command can print it.
-          if [[ -n "${APPLE_2FA_CODE:-}" ]]; then
-            echo "::add-mask::${APPLE_2FA_CODE}"
-          fi
-
           if [[ -z "${APPLE_ID:-}" ]]; then
             echo "::error::Missing APPLE_ID repository secret."
             exit 1
           fi
-
           if [[ -z "${FASTLANE_PASSWORD:-}" && -z "${FASTLANE_SESSION:-}" ]]; then
-            echo "::error::Add FASTLANE_PASSWORD or FASTLANE_SESSION as a repository secret."
+            echo "::error::Add FASTLANE_PASSWORD as a repository secret."
+            exit 1
+          fi
+          if [[ -z "${APPLE_2FA_RELAY_SECRET:-}" ]]; then
+            echo "::error::Missing APPLE_2FA_RELAY_SECRET repository secret."
+            exit 1
+          fi
+          if [[ ! "${APPLE_2FA_CHALLENGE_ID:-}" =~ ^[A-Za-z0-9_-]{32}$ ]]; then
+            echo "::error::Invalid challenge ID. Create a fresh challenge in NEXUS."
             exit 1
           fi
 
-          if [[ ! "${APPLE_2FA_CODE:-}" =~ ^[0-9]{4,6}$ ]]; then
-            echo "::error::Enter a valid 4–6 digit Apple verification code."
-            exit 1
-          fi
+          echo "::add-mask::${APPLE_2FA_RELAY_SECRET}"
 
           ruby <<'RUBY'
           require "spaceship"
+          require "net/http"
+          require "json"
+          require "uri"
 
           module Spaceship
             class Client
               def ask_for_2fa_code(_prompt)
-                ENV.fetch("APPLE_2FA_CODE")
+                challenge_id = ENV.fetch("APPLE_2FA_CHALLENGE_ID")
+                secret = ENV.fetch("APPLE_2FA_RELAY_SECRET")
+                uri = URI("https://nexus-api-rcmi.onrender.com/api/internal/apple-auth/#{challenge_id}/poll")
+                deadline = Time.now + 240
+
+                puts "Waiting for the verification code in your NEXUS popup..."
+                loop do
+                  raise "Timed out waiting for the NEXUS verification code." if Time.now >= deadline
+
+                  request = Net::HTTP::Post.new(uri)
+                  request["Authorization"] = "Bearer #{secret}"
+                  request["Content-Type"] = "application/json"
+                  response = Net::HTTP.start(uri.host, uri.port, use_ssl: true, open_timeout: 10, read_timeout: 15) do |http|
+                    http.request(request)
+                  end
+
+                  case response.code.to_i
+                  when 200
+                    code = JSON.parse(response.body).fetch("code").to_s
+                    raise "NEXUS returned an invalid verification code." unless code.match?(/\A[0-9]{4,8}\z/)
+                    puts "::add-mask::#{code}"
+                    puts "Verification code received securely."
+                    return code
+                  when 202
+                    sleep 3
+                  else
+                    raise "NEXUS verification relay returned HTTP #{response.code}."
+                  end
+                end
               end
             end
           end
@@ -102,7 +133,7 @@ jobs:
 
             abort "Apple returned no Team IDs." unless found
           rescue => error
-            warn "Apple sign-in or team lookup failed (#{error.class}). Check the credentials and use a fresh verification code."
+            warn "Apple sign-in or team lookup failed (#{error.class}). Check the credentials and create a fresh verification challenge."
             exit 1
           end
           RUBY
