@@ -541,13 +541,43 @@ export async function registerRoutes(
         counter: credential.counter,
         transports: credential.transports || [],
       }).onConflictDoNothing();
+      // Confirm the credential is persisted for this account before reporting success.
+      const [savedCredential] = await db.select({ id: passkeyCredentials.id, userId: passkeyCredentials.userId })
+        .from(passkeyCredentials).where(eq(passkeyCredentials.credentialId, credential.id)).limit(1);
+      if (!savedCredential || savedCredential.userId !== flow.userId) {
+        return res.status(409).json({ message: "The passkey was created on this device, but NEXUS could not attach it to this account. Try adding it again, or use your password to sign in." });
+      }
       delete req.session.passkeyFlow;
       await saveSession(req);
-      return res.json({ verified: true });
+      return res.json({ verified: true, saved: true, passkey: { id: savedCredential.id } });
     } catch (error: any) {
       console.error("[passkey] Registration verification failed:", error?.message || error);
       return res.status(400).json({ message: error?.message || "Could not verify this passkey." });
     }
+  });
+
+  // Passkey management: expose safe metadata only, never public keys or credential secrets.
+  app.get("/api/auth/passkeys", requireAuth, async (req, res) => {
+    const credentials = await db.select({
+      id: passkeyCredentials.id,
+      createdAt: passkeyCredentials.createdAt,
+      transports: passkeyCredentials.transports,
+    }).from(passkeyCredentials)
+      .where(eq(passkeyCredentials.userId, Number(req.session.userId!)))
+      .orderBy(desc(passkeyCredentials.createdAt));
+    res.setHeader("Cache-Control", "no-store");
+    return res.json({ passkeys: credentials });
+  });
+
+  app.delete("/api/auth/passkeys/:id", requireAuth, async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ message: "Invalid passkey." });
+    const [removed] = await db.delete(passkeyCredentials).where(and(
+      eq(passkeyCredentials.id, id),
+      eq(passkeyCredentials.userId, Number(req.session.userId!)),
+    )).returning({ id: passkeyCredentials.id });
+    if (!removed) return res.status(404).json({ message: "Passkey not found on this account." });
+    return res.json({ success: true, id: removed.id });
   });
 
   app.post("/api/auth/passkeys/login/options", authRateLimit, async (req, res) => {
@@ -557,7 +587,7 @@ export async function registerRoutes(
       const [account] = await db.select().from(users).where(sql`lower(${users.username}) = ${username.toLowerCase()}`).limit(1);
       if (!account) return res.status(404).json({ message: "No passkey-enabled account was found." });
       const credentials = await db.select().from(passkeyCredentials).where(eq(passkeyCredentials.userId, account.id));
-      if (!credentials.length) return res.status(404).json({ message: "This account has no registered passkeys yet." });
+      if (!credentials.length) return res.status(404).json({ message: "This account has no passkeys saved in NEXUS. Sign in with your password, then add a passkey in Settings." });
       const { generateAuthenticationOptions } = await import("@simplewebauthn/server");
       const { rpID } = getWebAuthnSettings(req);
       const options = await generateAuthenticationOptions({
