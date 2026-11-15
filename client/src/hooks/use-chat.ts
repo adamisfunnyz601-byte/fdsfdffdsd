@@ -81,7 +81,14 @@ export function useChat({ recipientId = null, groupId = null }: ChatChannel = {}
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error("Failed to send message");
+      if (!res.ok) {
+        let detail = "Failed to send message";
+        try {
+          const body = await res.json();
+          if (body?.message) detail = String(body.message);
+        } catch {}
+        throw new Error(detail);
+      }
       return res.json();
     },
     onMutate: async (data) => {
