@@ -36,7 +36,7 @@ declare module "express-session" {
 }
 
 const PgSessionStore = connectPgSimple(session);
-const OWNER_KEY = "TSHSKDB163)#(";
+const OWNER_KEY = process.env.OWNER_KEY || "";
 const PRESENCE_STATUSES = ["online", "idle", "dnd", "offline"] as const;
 type ProfileImageKind = "avatar" | "banner";
 type ProfileImageVariant = "thumbnail" | "full";
