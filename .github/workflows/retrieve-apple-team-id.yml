@@ -2,6 +2,11 @@ name: Retrieve Apple Personal Team ID
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feat/mobile-notifications-responsive-platforms
+    paths:
+      - .github/workflows/retrieve-apple-team-id.yml
 
 permissions:
   contents: read
