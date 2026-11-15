@@ -44,7 +44,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Could not create gift.");
       await navigator.clipboard?.writeText(data.claimUrl);
-      window.alert("CLAIM YOUR FREE DIHTRO PRESENT 🎁\\n\\n" + data.claimUrl + "\\n\\nThe claim link has been copied.");
+      window.alert("CLAIM YOUR FREE DIHTRO PRESENT 🎁\n\n" + data.claimUrl + "\n\nThe claim link has been copied.");
     } catch (error) { window.alert(error instanceof Error ? error.message : "Could not create gift."); }
   };
   useEffect(() => {
