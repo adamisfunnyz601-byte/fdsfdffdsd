@@ -91,7 +91,7 @@ export default function Landing() {
       <section className="nexus-landing-final">
         <Reveal><div className="nexus-landing-kicker">YOUR NEXT TAB STARTS HERE</div><h2>Ready to enter<br/><span>your NEXUS?</span></h2><p>Sign in and jump straight into your workspace.</p><Link href={destination} className="nexus-landing-primary">{user ? "Go to Main Page" : "Sign In to NEXUS"} <ArrowRight size={17}/></Link></Reveal>
       </section>
-      <footer className="nexus-landing-footer"><Link href="/" className="nexus-landing-brand"><span className="nexus-landing-mark">N</span><span>NEXUS<span className="nexus-landing-brand-dot">.</span></span></Link><span>Built to bring your digital world together.</span><div className="flex items-center gap-4 text-xs"><Link href="/terms" className="text-white/55 transition hover:text-white">Terms and Conditions</Link><a href="#top" onClick={e => { e.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); }}>Back to top ↑</a></div></footer>
+      <footer className="nexus-landing-footer"><Link href="/" className="nexus-landing-brand"><span className="nexus-landing-mark">N</span><span>NEXUS™<span className="nexus-landing-brand-dot">.</span></span></Link><span>Built to bring your digital world together.</span><div className="flex flex-wrap items-center gap-4 text-xs"><Link href="/terms" className="text-white/55 transition hover:text-white">Terms and Conditions</Link><a href="#top" onClick={e => { e.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); }}>Back to top ↑</a></div><small className="basis-full text-[10px] text-white/35">© 2026 AdamisFunnyz. All rights reserved. AdamisFunnyz™ and BLOCKED™ are creator brand names.</small></footer>
     </main>
   );
 }
