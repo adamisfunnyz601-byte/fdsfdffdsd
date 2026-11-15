@@ -26,6 +26,7 @@ import { getFontClass, getUsernameGradientStyle } from "@/components/ProfileText
 import { UserProfileTag } from "@/components/UserProfileTag";
 import { EmojiButton } from "@/components/EmojiPicker";
 import { getRtcConfiguration } from "@/lib/webrtc";
+import { startNativeCallAudio, stopNativeCallAudio } from "@/lib/native-call-audio";
 
 // Route API requests to the configured backend and always include the Neon-backed
 // server session cookie. "same-origin" silently drops the cookie in the native
@@ -680,6 +681,7 @@ export default function Chat() {
       const created=await groupVoicePost("/api/chat/group-voice/start",{groupId:selectedGroupId,withVideo});
       groupCallIdRef.current=created.roomId;setGroupCallId(created.roomId);setGroupCallGroupId(selectedGroupId);groupCallActiveRef.current=true;
       setGroupCallParticipants([{userId:Number(currentUserId),username:(currentUser as any)?.username||"You"}]);setActiveGroupCallTab(Number(currentUserId));
+      await startNativeCallAudio();
       const local=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:withVideo?{facingMode:"user"}:false});
       groupLocalStreamRef.current=local;setVisualizerStream(local);setCallTime(0);
       pushLog("GROUP_CALL_STARTED","info");
@@ -691,6 +693,7 @@ export default function Chat() {
       setGroupCallWithVideo(Boolean(invite.withVideo));
       const joined=await groupVoicePost("/api/chat/group-voice/join",{roomId:invite.roomId});
       groupCallIdRef.current=joined.roomId;setGroupCallId(joined.roomId);setGroupCallGroupId(Number(invite.groupId));groupCallActiveRef.current=true;setIncomingGroupCall(null);
+      await startNativeCallAudio();
       const local=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:joined.withVideo?{facingMode:"user"}:false});
       groupLocalStreamRef.current=local;setVisualizerStream(local);
       setGroupCallParticipants([{userId:Number(currentUserId),username:(currentUser as any)?.username||"You"},...joined.participants]);setActiveGroupCallTab(joined.participants[0]?.userId??Number(currentUserId));
@@ -714,6 +717,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     if(roomId)groupVoicePost("/api/chat/group-voice/leave",{roomId}).catch(()=>{});
     groupPeersRef.current.forEach(peer=>peer.close());groupPeersRef.current.clear();groupRemoteStreamsRef.current.clear();groupPendingIceRef.current.clear();
     groupLocalStreamRef.current?.getTracks().forEach(track=>track.stop());groupLocalStreamRef.current=null;
+    stopNativeCallAudio().catch(()=>{});
     setGroupCallParticipants([]);setActiveGroupCallTab(null);setGroupCallGroupId(null);setGroupRemoteVersion(v=>v+1);setVisualizerStream(null);setShowGroupCallInvites(false);
   };
 
@@ -1372,6 +1376,9 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     if (peerSetupPromiseRef.current) return peerSetupPromiseRef.current;
     if (peerConnectionRef.current && localStreamRef.current) return peerConnectionRef.current;
     const setup = (async () => {
+      // Start the native microphone foreground service before WebRTC captures audio.
+      // This keeps Android's WebView process eligible to continue the call in background.
+      await startNativeCallAudio();
       const peer = new RTCPeerConnection(await getRtcConfiguration());
       // Reserve a negotiated video sender even for audio-first calls so enabling
       // the camera later does not require an unsupported renegotiation.
@@ -1511,6 +1518,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     setIncomingCall(null);
     setCallState('connected');
     try {
+      await startNativeCallAudio();
       await postVoiceSignal('/api/chat/voice/accept', { callId: call.callId });
       pushLog(`CALL_ACCEPTED: ${call.fromName}`, 'info');
     } catch (error: any) {
@@ -1528,6 +1536,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     if (autoDeclineTimerRef.current) { clearTimeout(autoDeclineTimerRef.current); autoDeclineTimerRef.current = null; }
     callIdRef.current = null;
     stopAllCallMedia();
+    stopNativeCallAudio().catch(() => {});
     setCallState('idle');
     setIncomingCall(null);
     setCallTargetName('');
