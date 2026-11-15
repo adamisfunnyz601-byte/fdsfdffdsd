@@ -2461,7 +2461,7 @@ export async function registerRoutes(
     const participants=Array.from(room.participants.entries()).filter(([id])=>id!==userId).map(([userId,username])=>({userId,username}));
     res.json({roomId,withVideo:room.withVideo,participants});
   });
-  app.post("/api/chat/group-voice/decline",requireAuth,(req,res)=>{
+  app.post("/api/chat/group-voice/decline",requireAuth,async(req,res)=>{
     const userId=Number(req.session.userId!),roomId=req.body?.roomId;
     const room=typeof roomId==="string"?groupVoiceRooms.get(roomId):null;
     if(!room||!room.invited.has(userId)) return res.json({success:true});
