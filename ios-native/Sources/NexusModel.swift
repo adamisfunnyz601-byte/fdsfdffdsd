@@ -14,7 +14,7 @@ final class NexusModel: ObservableObject {
     @Published var busy = false
     @Published var error: String?
     @Published var connected = false
-    private let base = URL(string: "https://nexus.tunnelto.me")!
+    private let base = URL(string: "https://nexuss.devs.li")!
     private var poller: Task<Void, Never>?
     private var activeSound: AVAudioPlayer?
 
