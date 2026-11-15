@@ -18,6 +18,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [registering, setRegistering] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [passkeyBusy, setPasskeyBusy] = useState(false);
   const [error, setError] = useState("");
   const nativeApp = Capacitor.isNativePlatform() || window.location.protocol === "file:";
@@ -90,13 +91,14 @@ export default function Login() {
       login({ username: cleanUsername, serialKey: password });
       return;
     }
+    if (!termsAccepted) { setError("You must agree to the Terms and Conditions before creating an account."); return; }
     setRegistering(true);
     try {
       const response = await fetch(apiUrl("/api/auth/register"), {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: cleanUsername, password }),
+        body: JSON.stringify({ username: cleanUsername, password, acceptedTermsVersion: "2026-11-15" }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.message || "Could not create your account.");
@@ -138,8 +140,12 @@ export default function Login() {
               </div>
               {mode === "register" && <p className="text-xs text-muted-foreground">Use 3–24 characters for your username and at least 8 for your password.</p>}
             </div>
+            {mode === "register" && <label className="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
+              <input type="checkbox" checked={termsAccepted} onChange={event => setTermsAccepted(event.target.checked)} required className="mt-1 accent-violet-500"/>
+              <span>I agree to the <a href="/terms" target="_blank" rel="noreferrer" className="font-semibold text-violet-300 underline underline-offset-2 hover:text-violet-200">NEXUS Terms and Conditions</a>.</span>
+            </label>}
             {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-            <CyberButton type="submit" className="w-full mt-2" isLoading={isLoggingIn || registering} disabled={!username.trim() || password.length < 8 || isLoggingIn || registering}>
+            <CyberButton type="submit" className="w-full mt-2" isLoading={isLoggingIn || registering} disabled={!username.trim() || password.length < 8 || isLoggingIn || registering || (mode === "register" && !termsAccepted)}>
               {mode === "login" ? <><Lock className="w-4 h-4" /> Sign In</> : <><UserRoundPlus className="w-4 h-4" /> Create Account</>}
             </CyberButton>
           </form>
