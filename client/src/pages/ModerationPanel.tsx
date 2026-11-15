@@ -125,7 +125,7 @@ export default function ModerationPanel() {
   const protectedTarget = target && String(target.role).toLowerCase() === "owner";
   const roleRank: Record<string, number> = { owner: 100, admin: 90, "trial-admin": 80, moderator: 70, "trial-moderator": 60, helper: 40, "trial-helper": 30, user: 0 };
   const assignableRoles = Object.keys(roleRank).filter(candidate =>
-    role === "owner" ? candidate !== "owner" || true : roleRank[candidate] < (roleRank[role] ?? -1)
+    role === "owner" || roleRank[candidate] < (roleRank[role] ?? -1)
   );
 
   const assignRole = async () => {
