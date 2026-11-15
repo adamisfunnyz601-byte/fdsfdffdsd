@@ -68,7 +68,7 @@ export function NexusCallPanel({targetId,targetName}:Props) {
 
   useEffect(()=>{
     const video=remoteVideoRef.current;
-    if(video)video.srcObject=remoteStream;
+    if(video){video.srcObject=remoteStream;void video.play().catch(()=>{});}
   },[remoteStream,call]);
 
   const createPeer=useCallback(async(active:ActiveCall,stream:MediaStream)=>{
@@ -200,7 +200,8 @@ export function NexusCallPanel({targetId,targetName}:Props) {
         <header className="flex items-center justify-between gap-3"><div><p className="text-lg font-bold">{call.peerName}</p><p className="text-xs text-white/50">{status||"Connecting…"}</p></div><button type="button" onClick={()=>void hangup()} aria-label="Close call" className="rounded-xl border border-white/10 bg-white/5 p-2 text-white/60"><X size={17}/></button></header>
         <div className="relative mt-4 grid min-h-[260px] grid-cols-1 gap-3 overflow-hidden rounded-2xl bg-black/35 p-3 sm:grid-cols-2">
           <div className="flex min-h-[220px] flex-col items-center justify-center rounded-xl border border-white/10 bg-white/[0.035]">
-            <video ref={remoteVideoRef} autoPlay playsInline className="h-full max-h-[360px] w-full rounded-xl object-cover"/>
+            <video ref={remoteVideoRef} autoPlay muted playsInline className="h-full max-h-[360px] w-full rounded-xl object-cover"/>
+            <audio autoPlay playsInline ref={element=>{if(element&&element.srcObject!==remoteStream){element.srcObject=remoteStream;void element.play().catch(()=>{});}}} className="hidden"/>
             {!remoteStream&&<><div className="mb-2 grid h-20 w-20 place-items-center rounded-full bg-violet-500/20 text-2xl font-bold">{call.peerName.slice(0,1).toUpperCase()}</div><p className="text-sm text-white/60">Waiting for {call.peerName}…</p></>}
             <AudioMeter stream={remoteStream}/>
           </div>
