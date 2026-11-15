@@ -754,6 +754,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
   const remoteStreamRef = useRef<MediaStream | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const peerSetupPromiseRef = useRef<Promise<RTCPeerConnection> | null>(null);
+  const offerCreationCallIdRef = useRef<string | null>(null);
   const callPeerIdRef = useRef<number | null>(null);
   const callInitiatorRef = useRef(false);
   const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
@@ -1355,6 +1356,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     try { peerConnectionRef.current?.close(); } catch {}
     peerConnectionRef.current = null;
     peerSetupPromiseRef.current = null;
+    offerCreationCallIdRef.current = null;
     pendingIceCandidatesRef.current = [];
     screenShareTrackRef.current?.stop();
     screenShareTrackRef.current = null;
@@ -1668,14 +1670,28 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
         const peer = await createPeerConnection();
         if (!active) { peer.close(); return; }
         if (callInitiatorRef.current) {
-          const offer = await peer.createOffer();
-          await peer.setLocalDescription(offer);
-          await postVoiceSignal('/api/chat/voice/offer', {
-            callId: callIdRef.current,
-            recipientId: callPeerIdRef.current,
-            offer: peer.localDescription,
-          });
-          pushLog('WEBRTC_OFFER_SENT', 'info');
+          const activeCallId = callIdRef.current;
+          // A call may cause multiple renders (or duplicate acceptance events).
+          // Only ever create/send one local SDP offer for a given call.
+          if (!activeCallId || offerCreationCallIdRef.current === activeCallId) return;
+          if (peer.signalingState !== 'stable' || peer.localDescription) {
+            throw new Error(`Cannot create offer while signalling state is ${peer.signalingState}`);
+          }
+          offerCreationCallIdRef.current = activeCallId;
+          try {
+            const offer = await peer.createOffer();
+            if (!active || peer.signalingState !== 'stable') return;
+            await peer.setLocalDescription(offer);
+            await postVoiceSignal('/api/chat/voice/offer', {
+              callId: activeCallId,
+              recipientId: callPeerIdRef.current,
+              offer: peer.localDescription,
+            });
+            pushLog('WEBRTC_OFFER_SENT', 'info');
+          } catch (offerError) {
+            if (offerCreationCallIdRef.current === activeCallId) offerCreationCallIdRef.current = null;
+            throw offerError;
+          }
         }
       } catch (error: any) {
         toast({ title: 'CALL_MEDIA_ERROR', description: error?.message || 'Could not start microphone/camera.', variant: 'destructive' });
