@@ -56,7 +56,7 @@ jobs:
             class Client
               def ask_for_2fa_code(prompt)
                 code = ENV["APPLE_2FA_CODE"].to_s.strip
-                unless code.match?(/\\A\\d{4,6}\\z/)
+                unless code.match?(/\A\d{4,6}\z/)
                   raise "Apple requested 2FA, but no valid 4–6 digit APPLE_2FA_CODE was supplied. Generate a fresh code on a trusted Apple device and rerun."
                 end
                 puts "Using the one-time 2FA code supplied for this workflow run."
