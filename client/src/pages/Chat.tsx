@@ -195,6 +195,67 @@ interface IncomingCall { fromId: number; fromName: string; callId: string; withV
 type CallState = 'idle' | 'requesting' | 'incoming' | 'connected';
 interface LogEntry { id: string; time: string; type: 'info' | 'warn' | 'crit'; msg: string; }
 
+function getMentionDraftParts(content: string, users: any[] = []) {
+  const parts: Array<{ text: string; kind: "text" | "mention" | "everyone" }> = [];
+  const names = users
+    .filter((user: any) => user?.id)
+    .map((user: any) => ({ id: Number(user.id), username: String(user.username || "").trim() }))
+    .filter((user: any) => user.username.length >= 2)
+    .sort((a: any, b: any) => b.username.length - a.username.length);
+  let cursor = 0;
+  let plainStart = 0;
+  const pushText = (value: string) => { if (value) parts.push({ text: value, kind: "text" }); };
+  while (cursor < content.length) {
+    const token = content.slice(cursor).match(/^<@(\d+)>/);
+    if (token) {
+      pushText(content.slice(plainStart, cursor));
+      const user = users.find((item: any) => Number(item.id) === Number(token[1]));
+      parts.push({ text: user ? "@" + user.username : token[0], kind: user ? "mention" : "text" });
+      cursor += token[0].length;
+      plainStart = cursor;
+      continue;
+    }
+    if (content.slice(cursor).toLowerCase().startsWith("@everyone") && (!content[cursor + 9] || /[\s.,!?;:]/.test(content[cursor + 9]))) {
+      pushText(content.slice(plainStart, cursor));
+      parts.push({ text: "@everyone", kind: "everyone" });
+      cursor += 9;
+      plainStart = cursor;
+      continue;
+    }
+    if (content[cursor] === "@" && (cursor === 0 || /\s/.test(content[cursor - 1]))) {
+      const found = names.find((entry: any) => {
+        const candidate = "@" + entry.username;
+        const actual = content.slice(cursor, cursor + candidate.length);
+        const after = content[cursor + candidate.length] || "";
+        return actual.toLocaleLowerCase() === candidate.toLocaleLowerCase() && (!after || /[\s.,!?;:]/.test(after));
+      });
+      if (found) {
+        pushText(content.slice(plainStart, cursor));
+        parts.push({ text: "@" + found.username, kind: "mention" });
+        cursor += found.username.length + 1;
+        plainStart = cursor;
+        continue;
+      }
+    }
+    cursor++;
+  }
+  pushText(content.slice(plainStart));
+  return parts;
+}
+
+function encodeChatMentions(content: string, users: any[] = [], currentUserId?: number) {
+  const parts = getMentionDraftParts(content, users);
+  return parts.map(part => {
+    if (part.kind === "everyone") return "<!everyone>";
+    if (part.kind === "mention") {
+      const username = part.text.slice(1).toLocaleLowerCase();
+      const user = users.find((item: any) => String(item.username || "").toLocaleLowerCase() === username && Number(item.id) !== Number(currentUserId));
+      return user ? "<@" + Number(user.id) + ">" : part.text;
+    }
+    return part.text;
+  }).join("");
+}
+
 function MessageContent({ content, users = [] }: { content: string; users?: any[] }) {
   const { data: customEmojis = [] } = useQuery<any[]>({
     queryKey: ["/api/emojis"],
@@ -1311,29 +1372,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
       else mediaType = 'file';
     }
 
-    const mentionNames = new Map<string, number>();
-    for (const person of (users || [])) {
-      const username = String(person?.username || "").trim();
-      if (person?.id && person.id !== currentUser?.id && username.length >= 2) mentionNames.set(username, Number(person.id));
-    }
-    let encodedMessageContent = messageContent.replace(/(^|\s)@everyone(?=$|\s|[.,!?;:])/gi, "$1<!everyone>");
-    for (const [username, id] of Array.from(mentionNames.entries()).sort((a, b) => b[0].length - a[0].length)) {
-      const needle = "@" + username.toLocaleLowerCase();
-      let searchFrom = 0;
-      while (searchFrom < encodedMessageContent.length) {
-        const lower = encodedMessageContent.toLocaleLowerCase();
-        const at = lower.indexOf(needle, searchFrom);
-        if (at < 0) break;
-        const before = at === 0 ? "" : encodedMessageContent[at - 1];
-        const after = encodedMessageContent[at + needle.length] || "";
-        const leftBoundary = !before || /\s/.test(before);
-        const rightBoundary = !after || /[\s.,!?;:]/.test(after);
-        if (leftBoundary && rightBoundary) {
-          encodedMessageContent = encodedMessageContent.slice(0, at) + "<@" + id + ">" + encodedMessageContent.slice(at + needle.length);
-          searchFrom = at + String(id).length + 3;
-        } else searchFrom = at + 1;
-      }
-    }
+    const encodedMessageContent = encodeChatMentions(messageContent, users || [], currentUser?.id);
     if (encodedMessageContent.includes("<!everyone>") && !selectedGroupId) {
       toast({ title: "@everyone only works in group channels", description: "Choose a group channel to notify everyone.", variant: "destructive" });
       return;
@@ -2228,8 +2267,9 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     }
   };
 
-  const insertMention = (username: string) => {
-    setInputContent(prev => prev.replace(/(?:^|\\s)@([^@]*)$/, match => `${match.slice(0, match.lastIndexOf("@"))}@${username} `));
+  const insertMention = (person: any) => {
+    const token = "<@" + Number(person.id) + "> ";
+    setInputContent(prev => prev.replace(/(?:^|\s)@([^@]*)$/, match => match.slice(0, match.lastIndexOf("@")) + token));
   };
 
 
@@ -2827,12 +2867,19 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
 
               <button type="button" onClick={() => { setPollQuestion(""); setPollOptions(["", ""]); setShowPollComposer(true); }} title="Create a poll" aria-label="Create a poll" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-violet-300/15 bg-violet-400/[.06] text-violet-200/75 transition hover:border-violet-300/35 hover:bg-violet-400/15 hover:text-white"><BarChart3 className="h-4 w-4"/></button>
               <div className="flex-1 relative">
+                <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-[1] flex h-10 items-center overflow-hidden rounded-xl border border-transparent px-4 pr-12 text-sm whitespace-pre text-foreground">
+                  <span className="min-w-0 overflow-hidden text-ellipsis">
+                    {inputContent ? getMentionDraftParts(inputContent, users || []).map((part, index) => part.kind === "text"
+                      ? <span key={index}>{part.text}</span>
+                      : <span key={index} className="mx-px rounded-md border border-violet-300/35 bg-violet-500/25 px-1 py-0.5 font-semibold text-violet-100">{part.text}</span>) : <span className="text-muted-foreground">Message... (type / for commands)</span>}
+                  </span>
+                </div>
                 <input
                   value={inputContent}
                   onChange={e => setInputContent(e.target.value)}
                   onKeyDown={handleComposerKeyDown}
-                  placeholder="Message... (type / for commands)"
-                  className="w-full h-10 bg-input/90 border border-border rounded-xl px-4 pr-12 text-sm text-foreground placeholder:text-muted-foreground shadow-inner transition-all duration-200 ease-out focus:-translate-y-px focus:outline-none focus:ring-2 focus:ring-violet-400/30 focus:border-violet-400/60 focus:shadow-[0_0_22px_rgba(139,92,246,0.12)]"
+                  placeholder=""
+                  className="relative z-[2] w-full h-10 bg-input/90 border border-border rounded-xl px-4 pr-12 text-sm text-transparent caret-white selection:bg-violet-400/30 placeholder:text-transparent shadow-inner transition-all duration-200 ease-out focus:-translate-y-px focus:outline-none focus:ring-2 focus:ring-violet-400/30 focus:border-violet-400/60 focus:shadow-[0_0_22px_rgba(139,92,246,0.12)]"
                 />
                 {showCommandMenu && (
                   <div className="chat-command-menu absolute bottom-12 left-0 right-0 z-50 max-h-[min(64vh,520px)] overflow-hidden rounded-2xl border border-violet-300/25 bg-[#10091b]/[.98] shadow-[0_18px_65px_rgba(0,0,0,.55),0_0_34px_rgba(139,92,246,.17)] backdrop-blur-2xl">
@@ -2869,7 +2916,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
                       <button
                         key={u.id}
                         type="button"
-                        onClick={() => insertMention(u.username)}
+                        onClick={() => insertMention(u)}
                         className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-secondary/70 transition-colors"
                       >
                         <Avatar url={u.avatarUrl} name={u.username} size={22} />
