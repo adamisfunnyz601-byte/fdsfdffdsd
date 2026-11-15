@@ -58,6 +58,124 @@ jobs:
           echo "iOS-bundled frontend:"
           du -sh ios/App/App/public
           test -d ios/App/App.xcodeproj
+      - name: Embed native CallKit integration for iOS system call indicator
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          app_delegate = Path("ios/App/App/AppDelegate.swift")
+          if not app_delegate.exists():
+              raise SystemExit("Capacitor AppDelegate.swift was not generated")
+          source = app_delegate.read_text()
+          if "NexusCallKitPlugin" not in source:
+              source = source.replace("import Capacitor", "import Capacitor\nimport CallKit\nimport AVFoundation", 1)
+              launch = re.search(r"(func application\\([^)]*didFinishLaunchingWithOptions[^)]*\\)\\s*->\\s*Bool\\s*\\{)", source)
+              if not launch:
+                  raise SystemExit("Could not find AppDelegate launch method to register CallKit")
+              insertion = """
+                  DispatchQueue.main.async {
+                      if let bridgeViewController = self.window?.rootViewController as? CAPBridgeViewController {
+                          bridgeViewController.bridge?.registerPluginInstance(NexusCallKitPlugin())
+                      }
+                  }
+              """
+              source = source[:launch.end()] + insertion + source[launch.end():]
+              source += r'''
+
+          @objc(NexusCallKitPlugin)
+          public class NexusCallKitPlugin: CAPPlugin, CAPBridgedPlugin, CXProviderDelegate {
+              public let identifier = "NexusCallKitPlugin"
+              public let jsName = "NexusCallKit"
+              public let pluginMethods: [CAPPluginMethod] = [
+                  CAPPluginMethod(name: "start", returnType: CAPPluginReturnPromise),
+                  CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise)
+              ]
+
+              private let callProvider = CXProvider(configuration: {
+                  let config = CXProviderConfiguration(localizedName: "NEXUS")
+                  config.supportsVideo = true
+                  config.maximumCallsPerCallGroup = 1
+                  config.maximumCallGroups = 1
+                  config.supportedHandleTypes = [.generic]
+                  return config
+              }())
+              private let callController = CXCallController()
+              private var activeCallUUID: UUID?
+
+              public override func load() {
+                  callProvider.setDelegate(self, queue: nil)
+              }
+
+              @objc public func start(_ call: CAPPluginCall) {
+                  guard activeCallUUID == nil else {
+                      call.resolve()
+                      return
+                  }
+                  let uuid = UUID()
+                  let displayName = call.getString("name") ?? "NEXUS call"
+                  activeCallUUID = uuid
+                  let handle = CXHandle(type: .generic, value: displayName)
+                  let action = CXStartCallAction(call: uuid, handle: handle)
+                  action.isVideo = false
+                  callController.request(CXTransaction(action: action)) { [weak self] error in
+                      guard let self = self else { return }
+                      if let error = error {
+                          self.activeCallUUID = nil
+                          call.reject("Could not start the iOS system call indicator: \\(error.localizedDescription)")
+                          return
+                      }
+                      self.callProvider.reportOutgoingCall(with: uuid, startedConnectingAt: Date())
+                      self.callProvider.reportOutgoingCall(with: uuid, connectedAt: Date())
+                      call.resolve()
+                  }
+              }
+
+              @objc public func stop(_ call: CAPPluginCall) {
+                  guard let uuid = activeCallUUID else {
+                      call.resolve()
+                      return
+                  }
+                  let action = CXEndCallAction(call: uuid)
+                  callController.request(CXTransaction(action: action)) { [weak self] error in
+                      guard let self = self else { return }
+                      self.callProvider.reportCall(with: uuid, endedAt: Date(), reason: .remoteEnded)
+                      self.activeCallUUID = nil
+                      try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+                      if let error = error {
+                          call.reject("Could not close the iOS system call indicator: \\(error.localizedDescription)")
+                      } else {
+                          call.resolve()
+                      }
+                  }
+              }
+
+              public func provider(_ provider: CXProvider, perform action: CXStartCallAction) {
+                  do {
+                      let audio = AVAudioSession.sharedInstance()
+                      try audio.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth, .defaultToSpeaker])
+                      try audio.setActive(true)
+                      action.fulfill()
+                  } catch {
+                      action.fail()
+                  }
+              }
+
+              public func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
+                  try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+                  activeCallUUID = nil
+                  action.fulfill()
+              }
+
+              public func providerDidReset(_ provider: CXProvider) {
+                  activeCallUUID = nil
+                  try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+              }
+          }
+          '''
+              app_delegate.write_text(source)
+          print("Embedded and registered NEXUS CallKit plugin in AppDelegate.swift")
+          PY
       - name: Install the original NEXUS galaxy shield app icon
         run: |
           ICON_DIR="ios/App/App/Assets.xcassets/AppIcon.appiconset"
