@@ -1,4 +1,5 @@
 import { apiUrl } from "@/lib/api-url";
+import { Capacitor } from "@capacitor/core";
 import { useLocation } from "wouter";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -95,7 +96,7 @@ export function useAuth() {
       );
 
       queryClient.clear();
-      setLocation("/");
+      setLocation(Capacitor.isNativePlatform() || window.location.protocol === "file:" ? "/sign-in" : "/");
 
       toast({
         title: "SESSION TERMINATED",
