@@ -1318,9 +1318,24 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     }
     let encodedMessageContent = messageContent.replace(/(^|\\s)@everyone(?=$|\\s|[.,!?;:])/gi, "$1<!everyone>");
     for (const [username, id] of Array.from(mentionNames.entries()).sort((a, b) => b[0].length - a[0].length)) {
-      const escaped = username.replace(/[.*+?^${}()|[\]\\]/g, "\\    sendMessage.mutate({
-      content: messageContent || (uploadFile ? '' : ''),");
-      const matcher = new RegExp(`(^|\\s)@${escaped}(?=$|[\\s.,!?;:])`, "gi");
+    let encodedMessageContent = messageContent.replace(/(^|\s)@everyone(?=$|\s|[.,!?;:])/gi, "$1<!everyone>");
+    for (const [username, id] of Array.from(mentionNames.entries()).sort((a, b) => b[0].length - a[0].length)) {
+      const needle = "@" + username.toLocaleLowerCase();
+      let searchFrom = 0;
+      while (searchFrom < encodedMessageContent.length) {
+        const lower = encodedMessageContent.toLocaleLowerCase();
+        const at = lower.indexOf(needle, searchFrom);
+        if (at < 0) break;
+        const before = at === 0 ? "" : encodedMessageContent[at - 1];
+        const after = encodedMessageContent[at + needle.length] || "";
+        const leftBoundary = !before || /\s/.test(before);
+        const rightBoundary = !after || /[\s.,!?;:]/.test(after);
+        if (leftBoundary && rightBoundary) {
+          encodedMessageContent = encodedMessageContent.slice(0, at) + "<@" + id + ">" + encodedMessageContent.slice(at + needle.length);
+          searchFrom = at + String(id).length + 3;
+        } else searchFrom = at + 1;
+      }
+    }
       encodedMessageContent = encodedMessageContent.replace(matcher, (_match, prefix) => `${prefix}<@${id}>`);
     }
     if (encodedMessageContent.includes("<!everyone>") && !selectedGroupId) {
@@ -2114,7 +2129,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
 
   });
   const filteredGroups = (groups as any[]).filter((g: any) => g.name.toLowerCase().includes(searchTerm.toLowerCase()));
-  const mentionMatch = inputContent.match(/(?:^|\\s)@([^@]*)$/);
+  const mentionMatch = inputContent.match(/(?:^|\s)@([^@]*)$/);
   const mentionQuery = (mentionMatch?.[1] || "").trim().toLowerCase();
   const mentionCandidates = mentionMatch && mentionQuery !== "everyone"
     ? (users || []).filter((u: any) => u.id !== currentUser?.id && String(u.username || "").toLowerCase().includes(mentionQuery)).slice(0, 6)
