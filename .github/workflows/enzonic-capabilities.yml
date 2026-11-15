@@ -2,6 +2,11 @@ name: Inspect Enzonic integration capabilities
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feat/mobile-notifications-responsive-platforms
+    paths:
+      - ".github/workflows/enzonic-capabilities.yml"
 
 permissions:
   contents: read
