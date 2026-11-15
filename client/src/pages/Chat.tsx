@@ -1377,19 +1377,22 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
       toast({ title: "@everyone only works in group channels", description: "Choose a group channel to notify everyone.", variant: "destructive" });
       return;
     }
-    sendMessage.mutate({
-      content: encodedMessageContent || (uploadFile ? '' : ''),
-      recipientId: selectedRecipientId ?? undefined,
-      groupId: selectedGroupId ?? undefined,
-      mediaUrl,
-      mediaType,
-      replyToId: replyTarget?.id ?? null,
-    } as any);
-
-    setInputContent("");
-    setUploadFile(null);
-    setUploadPreview(null);
-    setReplyTarget(null);
+    try {
+      await sendMessage.mutateAsync({
+        content: encodedMessageContent || (uploadFile ? '' : ''),
+        recipientId: selectedRecipientId ?? undefined,
+        groupId: selectedGroupId ?? undefined,
+        mediaUrl,
+        mediaType,
+        replyToId: replyTarget?.id ?? null,
+      } as any);
+      setInputContent("");
+      setUploadFile(null);
+      setUploadPreview(null);
+      setReplyTarget(null);
+    } catch {
+      // Keep the draft in the composer so the user can correct it or retry.
+    }
   };
 
   // ============================================================
