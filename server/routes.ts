@@ -1129,7 +1129,7 @@ export async function registerRoutes(
 
   // === SERVER-AUTHORITATIVE ROLE + MODERATION COMMANDS ===
   const roleRank: Record<string, number> = {
-    super_owner: 110, owner: 100, admin: 90, "trial-admin": 80, moderator: 70,
+    "super-owner": 110, owner: 100, admin: 90, "trial-admin": 80,
     "trial-moderator": 60, helper: 40, "trial-helper": 30, user: 0,
   };
   const canonicalRole = (role: string) => role.toLowerCase().replace(/_/g, "-");
@@ -1138,7 +1138,7 @@ export async function registerRoutes(
     return actor ? canonicalRole(actor.role) : "user";
   };
   const canModerate = (actor: string, target: string) =>
-    actor === "super_owner" || actor === "owner" || (roleRank[actor] ?? 0) > (roleRank[target] ?? 0);
+    actor === "super-owner" || actor === "owner" || (roleRank[actor] ?? 0) > (roleRank[target] ?? 0);
   const moderationCommandNames = [
     "ban","unban","kick","mute","unmute","timeout","untimeout","warn","warnings","clearwarnings",
     "softban","tempban","permban","shadowban","unshadowban","jail","unjail","deafen","undeafen",
@@ -1163,7 +1163,7 @@ export async function registerRoutes(
 
   app.get("/api/moderation/users", requireAuth, async (req, res) => {
     const actor = await storage.getUser(req.session.userId!);
-    const allowed = ["super_owner","owner","admin","trial-admin","moderator","trial-moderator","helper","trial-helper"];
+    const allowed = ["super-owner","owner","admin","trial-admin","moderator","trial-moderator","helper","trial-helper"];
     if (!actor || !allowed.includes(canonicalRole(actor.role))) return res.status(403).json({ message: "Staff access required." });
     return res.json((await storage.getAllUsers()).map(safeUser));
   });
@@ -1187,8 +1187,8 @@ export async function registerRoutes(
       return res.status(403).json({ message: "Staff access is required to assign roles." });
     }
     if (targetId === actorId) return res.status(403).json({ message: "You cannot change your own role." });
-    if (tRole === "super_owner" || (tRole === "owner" && aRole !== "super_owner")) return res.status(403).json({ message: "That account is protected by the ownership hierarchy." });
-    if (requestedRole === "owner" && !["owner", "super_owner"].includes(aRole)) {
+    if (tRole === "super-owner" || (tRole === "owner" && aRole !== "super-owner")) return res.status(403).json({ message: "That account is protected by the ownership hierarchy." });
+    if (requestedRole === "owner" && !["owner", "super-owner"].includes(aRole)) {
       return res.status(403).json({ message: "Only an owner can grant the owner role." });
     }
     if (aRole !== "owner" && (roleRank[tRole] ?? 0) >= (roleRank[aRole] ?? 0)) {
@@ -1253,7 +1253,7 @@ export async function registerRoutes(
     if (target) {
       const tRole = canonicalRole(target.role);
       if (targetId === actorId) return res.status(400).json({ message: "You cannot moderate yourself." });
-      if (tRole === "super_owner" || (tRole === "owner" && aRole !== "super_owner") || !canModerate(aRole,tRole)) return res.status(403).json({ message: "That member is protected by the role hierarchy." });
+      if (tRole === "super-owner" || (tRole === "owner" && aRole !== "super-owner") || !canModerate(aRole,tRole)) return res.status(403).json({ message: "That member is protected by the role hierarchy." });
     }
     const durationToken = String(req.body?.duration || args[1] || "");
     const durationMs = ["ban","tempban","mute","timeout","jail","restrict","shadowban","softban"].includes(name) ? parseDurationMs(durationToken) : null;
