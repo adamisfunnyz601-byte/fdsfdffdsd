@@ -58,7 +58,7 @@ export default function GS({ code }: { code?: string }) {
   };
   const grant = async () => {
     try {
-      const r = await fetch("/api/admin/dihtro/grant", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: Number(grantUserId), tier: grantTier, months: Number(grantMonths) }) });
+      const r = await fetch("/api/admin/gs/grant", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: Number(grantUserId), tier: grantTier, months: Number(grantMonths) }) });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data.message || "Grant failed.");
       toast({ title: "SUBSCRIPTION GRANTED", description: `${grantTier.toUpperCase()} granted for ${grantMonths} month(s).` });
