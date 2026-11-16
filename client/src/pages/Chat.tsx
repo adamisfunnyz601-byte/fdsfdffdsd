@@ -424,6 +424,8 @@ const TerminalMessage = ({
 }) => {
   const [showActions, setShowActions] = useState(false);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const [gsGiftClaimState, setGsGiftClaimState] = useState<"idle" | "claiming" | "claimed" | "error">("idle");
+  const [gsGiftClaimMessage, setGsGiftClaimMessage] = useState("");
   const displayName = msg.senderDisplayName || msg.senderNickname || msg.senderName;
   const roleName = String(msg.senderRole || "").toLowerCase().replace(/_/g,"-");
   const roleBadge: Record<string,{label:string;style:string}> = {
@@ -513,8 +515,6 @@ const TerminalMessage = ({
     };
   }, [msg.id, chatEmoteMatch?.[1], chatEmoteStyles.audioUrl, shouldAutoplayEmote]);
   const gsGiftMatch = typeof displayContent === "string" ? displayContent.match(/(?:https?:\/\/[^/\s]+)?\/(?:gs|dihtro)\/claim\/([A-Za-z0-9_-]+)/) : null;
-  const [gsGiftClaimState, setGsGiftClaimState] = useState<"idle" | "claiming" | "claimed" | "error">("idle");
-  const [gsGiftClaimMessage, setGsGiftClaimMessage] = useState("");
   const claimGsGift = async () => {
     if (!gsGiftMatch || gsGiftClaimState === "claiming" || gsGiftClaimState === "claimed") return;
     setGsGiftClaimState("claiming");
