@@ -180,6 +180,26 @@ async function syncChatUserProjection() {
   }
 }
 
+async function syncChatBlockProjection() {
+  const { rows } = await enzonicPool.query("SELECT blocker_id, blocked_id FROM blocks");
+  await chatPool.query(`
+    CREATE TABLE IF NOT EXISTS blocks (
+      id BIGSERIAL PRIMARY KEY,
+      blocker_id INTEGER NOT NULL,
+      blocked_id INTEGER NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE (blocker_id, blocked_id)
+    )
+  `);
+  await chatPool.query("DELETE FROM blocks");
+  for (const row of rows) {
+    await chatPool.query(
+      "INSERT INTO blocks (blocker_id, blocked_id) VALUES ($1, $2) ON CONFLICT (blocker_id, blocked_id) DO NOTHING",
+      [row.blocker_id, row.blocked_id],
+    );
+  }
+}
+
 async function ensureChatUserProjection() {
   await chatPool.query(`
     CREATE TABLE IF NOT EXISTS users (
@@ -208,9 +228,11 @@ async function ensureChatUserProjection() {
       ADD COLUMN IF NOT EXISTS tag_text TEXT,
       ADD COLUMN IF NOT EXISTS tag_color TEXT
   `);
+  await syncChatBlockProjection();
   await syncChatUserProjection();
   const timer = setInterval(() => {
     void syncChatUserProjection().catch(error => console.error("[chat-user-sync] Failed:", error));
+    void syncChatBlockProjection().catch(error => console.error("[chat-block-sync] Failed:", error));
   }, 30_000);
   timer.unref?.();
 }
