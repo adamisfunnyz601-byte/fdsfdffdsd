@@ -5,7 +5,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "NODE_ENV=development tsx server/index.ts",
-    "build": "node -e \"console.log('FFMPEG_LOCATION=' + require('ffmpeg-static')); console.log('FFPROBE_PATH=' + require('ffprobe-static').path)\" && tsx script/build.ts",
+    "build": "node -e \"const cp=require('child_process'); const ffmpeg=process.env.FFMPEG_LOCATION || require('ffmpeg-static'); const ffprobe=process.env.FFPROBE_PATH || require('ffprobe-static').path; const yt=process.env.YTDLP_PATH || (cp.spawnSync('sh',['-lc','command -v yt-dlp'],{encoding:'utf8'}).stdout || '').trim() || 'yt-dlp (not found on PATH)'; console.log('FFMPEG_LOCATION='+ffmpeg); console.log('FFPROBE_PATH='+ffprobe); console.log('YTDLP_PATH='+yt)\" && tsx script/build.ts",
     "start": "node dist/index.cjs",
     "check": "tsc",
     "db:push": "drizzle-kit push --config=drizzle.config.ts",
