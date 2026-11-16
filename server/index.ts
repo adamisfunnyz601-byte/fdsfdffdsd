@@ -3,7 +3,7 @@ import { registerRoutes } from "./routes";
 import { startStorageCleanup } from "./storage-cleanup";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import { pool } from "./db";
+import { chatPool, enzonicPool } from "./db";
 
 const app = express();
 const httpServer = createServer(app);
@@ -103,8 +103,11 @@ app.use((req, res, next) => {
   // Readiness: only route traffic here when the primary database can answer.
   app.get("/readyz", async (_req, res) => {
     try {
-      await pool.query({ text: "SELECT 1", query_timeout: 5_000 });
-      res.status(200).json({ status: "ready", service: "nexus-api", database: "ok" });
+      await Promise.all([
+        chatPool.query({ text: "SELECT 1", query_timeout: 5_000 }),
+        enzonicPool.query({ text: "SELECT 1", query_timeout: 5_000 }),
+      ]);
+      res.status(200).json({ status: "ready", service: "nexus-api", databases: { prisma: "ok", enzonic: "ok" } });
     } catch (error) {
       console.error("[health] Readiness check failed:", error);
       res.status(503).json({ status: "not_ready", service: "nexus-api" });
@@ -134,7 +137,7 @@ app.use((req, res, next) => {
     isShuttingDown = true;
     log(`Received ${signal}; shutting down gracefully.`);
     httpServer.close(async () => {
-      await pool.end();
+      await Promise.all([chatPool.end(), enzonicPool.end()]);
       process.exit(0);
     });
     // Do not leave a stuck process running forever during platform shutdown.
