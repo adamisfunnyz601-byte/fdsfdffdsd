@@ -198,11 +198,16 @@ async function ensureSessionStoreTable() {
 }
 
 async function ensureChatGifTable() {
-  // Serverless hosts such as Vercel have an ephemeral/read-only filesystem.
-  // Store GIF bytes in PostgreSQL so uploads survive restarts and work on every instance.
-  await pool.query(`
+  await chatPool.query(`
     CREATE TABLE IF NOT EXISTS nexus_chat_gif_attachments (
-      filename TEXT PRIMARY KEY CHECK (filename ~ '^[a-f0-9]{40}\\.gif
+      filename TEXT PRIMARY KEY CHECK (filename ~ '^[a-f0-9]{40}\\.gif$'),
+      content BYTEA NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+}
+
+async function ensureVoiceCallTables() {
   await db.execute(sql.raw(`
     CREATE TABLE IF NOT EXISTS nexus_voice_calls (
       call_id TEXT PRIMARY KEY,
