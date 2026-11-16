@@ -619,7 +619,9 @@ export async function registerRoutes(
       "INSERT INTO dihtro_gifts (code, created_by, months, tier) VALUES ($1, $2, $3, $4) RETURNING code, months, tier, created_at",
       [code, Number(req.session.userId!), months, tier],
     );
-    const appOrigin = (process.env.APP_ORIGIN || "https://nexuss.devs.li").replace(/\/+$/, "");
+    const requestProtocol = req.get("x-forwarded-proto") || req.protocol;
+    const requestHost = req.get("x-forwarded-host") || req.get("host");
+    const appOrigin = (process.env.APP_ORIGIN || `${requestProtocol}://${requestHost}`).replace(/\\/+$/, "");
     return res.status(201).json({ ...result.rows[0], claimPath: `/gs/claim/${code}`, claimUrl: `${appOrigin}/gs/claim/${code}` });
   });
 
