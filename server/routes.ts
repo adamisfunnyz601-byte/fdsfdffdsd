@@ -552,34 +552,35 @@ export async function registerRoutes(
     return res.json({ code });
   });
 
-  // Dihtro subscription status and single-use gift links.
-  app.get("/api/dihtro/me", requireAuth, async (req, res) => {
+  // GS (Galaxy Subscription) status, purchases and one-time gift links.
+  app.get(["/api/gs/me", "/api/dihtro/me"], requireAuth, async (req, res) => {
     const account = await storage.getUser(Number(req.session.userId!));
     if (!account) return res.status(404).json({ message: "Account not found." });
     const until = account.dihhroUntil ? new Date(account.dihhroUntil) : null;
-    const isStaff = ["owner", "admin", "super_owner"].includes(String(account.role).toLowerCase());
+    const role = String(account.role).toLowerCase();
+    const isStaff = ["owner", "admin", "super_owner"].includes(role);
     const active = isStaff || Boolean(until && until.getTime() > Date.now());
     const storedTier = String(account.subscriptionTier || "none");
     const tier = isStaff ? "diamond" : active ? (storedTier === "none" ? "bronze" : storedTier) : "none";
-    return res.json({ active, tier, until: until?.toISOString() || null, isStaff, prices: { bronze: 250, silver: 750, gold: 1800, diamond: 4000 } });
+    return res.json({ active, tier, until: isStaff ? null : until?.toISOString() || null, isStaff, isSuperOwner: role === "super_owner", prices: { bronze: 250, silver: 750, gold: 1800, diamond: 4000 } });
   });
 
-  app.post("/api/dihtro/purchase", requireAuth, async (req, res) => {
+  app.post(["/api/gs/purchase", "/api/dihtro/purchase"], requireAuth, async (req, res) => {
     const tier = String(req.body?.tier || "").toLowerCase();
     const prices: Record<string, number> = { bronze: 250, silver: 750, gold: 1800, diamond: 4000 };
     const price = prices[tier];
-    if (!price) return res.status(400).json({ message: "Choose a valid subscription." });
+    if (!price) return res.status(400).json({ message: "Choose a valid GS subscription." });
     const userId = Number(req.session.userId!);
     const account = await storage.getUser(userId);
     if (!account) return res.status(404).json({ message: "Account not found." });
     if (["owner", "admin", "super_owner"].includes(String(account.role).toLowerCase())) {
-      return res.status(400).json({ message: "Staff already have full Universe Diamond access." });
+      return res.status(400).json({ message: "Staff already have permanent Universe Diamond access." });
     }
     const tierRank: Record<string, number> = { none: 0, bronze: 1, silver: 2, gold: 3, diamond: 4 };
     const activeSubscription = Boolean(account.dihhroUntil && new Date(account.dihhroUntil) > new Date());
     const storedTier = String(account.subscriptionTier || "none");
     const existingTier = activeSubscription ? (storedTier === "none" ? "bronze" : storedTier) : "none";
-    if ((tierRank[existingTier] || 0) > tierRank[tier]) return res.status(400).json({ message: "You already have a higher active subscription. Wait until it expires before purchasing a lower tier." });
+    if ((tierRank[existingTier] || 0) > tierRank[tier]) return res.status(400).json({ message: "You already have a higher active GS subscription." });
     const balance = Number(account.coins || 0);
     if (!Number.isSafeInteger(balance) || balance < price) return res.status(400).json({ message: "Not enough Galactic Coins." });
     const now = new Date();
@@ -589,7 +590,7 @@ export async function registerRoutes(
     return res.json({ success: true, tier, coins: balance - price, until: until.toISOString() });
   });
 
-  app.post("/api/admin/dihtro/grant", requireAdmin, async (req, res) => {
+  app.post(["/api/admin/gs/grant", "/api/admin/dihtro/grant"], requireAdmin, async (req, res) => {
     const targetId = Number(req.body?.userId);
     const tier = String(req.body?.tier || "").toLowerCase();
     const months = Number(req.body?.months ?? 1);
@@ -602,51 +603,83 @@ export async function registerRoutes(
     const oldExpiry = target.dihhroUntil && new Date(target.dihhroUntil) > now ? new Date(target.dihhroUntil) : now;
     const until = new Date(oldExpiry); until.setUTCMonth(until.getUTCMonth() + months);
     await db.update(users).set({ subscriptionTier: tier, dihhroUntil: until }).where(eq(users.id, targetId));
-    await db.insert(moderationLogs).values({ actorId: Number(req.session.userId!), targetId, action: "dihtro_subscription_grant", reason: "Staff subscription grant", metadata: { tier, months } });
+    await db.insert(moderationLogs).values({ actorId: Number(req.session.userId!), targetId, action: "gs_subscription_grant", reason: "GS subscription grant", metadata: { tier, months } });
     return res.json({ success: true, userId: targetId, tier, months, until: until.toISOString() });
   });
 
-  app.post("/api/dihtro/gifts", requireAdmin, async (req, res) => {
+  app.post(["/api/gs/gifts", "/api/dihtro/gifts"], requireAdmin, async (req, res) => {
     const months = Number(req.body?.months);
+    const tier = String(req.body?.tier || "bronze").toLowerCase();
     if (!Number.isInteger(months) || months < 1 || months > 24) return res.status(400).json({ message: "Gift duration must be between 1 and 24 months." });
+    if (!["bronze", "silver", "gold", "diamond"].includes(tier)) return res.status(400).json({ message: "Choose a valid GS gift tier." });
     const code = randomBytes(24).toString("base64url");
     const result = await pool.query(
-      "INSERT INTO dihtro_gifts (code, created_by, months) VALUES ($1, $2, $3) RETURNING code, months, created_at",
-      [code, Number(req.session.userId!), months],
+      "INSERT INTO dihtro_gifts (code, created_by, months, tier) VALUES ($1, $2, $3, $4) RETURNING code, months, tier, created_at",
+      [code, Number(req.session.userId!), months, tier],
     );
     const appOrigin = (process.env.APP_ORIGIN || "https://nexuss.devs.li").replace(/\/+$/, "");
-    return res.status(201).json({ ...result.rows[0], claimPath: `/dihtro/claim/${code}`, claimUrl: `${appOrigin}/dihtro/claim/${code}` });
+    return res.status(201).json({ ...result.rows[0], claimPath: `/gs/claim/${code}`, claimUrl: `${appOrigin}/gs/claim/${code}` });
   });
 
-  app.get("/api/dihtro/gifts/:code", requireAuth, async (req, res) => {
+  app.get(["/api/gs/gifts", "/api/dihtro/gifts"], requireAdmin, async (_req, res) => {
     const result = await pool.query(
-      "SELECT code, months, claimed_at, created_at FROM dihtro_gifts WHERE code = $1 LIMIT 1",
+      `SELECT g.code, g.months, g.tier, g.created_at AS "createdAt", g.claimed_at AS "claimedAt",
+              g.claimed_by AS "claimedBy", creator.username AS "createdByName", claimant.username AS "claimedByName"
+       FROM dihtro_gifts g
+       LEFT JOIN users creator ON creator.id = g.created_by
+       LEFT JOIN users claimant ON claimant.id = g.claimed_by
+       ORDER BY g.created_at DESC LIMIT 200`,
+    );
+    return res.json(result.rows);
+  });
+
+  app.get(["/api/gs/gifts/:code", "/api/dihtro/gifts/:code"], requireAuth, async (req, res) => {
+    const result = await pool.query(
+      "SELECT code, months, tier, claimed_at, created_at FROM dihtro_gifts WHERE code = $1 LIMIT 1",
       [String(req.params.code)],
     );
-    if (!result.rows.length) return res.status(404).json({ message: "This Dihtro gift link is invalid." });
+    if (!result.rows.length) return res.status(404).json({ message: "This GS gift link is invalid." });
     const gift = result.rows[0];
-    return res.json({ months: gift.months, claimed: Boolean(gift.claimed_at), createdAt: gift.created_at });
+    return res.json({ months: gift.months, tier: gift.tier || "bronze", claimed: Boolean(gift.claimed_at), createdAt: gift.created_at });
   });
 
-  app.post("/api/dihtro/gifts/:code/claim", requireAuth, async (req, res) => {
+  app.post(["/api/gs/gifts/:code/claim", "/api/dihtro/gifts/:code/claim"], requireAuth, async (req, res) => {
     const code = String(req.params.code || "");
-    const claimed = await pool.query(
-      "UPDATE dihtro_gifts SET claimed_by = $1, claimed_at = NOW() WHERE code = $2 AND claimed_at IS NULL RETURNING months",
-      [Number(req.session.userId!), code],
-    );
-    if (!claimed.rows.length) {
-      const exists = await pool.query("SELECT claimed_at FROM dihtro_gifts WHERE code = $1 LIMIT 1", [code]);
-      if (!exists.rows.length) return res.status(404).json({ message: "This Dihtro gift link is invalid." });
-      return res.status(409).json({ message: "This Dihtro gift has already been redeemed." });
+    const userId = Number(req.session.userId!);
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const claimed = await client.query(
+        "UPDATE dihtro_gifts SET claimed_by = $1, claimed_at = NOW() WHERE code = $2 AND claimed_at IS NULL RETURNING months, tier",
+        [userId, code],
+      );
+      if (!claimed.rows.length) {
+        const exists = await client.query("SELECT code FROM dihtro_gifts WHERE code = $1 LIMIT 1", [code]);
+        await client.query("ROLLBACK");
+        if (!exists.rows.length) return res.status(404).json({ message: "This GS gift link is invalid." });
+        return res.status(409).json({ message: "This one-time GS gift has already been claimed." });
+      }
+      const gift = claimed.rows[0];
+      const accountResult = await client.query("SELECT dihhro_until, subscription_tier FROM users WHERE id = $1 FOR UPDATE", [userId]);
+      if (!accountResult.rows.length) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ message: "Account not found." });
+      }
+      const account = accountResult.rows[0];
+      const now = new Date();
+      const currentExpiry = account.dihhro_until ? new Date(account.dihhro_until) : now;
+      const startAt = currentExpiry > now ? currentExpiry : now;
+      const until = new Date(startAt);
+      until.setUTCMonth(until.getUTCMonth() + Number(gift.months));
+      await client.query("UPDATE users SET subscription_tier = $1, dihhro_until = $2 WHERE id = $3", [gift.tier || "bronze", until, userId]);
+      await client.query("COMMIT");
+      return res.json({ success: true, months: Number(gift.months), tier: gift.tier || "bronze", until: until.toISOString() });
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally {
+      client.release();
     }
-    const account = await storage.getUser(Number(req.session.userId!));
-    const now = new Date();
-    const currentExpiry = account?.dihhroUntil ? new Date(account.dihhroUntil) : now;
-    const start = currentExpiry > now ? currentExpiry : now;
-    const until = new Date(start);
-    until.setUTCMonth(until.getUTCMonth() + Number(claimed.rows[0].months));
-    await db.update(users).set({ dihhroUntil: until }).where(eq(users.id, Number(req.session.userId!)));
-    return res.json({ success: true, months: Number(claimed.rows[0].months), until: until.toISOString() });
   });
 
   // Passkey registration and authentication use WebAuthn challenges stored in the session.
