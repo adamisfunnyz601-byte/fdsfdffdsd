@@ -534,9 +534,7 @@ export function ProfileModal({
                         const badge = badges[role];
                         return badge ? <div className={cn("inline-flex items-center gap-1 mt-1 rounded border px-2 py-1 text-[9px] font-black tracking-wider",badge.cls)}>{badge.label}</div> : null;
                       })()}
-                      {(["owner","admin"].includes(String(profile.role).toLowerCase()) || (profile.dihhroUntil && new Date(profile.dihhroUntil) > new Date())) && (
-                        <div className="inline-flex items-center gap-1 mt-1 rounded border border-fuchsia-500/40 bg-fuchsia-400/10 px-2 py-1 text-[9px] font-black tracking-wider text-fuchsia-300"><Sparkles className="w-2.5 h-2.5"/> DIHHRO</div>
-                      )}
+
                     </div>
                     {canEditProfile && !editing && (
                       <button
