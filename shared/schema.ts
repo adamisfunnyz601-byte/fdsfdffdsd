@@ -74,7 +74,7 @@ export const shopItems = pgTable("shop_items", {
 // User Inventory
 export const userInventory = pgTable("user_inventory", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id),
   itemId: integer("item_id").notNull().references(() => shopItems.id),
   purchasedAt: timestamp("purchased_at").defaultNow(),
 });
@@ -113,7 +113,7 @@ export const customEmojis = pgTable("custom_emojis", {
 // Search history
 export const searchHistory = pgTable("search_history", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id),
   query: text("query"),
   url: text("url").notNull(),
   visitedAt: timestamp("visited_at").defaultNow(),
@@ -186,7 +186,7 @@ export const communityServerMessages = pgTable("community_server_messages", {
 // OAuth identities are kept separate from usernames and legacy access-key accounts.
 export const oauthAccounts = pgTable("oauth_accounts", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   provider: text("provider").notNull(),
   providerSubject: text("provider_subject").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
@@ -198,7 +198,7 @@ export const oauthAccounts = pgTable("oauth_accounts", {
 // Discoverable credentials for passwordless passkey sign-in.
 export const passkeyCredentials = pgTable("passkey_credentials", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   credentialId: text("credential_id").notNull().unique(),
   publicKey: text("public_key").notNull(),
   counter: integer("counter").notNull().default(0),
@@ -275,14 +275,14 @@ export const moderationLogs = pgTable("moderation_logs", {
 // Block Blast verified account history and monthly prize tracking.
 export const blockBlastScores = pgTable("block_blast_scores", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id),
   score: integer("score").notNull(),
   monthKey: text("month_key").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 export const dihhroAwards = pgTable("dihhro_awards", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id),
   monthKey: text("month_key").notNull().unique(),
   score: integer("score").notNull(),
   expiresAt: timestamp("expires_at").notNull(),
