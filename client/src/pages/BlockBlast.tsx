@@ -154,10 +154,11 @@ function BlockBlastGame() {
   if(!navigator.mediaDevices?.getUserMedia||!window.RTCPeerConnection){setVoiceStatus("This browser does not support WebRTC microphone rooms.");return;}
   try{
    const media=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
-   media.getAudioTracks().forEach(t=>t.enabled=false);
+   // Start with the microphone enabled after the user explicitly joins.
+   media.getAudioTracks().forEach(t=>{t.enabled=true;});
    const joined=await fetch("/api/blockblast/voice/join",{method:"POST",credentials:"same-origin"});
    if(!joined.ok)throw new Error("Could not join the voice room.");
-   const data=await joined.json();setVoiceParticipants(data.participants||[]);setStream(media);setVoiceJoined(true);setMuted(true);setVoiceStatus("Connected to the Block Blast voice room. You are muted.");
+   const data=await joined.json();setVoiceParticipants(data.participants||[]);setStream(media);setVoiceJoined(true);setMuted(false);setVoiceStatus("Connected to the Block Blast voice room. Your microphone is on.");
   }catch(error:any){setVoiceStatus(error?.name==="NotAllowedError"?"Microphone permission was denied. Allow microphone access and try again.":error.message||"Could not join voice.");}
  };
  const sendRoomEmote=async(item:any)=>{
