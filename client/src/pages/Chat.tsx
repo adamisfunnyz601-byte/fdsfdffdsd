@@ -512,7 +512,7 @@ const TerminalMessage = ({
       if (activeChatEmoteAudio === audio) activeChatEmoteAudio = null;
     };
   }, [msg.id, chatEmoteMatch?.[1], chatEmoteStyles.audioUrl, shouldAutoplayEmote]);
-  const gsGiftMatch = typeof displayContent === "string" ? displayContent.match(/(?:https?:\\/\\/[^/\\s]+)?\\/(?:gs|dihtro)\\/claim\\/([A-Za-z0-9_-]+)/) : null;
+  const gsGiftMatch = typeof displayContent === "string" ? displayContent.match(/(?:https?:\/\/[^/\s]+)?\/(?:gs|dihtro)\/claim\/([A-Za-z0-9_-]+)/) : null;
   const [gsGiftClaimState, setGsGiftClaimState] = useState<"idle" | "claiming" | "claimed" | "error">("idle");
   const [gsGiftClaimMessage, setGsGiftClaimMessage] = useState("");
   const claimGsGift = async () => {
