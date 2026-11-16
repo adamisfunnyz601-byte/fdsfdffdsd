@@ -337,7 +337,7 @@ export async function registerRoutes(
   await ensureSessionStoreTable();
   await ensureVoiceCallTables();
   await ensureChatGifTable();
-  // Session middleware. Store sessions in Neon so logins survive server restarts.
+  // Session middleware. Store sessions in Enzonic so logins survive server restarts.
   // The table is created automatically on first boot by connect-pg-simple.
   const sessionSecret = process.env.SESSION_SECRET;
   if (!sessionSecret || sessionSecret.length < 32) {
