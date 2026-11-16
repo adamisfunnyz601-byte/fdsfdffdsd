@@ -170,10 +170,19 @@ async function runStorageCleanup(): Promise<void> {
   }
 }
 
+let cleanupTimer: ReturnType<typeof setInterval> | null = null;
+
 export function startStorageCleanup(): void {
   // This service's DATABASE_URL is Neon (chat storage). Enzonic is reserved for
   // account data and is not cleaned by this job.
-  void runStorageCleanup();
-  const timer = setInterval(() => void runStorageCleanup(), CHECK_INTERVAL_MS);
-  timer.unref?.();
+  if (cleanupTimer) return;
+  void runStorageCleanup().catch((error) => {
+    console.error("[storage-cleanup] Initial cleanup failed:", error);
+  });
+  cleanupTimer = setInterval(() => {
+    void runStorageCleanup().catch((error) => {
+      console.error("[storage-cleanup] Scheduled cleanup failed:", error);
+    });
+  }, CHECK_INTERVAL_MS);
+  cleanupTimer.unref?.();
 }
