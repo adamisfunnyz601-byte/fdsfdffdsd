@@ -22,7 +22,9 @@ export default function GSGifts() {
   const [tier, setTier] = useState("bronze");
   const [months, setMonths] = useState("1");
   const [creating, setCreating] = useState(false);
-  const isStaff = ["owner", "admin", "super_owner"].includes(String(user?.role || "").toLowerCase());
+  const role = String(user?.role || "").toLowerCase();
+  const isStaff = ["owner", "admin", "super_owner"].includes(role);
+  const isSuperOwner = role === "super_owner";
 
   const { data: gifts = [], isLoading, error } = useQuery<GiftLink[]>({
     queryKey: ["/api/gs/gifts"],
@@ -76,7 +78,7 @@ export default function GSGifts() {
     <div className="nexus-page mx-auto max-w-5xl space-y-6">
       <header className="rounded-3xl border border-fuchsia-400/25 bg-gradient-to-br from-fuchsia-500/15 via-violet-500/10 to-cyan-500/10 p-6 md:p-8">
         <div className="flex items-center gap-3"><span className="rounded-2xl bg-fuchsia-400/15 p-3 text-fuchsia-200"><Gift size={26}/></span><div><p className="text-xs font-bold tracking-[.3em] text-fuchsia-200">STAFF TOOLS</p><h1 className="text-3xl font-black text-white">GS GIFT LINKS</h1></div></div>
-        <p className="mt-3 max-w-2xl text-sm text-white/65">Create one-time Galaxy Subscription gifts. Share the link anywhere or paste it into NEXUS chat to show an in-chat Claim card. Each gift can be redeemed once.</p>
+        <p className="mt-3 max-w-2xl text-sm text-white/65">Create one-time Galaxy Subscription gift links—no account ID needed. Share a link anywhere or paste it into NEXUS chat for an in-chat Claim card. Each link can be redeemed once. Super owners can also create Universe Diamond gifts.</p>
       </header>
 
       <section className="rounded-2xl border border-white/10 bg-card/60 p-5">
@@ -84,7 +86,7 @@ export default function GSGifts() {
         <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
           <label className="text-xs text-white/55">SUBSCRIPTION TIER
             <select value={tier} onChange={e=>setTier(e.target.value)} className="mt-1 w-full rounded-xl border border-white/15 bg-black/30 px-3 py-3 text-sm text-white">
-              <option value="bronze">Planet Bronze</option><option value="silver">Solar System Silver</option><option value="gold">Galaxy Gold</option><option value="diamond">Universe Diamond</option>
+              <option value="bronze">Planet Bronze</option><option value="silver">Solar System Silver</option><option value="gold">Galaxy Gold</option>{isSuperOwner && <option value="diamond">Universe Diamond</option>}
             </select>
           </label>
           <label className="text-xs text-white/55">DURATION (MONTHS)
@@ -92,7 +94,7 @@ export default function GSGifts() {
           </label>
           <button type="button" onClick={()=>void createGift()} disabled={creating} className="self-end rounded-xl bg-fuchsia-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">{creating ? "CREATING…" : "CREATE & COPY LINK"}</button>
         </div>
-        <p className="mt-3 text-xs text-white/40">Gift codes are random, single-use, and permanently marked as claimed after a successful redemption.</p>
+        <p className="mt-3 text-xs text-white/40">Gift codes are random and single-use. Only super owners can issue Universe Diamond gifts; admins and owners can issue Bronze, Silver and Gold.</p>
       </section>
 
       <section className="rounded-2xl border border-white/10 bg-card/50 p-5">
@@ -112,7 +114,7 @@ export default function GSGifts() {
           })}</div>
         }
       </section>
-      <p className="flex items-center gap-2 text-xs text-white/40"><Crown size={14}/> Super owners have permanent Universe Diamond access and do not need gift links.</p>
+      <p className="flex items-center gap-2 text-xs text-white/40"><Crown size={14}/> Super owners keep permanent Universe Diamond access and can create Universe Diamond gift links for other members.</p>
     </div>
   </Layout>;
 }
