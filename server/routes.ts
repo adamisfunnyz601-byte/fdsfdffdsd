@@ -572,6 +572,9 @@ export async function registerRoutes(
     if (["owner", "admin", "super_owner"].includes(String(account.role).toLowerCase())) {
       return res.status(400).json({ message: "Staff already have full Universe Diamond access." });
     }
+    const tierRank: Record<string, number> = { none: 0, bronze: 1, silver: 2, gold: 3, diamond: 4 };
+    const existingTier = account.dihhroUntil && new Date(account.dihhroUntil) > new Date() ? String(account.subscriptionTier || "bronze") : "none";
+    if ((tierRank[existingTier] || 0) > tierRank[tier]) return res.status(400).json({ message: "You already have a higher active subscription. Wait until it expires before purchasing a lower tier." });
     const balance = Number(account.coins || 0);
     if (!Number.isSafeInteger(balance) || balance < price) return res.status(400).json({ message: "Not enough Galactic Coins." });
     const now = new Date();
@@ -2343,20 +2346,20 @@ export async function registerRoutes(
     const balance = Number(target.coins || 0);
     if (!Number.isSafeInteger(balance) || balance + amount > 2147483647) return res.status(400).json({ message: "That balance is too large." });
     await db.update(users).set({ coins: String(balance + amount) }).where(eq(users.id, targetId));
-    await db.insert(moderationLogs).values({ actorId: Number(req.session.userId!), targetId, action: "dihcoins_grant", reason: "Staff currency grant", metadata: { amount } });
+    await db.insert(moderationLogs).values({ actorId: Number(req.session.userId!), targetId, action: "galactic_coins_grant", reason: "Staff currency grant", metadata: { amount } });
     res.json({ success: true, userId: targetId, amount, balance: balance + amount });
   });
 
   const blockBlastComboRewardCooldown = new Map<number, number>();
   app.post("/api/blockblast/combo-reward", requireAuth, async (req, res) => {
     const combo = Number(req.body?.combo);
-    if (!Number.isInteger(combo) || combo < 2 || combo > 5) return res.status(400).json({ message: "Only a valid combo can earn DihCoins." });
+    if (!Number.isInteger(combo) || combo < 2 || combo > 5) return res.status(400).json({ message: "Only a valid combo can earn Galactic Coins." });
     const userId = Number(req.session.userId!);
     const now = Date.now();
     if (now - (blockBlastComboRewardCooldown.get(userId) || 0) < 1200) return res.status(429).json({ message: "Combo reward is cooling down." });
     const account = await storage.getUser(userId);
     const balance = Number(account?.coins || 0);
-    if (!Number.isSafeInteger(balance) || balance < 0 || balance + 10 > 2147483647) return res.status(400).json({ message: "Could not update DihCoins balance." });
+    if (!Number.isSafeInteger(balance) || balance < 0 || balance + 10 > 2147483647) return res.status(400).json({ message: "Could not update Galactic Coins balance." });
     blockBlastComboRewardCooldown.set(userId, now);
     const nextBalance = balance + 10;
     await db.update(users).set({ coins: String(nextBalance) }).where(eq(users.id, userId));
