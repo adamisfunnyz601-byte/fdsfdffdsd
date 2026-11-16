@@ -366,6 +366,8 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // Safe additive Enzonic migration: keep existing accounts and subscriptions intact.
+  await enzonicPool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_tier TEXT NOT NULL DEFAULT 'none'`);
   await ensureChatUserProjection();
   await ensureCommunityServerTables();
   // Promote the existing, reserved AdamisFunnyz account to the internal super-owner role.
