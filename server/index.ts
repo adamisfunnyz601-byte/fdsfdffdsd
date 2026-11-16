@@ -1,11 +1,9 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { startStorageCleanup } from "./storage-cleanup";
-import { startEnzonicStorageCleanup } from "./enzonic-storage-cleanup";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { pool } from "./db";
-import { closeEnzonicStorageCleanup } from "./enzonic-storage-cleanup";
 
 const app = express();
 const httpServer = createServer(app);
@@ -83,7 +81,6 @@ app.use((req, res, next) => {
 (async () => {
   await registerRoutes(httpServer, app);
   startStorageCleanup();
-  startEnzonicStorageCleanup();
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
@@ -137,7 +134,7 @@ app.use((req, res, next) => {
     isShuttingDown = true;
     log(`Received ${signal}; shutting down gracefully.`);
     httpServer.close(async () => {
-      await Promise.allSettled([pool.end(), closeEnzonicStorageCleanup()]);
+      await pool.end();
       process.exit(0);
     });
     // Do not leave a stuck process running forever during platform shutdown.
