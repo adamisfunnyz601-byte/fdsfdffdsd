@@ -21,7 +21,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: "/updates", label: "Update Logs", icon: ScrollText, section: "Workspace" },
     { href: "/block-blast", label: "Block Blast", icon: Blocks, section: "Playground", accent: "amber" },
     { href: "/shop", label: "Shop", icon: ShoppingBag, section: "Playground", accent: "pink" },
-    { href: "/dihtro", label: "Dihtro", icon: Gift, section: "Account", accent: "pink" },
+    { href: "/dihtro", label: "Subscriptions", icon: Gift, section: "Account", accent: "pink" },
     { href: "/hub", label: "Community Hub", icon: Gamepad2, section: "Playground" },
     { href: "/hangouts", label: "2D Hangouts", icon: Users, section: "Playground" },
     { href: "/settings", label: "Settings", icon: Settings, section: "Account" },
@@ -33,9 +33,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
     navItems.push({ href: "/admin", label: "Admin Console", icon: Command, section: "Staff" });
   const sections = Array.from(new Set(navItems.map(item => item.section)));
   const closeMenu = () => setIsMobileMenuOpen(false);
-  const canGiftDihtro = ["owner", "admin"].includes(role);
+  const canGiftDihtro = ["owner", "admin", "super-owner"].includes(role);
   const giftDihtro = async () => {
-    const raw = window.prompt("How many months of Dihtro should this gift contain? (1–24)", "1");
+    const raw = window.prompt("How many months should this subscription gift contain? (1–24)", "1");
     if (raw === null) return;
     const months = Number(raw);
     if (!Number.isInteger(months) || months < 1 || months > 24) { window.alert("Choose a duration from 1 to 24 months."); return; }
@@ -44,7 +44,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Could not create gift.");
       await navigator.clipboard?.writeText(data.claimUrl);
-      window.alert("CLAIM YOUR FREE DIHTRO PRESENT 🎁\n\n" + data.claimUrl + "\n\nThe claim link has been copied.");
+      window.alert("CLAIM YOUR FREE NEXUS SUBSCRIPTION 🎁\n\n" + data.claimUrl + "\n\nThe claim link has been copied.");
     } catch (error) { window.alert(error instanceof Error ? error.message : "Could not create gift."); }
   };
   useEffect(() => {
@@ -120,7 +120,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      {canGiftDihtro && <button type="button" onClick={() => void giftDihtro()} title="Gift Dihtro" aria-label="Gift Dihtro" className="fixed bottom-5 right-5 z-[90] flex h-14 w-14 items-center justify-center rounded-full border border-fuchsia-300/40 bg-gradient-to-br from-fuchsia-500 to-violet-600 text-white shadow-[0_8px_32px_rgba(168,85,247,.45)] transition hover:scale-105"><Gift size={23}/></button>}\n      <main className="nexus-main flex min-w-0 flex-1 flex-col">
+      {canGiftDihtro && <button type="button" onClick={() => void giftDihtro()} title="Gift subscription" aria-label="Gift Dihtro" className="fixed bottom-5 right-5 z-[90] flex h-14 w-14 items-center justify-center rounded-full border border-fuchsia-300/40 bg-gradient-to-br from-fuchsia-500 to-violet-600 text-white shadow-[0_8px_32px_rgba(168,85,247,.45)] transition hover:scale-105"><Gift size={23}/></button>}\n      <main className="nexus-main flex min-w-0 flex-1 flex-col">
         <header className="nexus-topbar hidden h-[58px] shrink-0 items-center justify-between px-7 lg:flex">
           <div className="flex items-center gap-3"><span className="nexus-breadcrumb-dot"/><span className="text-[11px] font-semibold uppercase tracking-[.16em] text-white/45">Nexus Network</span><span className="text-white/15">/</span><span className="text-[11px] font-semibold text-white/85">{navItems.find(item => item.href === location)?.label || (location === "/profile" ? "My Profile" : "Workspace")}</span></div>
           <div className="flex items-center gap-4"><span className="nexus-encryption"><span/> AES-256 SESSION</span><span className="h-4 w-px bg-white/10"/><span className="inline-flex items-center gap-2 text-[10px] tracking-widest text-white/30"><img src="/nexus-icon.svg" alt="NEXUS" className="h-4 w-4 object-contain"/> NEXUS / 02.06</span></div>
