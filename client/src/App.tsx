@@ -16,14 +16,11 @@ import Shop from "@/pages/Shop";
 import NotFound from "@/pages/not-found";
 import SettingsPage from "@/pages/Settings";
 import BlockBlast from "@/pages/BlockBlast";
-import Hub from "@/pages/Hub";
-import Hangouts from "@/pages/Hangouts";
 import Invite from "@/pages/Invite";
 import MyProfile from "@/pages/MyProfile";
 import ModerationPanel from "@/pages/ModerationPanel";
 import Chat from "@/pages/Chat";
 import UpdatesPage from "@/pages/Updates";
-import ServersPage from "@/pages/Servers";
 import Dihtro from "@/pages/Dihtro";
 import GSGifts from "@/pages/GSGifts";
 import TermsPage from "@/pages/Terms";
@@ -48,7 +45,6 @@ function Router(){return <Switch>
  <Route path="/main-page"><ProtectedRoute component={Proxy}/></Route>
  <Route path="/proxy"><ProtectedRoute component={Proxy}/></Route>
  <Route path="/chat" component={()=>null}/>
- <Route path="/servers"><ProtectedRoute component={ServersPage}/></Route>
  <Route path="/updates"><ProtectedRoute component={UpdatesPage}/></Route>
  <Route path="/history"><ProtectedRoute component={History}/></Route>
  <Route path="/moderation"><ProtectedRoute component={ModerationPanel}/></Route>
@@ -62,8 +58,6 @@ function Router(){return <Switch>
  <Route path="/profile"><ProtectedRoute component={MyProfile}/></Route>
  <Route path="/settings"><ProtectedRoute component={SettingsPage}/></Route>
  <Route path="/block-blast"><ProtectedRoute component={BlockBlast}/></Route>
- <Route path="/hub"><ProtectedRoute component={Hub}/></Route>
- <Route path="/hangouts"><ProtectedRoute component={Hangouts}/></Route>
  <Route component={NotFound}/>
  </Switch>}
 function GlobalChatHost(){const {user,isLoading}=useAuth();const [location]=useLocation();if(isLoading||!user)return null;const active=location==="/chat";return <div aria-hidden={!active} style={{position:"fixed",inset:0,zIndex:30,visibility:active?"visible":"hidden",pointerEvents:active?"auto":"none"}}><Chat/></div>}
