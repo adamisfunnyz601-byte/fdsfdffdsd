@@ -74,7 +74,7 @@ export const shopItems = pgTable("shop_items", {
 // User Inventory
 export const userInventory = pgTable("user_inventory", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id),
+  userId: integer("user_id").notNull(),
   itemId: integer("item_id").notNull().references(() => shopItems.id),
   purchasedAt: timestamp("purchased_at").defaultNow(),
 });
@@ -113,7 +113,7 @@ export const customEmojis = pgTable("custom_emojis", {
 // Search history
 export const searchHistory = pgTable("search_history", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id),
+  userId: integer("user_id").notNull(),
   query: text("query"),
   url: text("url").notNull(),
   visitedAt: timestamp("visited_at").defaultNow(),
@@ -124,7 +124,7 @@ export const groupChats = pgTable("group_chats", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   inviteCode: text("invite_code").notNull().unique(),
-  ownerId: integer("owner_id").notNull().references(() => users.id),
+  ownerId: integer("owner_id").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -132,7 +132,7 @@ export const groupChats = pgTable("group_chats", {
 export const groupChatMembers = pgTable("group_chat_members", {
   id: serial("id").primaryKey(),
   groupId: integer("group_id").notNull().references(() => groupChats.id),
-  userId: integer("user_id").notNull().references(() => users.id),
+  userId: integer("user_id").notNull(),
   joinedAt: timestamp("joined_at").defaultNow(),
 });
 
@@ -144,13 +144,13 @@ export const communityServers = pgTable("community_servers", {
   description: text("description").notNull().default(""),
   visibility: text("visibility").notNull().default("private"),
   inviteCode: text("invite_code").notNull().unique(),
-  ownerId: integer("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  ownerId: integer("owner_id").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 export const communityServerMembers = pgTable("community_server_members", {
   id: serial("id").primaryKey(),
   serverId: integer("server_id").notNull().references(() => communityServers.id, { onDelete: "cascade" }),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull(),
   role: text("role").notNull().default("member"),
   joinedAt: timestamp("joined_at").defaultNow(),
 }, (table) => ({
@@ -177,7 +177,7 @@ export const communityServerMessages = pgTable("community_server_messages", {
   id: serial("id").primaryKey(),
   serverId: integer("server_id").notNull().references(() => communityServers.id, { onDelete: "cascade" }),
   channelId: integer("channel_id").notNull().references(() => communityServerChannels.id, { onDelete: "cascade" }),
-  authorId: integer("author_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  authorId: integer("author_id").notNull(),
   content: text("content").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   editedAt: timestamp("edited_at"),
@@ -186,7 +186,7 @@ export const communityServerMessages = pgTable("community_server_messages", {
 // OAuth identities are kept separate from usernames and legacy access-key accounts.
 export const oauthAccounts = pgTable("oauth_accounts", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull(),
   provider: text("provider").notNull(),
   providerSubject: text("provider_subject").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
@@ -198,7 +198,7 @@ export const oauthAccounts = pgTable("oauth_accounts", {
 // Discoverable credentials for passwordless passkey sign-in.
 export const passkeyCredentials = pgTable("passkey_credentials", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull(),
   credentialId: text("credential_id").notNull().unique(),
   publicKey: text("public_key").notNull(),
   counter: integer("counter").notNull().default(0),
@@ -209,8 +209,8 @@ export const passkeyCredentials = pgTable("passkey_credentials", {
 // Update messages to support GCs and media
 export const messages = pgTable("messages", {
   id: serial("id").primaryKey(),
-  senderId: integer("sender_id").notNull().references(() => users.id),
-  recipientId: integer("recipient_id").references(() => users.id),
+  senderId: integer("sender_id").notNull(),
+  recipientId: integer("recipient_id"),
   groupId: integer("group_id").references(() => groupChats.id),
   content: text("content").notNull(),
   mediaUrl: text("media_url"),
@@ -225,7 +225,7 @@ export const messages = pgTable("messages", {
 export const chatMessageReactions = pgTable("chat_message_reactions", {
   id: serial("id").primaryKey(),
   messageId: integer("message_id").notNull().references(() => messages.id, { onDelete: "cascade" }),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull(),
   emoji: text("emoji").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({
@@ -252,7 +252,7 @@ export const chatPollVotes = pgTable("chat_poll_votes", {
   id: serial("id").primaryKey(),
   pollId: integer("poll_id").notNull().references(() => chatPolls.id, { onDelete: "cascade" }),
   optionId: integer("option_id").notNull().references(() => chatPollOptions.id, { onDelete: "cascade" }),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({
   oneVotePerPoll: uniqueIndex("chat_poll_one_vote_per_user").on(table.pollId, table.userId),
@@ -275,14 +275,14 @@ export const moderationLogs = pgTable("moderation_logs", {
 // Block Blast verified account history and monthly prize tracking.
 export const blockBlastScores = pgTable("block_blast_scores", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull(),
   score: integer("score").notNull(),
   monthKey: text("month_key").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 export const dihhroAwards = pgTable("dihhro_awards", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull(),
   monthKey: text("month_key").notNull().unique(),
   score: integer("score").notNull(),
   expiresAt: timestamp("expires_at").notNull(),
