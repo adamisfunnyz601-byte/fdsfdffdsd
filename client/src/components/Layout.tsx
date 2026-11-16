@@ -21,7 +21,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: "/updates", label: "Update Logs", icon: ScrollText, section: "Workspace" },
     { href: "/block-blast", label: "Block Blast", icon: Blocks, section: "Playground", accent: "amber" },
     { href: "/shop", label: "Shop", icon: ShoppingBag, section: "Playground", accent: "pink" },
-    { href: "/dihtro", label: "GS · Galaxy Subscription", icon: Gift, section: "Account", accent: "pink" },
+    { href: "/gs", label: "GS · Galaxy Subscription", icon: Gift, section: "Account", accent: "pink" },
     { href: "/hub", label: "Community Hub", icon: Gamepad2, section: "Playground" },
     { href: "/hangouts", label: "2D Hangouts", icon: Users, section: "Playground" },
     { href: "/settings", label: "Settings", icon: Settings, section: "Account" },
@@ -31,6 +31,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     navItems.push({ href: "/moderation", label: "Moderation", icon: ShieldAlert, section: "Staff" });
   if (["owner","admin","trial-admin"].includes(role))
     navItems.push({ href: "/admin", label: "Admin Console", icon: Command, section: "Staff" });
+  if (["owner", "admin", "super-owner"].includes(role)) navItems.push({ href: "/gs/gifts", label: "GS Gift Links", icon: Gift, section: "Account", accent: "pink" });
   const sections = Array.from(new Set(navItems.map(item => item.section)));
   const closeMenu = () => setIsMobileMenuOpen(false);
   const canGiftGS = ["owner", "admin", "super-owner"].includes(role);
@@ -40,7 +41,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     const months = Number(raw);
     if (!Number.isInteger(months) || months < 1 || months > 24) { window.alert("Choose a duration from 1 to 24 months."); return; }
     try {
-      const response = await fetch("/api/dihtro/gifts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ months }) });
+      const response = await fetch("/api/gs/gifts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ months }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "Could not create gift.");
       await navigator.clipboard?.writeText(data.claimUrl);
