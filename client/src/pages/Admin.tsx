@@ -20,7 +20,7 @@ export default function Admin() {
   const { toast } = useToast();
   const { keys, generateKey, deleteKey } = useAdminKeys();
   const isOwner = String(user?.role || "").toLowerCase() === "owner";
-  const { data: accounts = [], refetch: refetchAccounts } = useQuery<any[]>({
+  const { data: accounts = [] } = useQuery<any[]>({
     queryKey: ["/api/admin/users"],
     queryFn: async () => {
       const response = await fetch("/api/admin/users", { credentials: "include" });
@@ -36,8 +36,11 @@ export default function Admin() {
       if (!response.ok) throw new Error(data.message || "Could not delete account.");
       return data;
     },
-    onSuccess: async () => {
-      await refetchAccounts();
+    onSuccess: (_data, deletedId) => {
+      // Remove it from the cached list immediately; no slow full-list refetch.
+      queryClient.setQueryData<any[]>(["/api/admin/users"], current =>
+        (current || []).filter(account => Number(account.id) !== Number(deletedId))
+      );
       toast({ title: "Account deleted", description: "The account and its associated data have been removed." });
     },
     onError: (error: Error) => toast({ title: "Deletion failed", description: error.message, variant: "destructive" }),
@@ -177,7 +180,7 @@ export default function Admin() {
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-semibold text-foreground">{account.username}</div>
                         <div className="mt-1 text-[10px] text-muted-foreground">
-                          ID #{account.id} · {String(account.role || "user").replace(/-/g, " ")} · Joined {account.createdAt ? format(new Date(account.createdAt), "MMM d, yyyy") : "unknown"}
+                          ID #{account.id} · {String(account.role || "user").replace(/-/g, " ")} · Joined {account.createdAt && !Number.isNaN(new Date(account.createdAt).getTime()) ? format(new Date(account.createdAt), "MMM d, yyyy") : "unknown"}
                         </div>
                       </div>
                       {account.canDelete && (
