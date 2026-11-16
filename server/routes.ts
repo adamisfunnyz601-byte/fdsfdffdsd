@@ -644,7 +644,7 @@ export async function registerRoutes(
     return res.json(result.rows);
   });
 
-  app.get(["/api/gs/gifts/:code", "/api/dihtro/gifts/:code"], requireAuth, async (req, res) => {
+  app.get(["/api/gs/gifts/:code", "/api/dihtro/gifts/:code"], async (req, res) => {
     const result = await pool.query(
       "SELECT code, months, tier, claimed_at, created_at FROM dihtro_gifts WHERE code = $1 LIMIT 1",
       [String(req.params.code)],
