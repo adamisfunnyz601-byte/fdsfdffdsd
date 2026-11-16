@@ -467,6 +467,68 @@ export async function registerRoutes(
     next();
   };
 
+  // YouTube conversion is delegated to the operator's own Cobalt instance.
+  // NEXUS only returns a short-lived download URL; media bytes never enter NEXUS or either database.
+  const youtubeConvertRateLimit = rateLimit({
+    windowMs: 60 * 1000,
+    limit: 3,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    message: { message: "Too many conversions. Wait a minute and try again." },
+  });
+  app.post("/api/youtube/convert", requireAuth, youtubeConvertRateLimit, async (req, res) => {
+    const source = typeof req.body?.url === "string" ? req.body.url.trim() : "";
+    const format = req.body?.format === "mp3" ? "mp3" : req.body?.format === "mp4" ? "mp4" : "";
+    let parsed: URL;
+    try { parsed = new URL(source); } catch { return res.status(400).json({ message: "Enter a valid YouTube video URL." }); }
+    if (!["youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"].includes(parsed.hostname.toLowerCase()) || parsed.protocol !== "https:") {
+      return res.status(400).json({ message: "Only HTTPS YouTube video links are supported." });
+    }
+    if (!format) return res.status(400).json({ message: "Choose MP3 or MP4." });
+    const configuredApi = String(process.env.COBALT_API_URL || "").trim();
+    if (!configuredApi) return res.status(503).json({ message: "The converter service is not connected yet. The NEXUS converter is ready, but its private Cobalt service must be deployed and COBALT_API_URL configured." });
+    let apiUrl: URL;
+    try {
+      apiUrl = new URL(configuredApi);
+      if (apiUrl.protocol !== "https:" && !(process.env.NODE_ENV !== "production" && apiUrl.hostname === "localhost")) throw new Error("HTTPS required");
+    } catch {
+      return res.status(503).json({ message: "COBALT_API_URL must be a valid HTTPS address." });
+    }
+    try {
+      const headers: Record<string, string> = { Accept: "application/json", "Content-Type": "application/json" };
+      if (process.env.COBALT_API_KEY) headers.Authorization = `Api-Key ${process.env.COBALT_API_KEY}`;
+      const payload = format === "mp3"
+        ? { url: parsed.toString(), downloadMode: "audio", audioFormat: "mp3", audioBitrate: "192", filenameStyle: "pretty" }
+        : { url: parsed.toString(), downloadMode: "auto", videoQuality: "720", youtubeVideoCodec: "h264", youtubeVideoContainer: "mp4", filenameStyle: "pretty" };
+      const upstream = await fetch(apiUrl.toString().replace(/\/+$/, "") + "/", {
+        method: "POST", headers, body: JSON.stringify(payload), signal: AbortSignal.timeout(30000),
+      });
+      const data: any = await upstream.json().catch(() => null);
+      if (!upstream.ok || !data || data.status === "error") {
+        const code = String(data?.error?.code || "");
+        const message = code.includes("rate") ? "The converter is busy. Try again shortly."
+          : code.includes("youtube") ? "YouTube could not provide this video. It may be private, restricted, or unavailable."
+          : "The converter could not process this video. Try another public video.";
+        return res.status(upstream.status === 429 ? 429 : 502).json({ message });
+      }
+      if (!["tunnel", "redirect"].includes(data.status) || typeof data.url !== "string") {
+        return res.status(502).json({ message: "The converter returned an unsupported response. Try another video." });
+      }
+      let download: URL;
+      try { download = new URL(data.url); } catch { return res.status(502).json({ message: "The converter returned an invalid download link." }); }
+      if (download.protocol !== "https:" && !(process.env.NODE_ENV !== "production" && download.hostname === "localhost")) {
+        return res.status(502).json({ message: "The converter returned an insecure download link." });
+      }
+      const fallbackName = format === "mp3" ? "audio.mp3" : "video.mp4";
+      const filename = typeof data.filename === "string" ? data.filename.replace(/[\\/\\r\\n"]/g, "_").slice(0, 160) : fallbackName;
+      res.set("Cache-Control", "no-store, private");
+      return res.json({ downloadUrl: download.toString(), filename });
+    } catch (error) {
+      console.error("[youtube-converter] request failed:", error);
+      return res.status(502).json({ message: "The converter service could not be reached. Please try again later." });
+    }
+  });
+
   const blockedEitherWay = async (userId: number, otherId: number) => {
     const [block] = await db.select({ id: blocks.id }).from(blocks).where(
       or(
