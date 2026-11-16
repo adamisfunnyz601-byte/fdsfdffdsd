@@ -51,7 +51,7 @@ function Router(){return <Switch>
  <Route path="/admin"><ProtectedRoute component={Admin}/></Route>
  <Route path="/shop"><ProtectedRoute component={Shop}/></Route>
  <Route path="/gs"><ProtectedRoute component={Dihtro}/></Route>
- <Route path="/gs/claim/:code">{params => <ProtectedRoute component={() => <Dihtro code={params.code}/>} />}</Route>
+ <Route path="/gs/claim/:code">{params => <Dihtro code={params.code}/>}</Route>
  <Route path="/gs/gifts"><ProtectedRoute component={GSGifts}/></Route>
  <Route path="/dihtro/claim/:code">{params => <Redirect to={`/gs/claim/${params.code}`}/>}</Route>
  <Route path="/dihtro"><Redirect to="/gs"/></Route>
