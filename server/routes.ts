@@ -559,7 +559,8 @@ export async function registerRoutes(
     const until = account.dihhroUntil ? new Date(account.dihhroUntil) : null;
     const isStaff = ["owner", "admin", "super_owner"].includes(String(account.role).toLowerCase());
     const active = isStaff || Boolean(until && until.getTime() > Date.now());
-    const tier = isStaff ? "diamond" : active ? String(account.subscriptionTier || "bronze") : "none";
+    const storedTier = String(account.subscriptionTier || "none");
+    const tier = isStaff ? "diamond" : active ? (storedTier === "none" ? "bronze" : storedTier) : "none";
     return res.json({ active, tier, until: until?.toISOString() || null, isStaff, prices: { bronze: 250, silver: 750, gold: 1800, diamond: 4000 } });
   });
 
@@ -575,7 +576,9 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Staff already have full Universe Diamond access." });
     }
     const tierRank: Record<string, number> = { none: 0, bronze: 1, silver: 2, gold: 3, diamond: 4 };
-    const existingTier = account.dihhroUntil && new Date(account.dihhroUntil) > new Date() ? String(account.subscriptionTier || "bronze") : "none";
+    const activeSubscription = Boolean(account.dihhroUntil && new Date(account.dihhroUntil) > new Date());
+    const storedTier = String(account.subscriptionTier || "none");
+    const existingTier = activeSubscription ? (storedTier === "none" ? "bronze" : storedTier) : "none";
     if ((tierRank[existingTier] || 0) > tierRank[tier]) return res.status(400).json({ message: "You already have a higher active subscription. Wait until it expires before purchasing a lower tier." });
     const balance = Number(account.coins || 0);
     if (!Number.isSafeInteger(balance) || balance < price) return res.status(400).json({ message: "Not enough Galactic Coins." });
