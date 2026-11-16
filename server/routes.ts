@@ -670,12 +670,17 @@ export async function registerRoutes(
       const account = accountResult.rows[0];
       const now = new Date();
       const currentExpiry = account.dihhro_until ? new Date(account.dihhro_until) : now;
-      const startAt = currentExpiry > now ? currentExpiry : now;
+      const hasActiveSubscription = currentExpiry > now;
+      const startAt = hasActiveSubscription ? currentExpiry : now;
       const until = new Date(startAt);
       until.setUTCMonth(until.getUTCMonth() + Number(gift.months));
-      await client.query("UPDATE users SET subscription_tier = $1, dihhro_until = $2 WHERE id = $3", [gift.tier || "bronze", until, userId]);
+      const tierRank: Record<string, number> = { none: 0, bronze: 1, silver: 2, gold: 3, diamond: 4 };
+      const currentTier = hasActiveSubscription ? String(account.subscription_tier || "none") : "none";
+      const giftTier = String(gift.tier || "bronze");
+      const effectiveTier = (tierRank[currentTier] || 0) > (tierRank[giftTier] || 0) ? currentTier : giftTier;
+      await client.query("UPDATE users SET subscription_tier = $1, dihhro_until = $2 WHERE id = $3", [effectiveTier, until, userId]);
       await client.query("COMMIT");
-      return res.json({ success: true, months: Number(gift.months), tier: gift.tier || "bronze", until: until.toISOString() });
+      return res.json({ success: true, months: Number(gift.months), tier: effectiveTier, until: until.toISOString() });
     } catch (error) {
       await client.query("ROLLBACK").catch(() => {});
       throw error;
