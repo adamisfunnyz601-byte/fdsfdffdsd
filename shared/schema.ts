@@ -33,6 +33,7 @@ export const users = pgTable("users", {
   hubPointsDay: text("hub_points_day"),
   profileGradient: text("profile_gradient"),
   dihhroUntil: timestamp("dihhro_until"),
+  subscriptionTier: text("subscription_tier").notNull().default("none"),
   tagSymbol: text("tag_symbol"),
   tagText: text("tag_text"),
   tagColor: text("tag_color"),
