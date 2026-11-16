@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
 import { useToast } from "@/hooks/use-toast";
-import { Crown, Gift, Sparkles, Clock, CheckCircle2, ShieldCheck, ShoppingCart } from "lucide-react";
+import { Crown, Gift, Sparkles, Clock, CheckCircle2, ShoppingCart } from "lucide-react";
 
 const plans = [
   { id: "bronze", name: "Planet Bronze", price: 250, summary: "10 profile-gradient features", features: ["10 Bronze features"] },
@@ -26,9 +26,6 @@ export default function GS({ code }: { code?: string }) {
     enabled: Boolean(code), retry: false,
   });
   const [claiming, setClaiming] = useState(false);
-  const [grantUserId, setGrantUserId] = useState("");
-  const [grantTier, setGrantTier] = useState("silver");
-  const [grantMonths, setGrantMonths] = useState("1");
   const [busyTier, setBusyTier] = useState("");
   const claim = async () => {
     if (!code || gift?.claimed || claiming) return;
@@ -55,15 +52,6 @@ export default function GS({ code }: { code?: string }) {
       await qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
     } catch (e: any) { toast({ title: "PURCHASE FAILED", description: e.message, variant: "destructive" }); }
     finally { setBusyTier(""); }
-  };
-  const grant = async () => {
-    try {
-      const r = await fetch("/api/admin/gs/grant", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: Number(grantUserId), tier: grantTier, months: Number(grantMonths) }) });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data.message || "Grant failed.");
-      toast({ title: "SUBSCRIPTION GRANTED", description: `${grantTier.toUpperCase()} granted for ${grantMonths} month(s).` });
-      setGrantUserId("");
-    } catch (e: any) { toast({ title: "GRANT FAILED", description: e.message, variant: "destructive" }); }
   };
   const until = plan?.until ? new Date(plan.until) : null;
   const days = until && until.getTime() > Date.now() ? Math.ceil((until.getTime() - Date.now()) / 86400000) : 0;
@@ -112,16 +100,6 @@ export default function GS({ code }: { code?: string }) {
       <p className="mt-1 text-sm text-white/55">All Galaxy Gold features, plus these Universe-only unlocks.</p>
       <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{diamondFeatures.map((feature,i)=><div key={feature} className="rounded-lg border border-white/5 bg-black/10 px-3 py-2 text-xs text-foreground/80">{i+1}. {feature}</div>)}</div>
     </section>
-    {plan?.isStaff && <section className="rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-5">
-      <h2 className="flex items-center gap-2 font-bold text-white"><ShieldCheck size={18}/> Staff subscription grants</h2>
-      <p className="mt-1 text-xs text-white/50">Admins can grant Bronze, Silver or Gold for 1–24 months. Diamond is reserved for the highest owner tier.</p>
-      <div className="mt-3 grid gap-2 sm:grid-cols-4">
-        <input value={grantUserId} onChange={e=>setGrantUserId(e.target.value)} placeholder="Account ID" inputMode="numeric" className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white"/>
-        <select value={grantTier} onChange={e=>setGrantTier(e.target.value)} className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white"><option value="bronze">Planet Bronze</option><option value="silver">Solar System Silver</option><option value="gold">Galaxy Gold</option></select>
-        <input value={grantMonths} onChange={e=>setGrantMonths(e.target.value)} type="number" min="1" max="24" className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white"/>
-        <button onClick={()=>void grant()} disabled={!grantUserId||!grantMonths} className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-50">Grant subscription</button>
-      </div>
-    </section>}
     <section className="flex items-center gap-3 rounded-2xl border border-white/10 bg-card/50 p-5 text-sm text-muted-foreground"><Clock size={18}/> Subscriptions last one month per purchase. Renewals extend the expiry date. Block Blast monthly champions receive one month of Solar System Silver.</section>
   </div></Layout>;
 }
