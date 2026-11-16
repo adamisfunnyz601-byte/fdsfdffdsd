@@ -512,7 +512,23 @@ const TerminalMessage = ({
       if (activeChatEmoteAudio === audio) activeChatEmoteAudio = null;
     };
   }, [msg.id, chatEmoteMatch?.[1], chatEmoteStyles.audioUrl, shouldAutoplayEmote]);
-  const dihhroGiftMatch = typeof displayContent === "string" ? displayContent.match(/https?:\/\/[^\s]+\/gift\/([A-Za-z0-9-]+)/) : null;
+  const gsGiftMatch = typeof displayContent === "string" ? displayContent.match(/(?:https?:\\/\\/[^/\\s]+)?\\/(?:gs|dihtro)\\/claim\\/([A-Za-z0-9_-]+)/) : null;
+  const [gsGiftClaimState, setGsGiftClaimState] = useState<"idle" | "claiming" | "claimed" | "error">("idle");
+  const [gsGiftClaimMessage, setGsGiftClaimMessage] = useState("");
+  const claimGsGift = async () => {
+    if (!gsGiftMatch || gsGiftClaimState === "claiming" || gsGiftClaimState === "claimed") return;
+    setGsGiftClaimState("claiming");
+    try {
+      const response = await apiFetch(`/api/gs/gifts/${gsGiftMatch[1]}/claim`, { method: "POST", credentials: "same-origin" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || "This GS gift could not be claimed.");
+      setGsGiftClaimState("claimed");
+      setGsGiftClaimMessage(`${String(data.tier || "bronze").toUpperCase()} · ${data.months} month(s) added to your account`);
+    } catch (error: any) {
+      setGsGiftClaimState("error");
+      setGsGiftClaimMessage(error?.message || "Gift claim failed.");
+    }
+  };
 
   return (
     <div className={cn("chat-message-row flex mb-5 group gap-2 message-motion", `message-motion-${Math.abs(Number(msg.id) || 0) % 120}`, isMe ? "flex-row-reverse" : "flex-row")}>
