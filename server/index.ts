@@ -4,6 +4,8 @@ import { startStorageCleanup } from "./storage-cleanup";
 import { startEnzonicStorageCleanup } from "./enzonic-storage-cleanup";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { pool } from "./db";
+import { closeEnzonicStorageCleanup } from "./enzonic-storage-cleanup";
 
 const app = express();
 const httpServer = createServer(app);
@@ -82,7 +84,6 @@ app.use((req, res, next) => {
   await registerRoutes(httpServer, app);
   startStorageCleanup();
   startEnzonicStorageCleanup();
-  startEnzonicStorageCleanup();
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
@@ -97,9 +98,20 @@ app.use((req, res, next) => {
     return res.status(status).json({ message });
   });
 
-  // Railway deployment health check. Keep this before static/Vite fallback routes.
-  app.get("/health", (_req, res) => {
+  // Liveness: confirms the Node process is running without depending on the database.
+  app.get(["/health", "/healthz"], (_req, res) => {
     res.status(200).json({ status: "ok", service: "nexus-api" });
+  });
+
+  // Readiness: only route traffic here when the primary database can answer.
+  app.get("/readyz", async (_req, res) => {
+    try {
+      await pool.query({ text: "SELECT 1", query_timeout: 5_000 });
+      res.status(200).json({ status: "ready", service: "nexus-api", database: "ok" });
+    } catch (error) {
+      console.error("[health] Readiness check failed:", error);
+      res.status(503).json({ status: "not_ready", service: "nexus-api" });
+    }
   });
 
   // importantly only setup vite in development and after
@@ -119,6 +131,22 @@ app.use((req, res, next) => {
   const port = parseInt(process.env.SERVER_PORT || process.env.PORT || "5000", 10);
   // Windows does not support Node's reusePort option on all socket providers.
   // A normal bind is sufficient for this single-instance self-hosted server.
+  let isShuttingDown = false;
+  const shutdown = (signal: string) => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+    log(`Received ${signal}; shutting down gracefully.`);
+    httpServer.close(async () => {
+      await Promise.allSettled([pool.end(), closeEnzonicStorageCleanup()]);
+      process.exit(0);
+    });
+    // Do not leave a stuck process running forever during platform shutdown.
+    const forceExit = setTimeout(() => process.exit(1), 15_000);
+    forceExit.unref();
+  };
+  process.once("SIGTERM", () => shutdown("SIGTERM"));
+  process.once("SIGINT", () => shutdown("SIGINT"));
+
   httpServer.listen(
     {
       port,
