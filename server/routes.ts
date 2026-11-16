@@ -592,28 +592,13 @@ export async function registerRoutes(
     return res.json({ success: true, tier, coins: balance - price, until: until.toISOString() });
   });
 
-  app.post(["/api/admin/gs/grant", "/api/admin/dihtro/grant"], requireAdmin, async (req, res) => {
-    const targetId = Number(req.body?.userId);
-    const tier = String(req.body?.tier || "").toLowerCase();
-    const months = Number(req.body?.months ?? 1);
-    if (!Number.isSafeInteger(targetId) || targetId <= 0) return res.status(400).json({ message: "Choose a valid account." });
-    if (!["bronze", "silver", "gold"].includes(tier)) return res.status(400).json({ message: "Admins can grant Bronze, Silver or Gold." });
-    if (!Number.isInteger(months) || months < 1 || months > 24) return res.status(400).json({ message: "Choose 1–24 months." });
-    const target = await storage.getUser(targetId);
-    if (!target) return res.status(404).json({ message: "Account not found." });
-    const now = new Date();
-    const oldExpiry = target.dihhroUntil && new Date(target.dihhroUntil) > now ? new Date(target.dihhroUntil) : now;
-    const until = new Date(oldExpiry); until.setUTCMonth(until.getUTCMonth() + months);
-    await db.update(users).set({ subscriptionTier: tier, dihhroUntil: until }).where(eq(users.id, targetId));
-    await db.insert(moderationLogs).values({ actorId: Number(req.session.userId!), targetId, action: "gs_subscription_grant", reason: "GS subscription grant", metadata: { tier, months } });
-    return res.json({ success: true, userId: targetId, tier, months, until: until.toISOString() });
-  });
-
   app.post(["/api/gs/gifts", "/api/dihtro/gifts"], requireAdmin, async (req, res) => {
     const months = Number(req.body?.months);
     const tier = String(req.body?.tier || "bronze").toLowerCase();
+    const actor = await storage.getUser(Number(req.session.userId!));
+    const isSuperOwner = String(actor?.role || "").toLowerCase() === "super_owner";
     if (!Number.isInteger(months) || months < 1 || months > 24) return res.status(400).json({ message: "Gift duration must be between 1 and 24 months." });
-    if (!["bronze", "silver", "gold", "diamond"].includes(tier)) return res.status(400).json({ message: "Choose a valid GS gift tier." });
+    if (!["bronze", "silver", "gold"].includes(tier) && !(tier === "diamond" && isSuperOwner)) return res.status(403).json({ message: "Only super owners can create Universe Diamond gifts." });
     const code = randomBytes(24).toString("base64url");
     const result = await pool.query(
       "INSERT INTO dihtro_gifts (code, created_by, months, tier) VALUES ($1, $2, $3, $4) RETURNING code, months, tier, created_at",
