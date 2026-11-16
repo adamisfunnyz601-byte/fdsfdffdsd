@@ -467,8 +467,13 @@ export async function registerRoutes(
     next();
   };
 
-  // YouTube conversion is delegated to the operator's own Cobalt instance.
-  // NEXUS only returns a short-lived download URL; media bytes never enter NEXUS or either database.
+  // Local yt-dlp conversion. Output is written to an OS temporary directory and streamed to the client;
+  // no media bytes, conversion jobs, source URLs, or download history are written to either database.
+  const { spawn } = await import("node:child_process");
+  const { mkdtemp, readdir, rm, stat } = await import("node:fs/promises");
+  const { createReadStream } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join, basename } = await import("node:path");
   const youtubeConvertRateLimit = rateLimit({
     windowMs: 60 * 1000,
     limit: 3,
@@ -476,57 +481,96 @@ export async function registerRoutes(
     legacyHeaders: false,
     message: { message: "Too many conversions. Wait a minute and try again." },
   });
+  let activeYoutubeConversions = 0;
   app.post("/api/youtube/convert", requireAuth, youtubeConvertRateLimit, async (req, res) => {
     const source = typeof req.body?.url === "string" ? req.body.url.trim() : "";
-    const format = req.body?.format === "mp3" ? "mp3" : req.body?.format === "mp4" ? "mp4" : "";
+    const format = ["mp3", "mp4", "mov"].includes(req.body?.format) ? req.body.format as "mp3" | "mp4" | "mov" : "";
+    const quality = typeof req.body?.quality === "string" ? req.body.quality : "";
     let parsed: URL;
     try { parsed = new URL(source); } catch { return res.status(400).json({ message: "Enter a valid YouTube video URL." }); }
-    if (!["youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"].includes(parsed.hostname.toLowerCase()) || parsed.protocol !== "https:") {
+    if (parsed.protocol !== "https:" || !["youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"].includes(parsed.hostname.toLowerCase())) {
       return res.status(400).json({ message: "Only HTTPS YouTube video links are supported." });
     }
-    if (!format) return res.status(400).json({ message: "Choose MP3 or MP4." });
-    const apiKey = String(process.env.YOINKU_API_KEY || "").trim();
-    if (!apiKey) return res.status(503).json({ message: "The free converter is not connected yet. Add YOINKU_API_KEY in Enzonic." });
-    const apiBase = "https://yoinku.com/api/v1";
+    if (!format) return res.status(400).json({ message: "Choose MP3, MP4 or MOV." });
+    const validQuality = format === "mp3" ? ["128", "192", "256", "320"].includes(quality)
+      : ["360", "480", "720", "1080", "1440", "best"].includes(quality);
+    if (!validQuality) return res.status(400).json({ message: "Choose a supported quality." });
+    if (activeYoutubeConversions >= 2) return res.status(429).json({ message: "NEXUS is already converting two files. Try again shortly." });
+
+    const ytdlpPath = String(process.env.YTDLP_PATH || "yt-dlp").trim();
+    const ffmpegLocation = String(process.env.FFMPEG_LOCATION || "").trim();
+    const workDir = await mkdtemp(join(tmpdir(), "nexus-ytdlp-"));
+    const outputTemplate = join(workDir, "%(id)s.%(ext)s");
+    const args = [
+      "--no-playlist", "--no-warnings", "--no-progress", "--no-part",
+      "--restrict-filenames", "--max-filesize", "500M",
+      "--socket-timeout", "20", "--retries", "2", "--fragment-retries", "2",
+      "--output", outputTemplate,
+    ];
+    if (ffmpegLocation) args.push("--ffmpeg-location", ffmpegLocation);
+    if (format === "mp3") {
+      args.push("-f", "bestaudio/best", "-x", "--audio-format", "mp3", "--audio-quality", `${quality}K`);
+    } else {
+      const formatSelector = quality === "best" ? "bestvideo+bestaudio/best"
+        : `bestvideo[height<=${quality}]+bestaudio/best[height<=${quality}]`;
+      args.push("-f", formatSelector);
+      if (format === "mp4") args.push("--merge-output-format", "mp4");
+      else args.push("--remux-video", "mov");
+    }
+    args.push("--", parsed.toString());
+
+    activeYoutubeConversions += 1;
+    let child: ReturnType<typeof spawn> | undefined;
+    let settled = false;
     try {
-      const headers: Record<string, string> = { Accept: "application/json", "x-api-key": apiKey };
-      const infoUrl = new URL(apiBase + "/info");
-      infoUrl.searchParams.set("url", parsed.toString());
-      const infoResponse = await fetch(infoUrl, { headers, signal: AbortSignal.timeout(30000) });
-      const info: any = await infoResponse.json().catch(() => null);
-      if (!infoResponse.ok || info?.ok !== true || !Array.isArray(info?.data?.formats)) {
-        const message = infoResponse.status === 429 ? "The free converter limit has been reached. Try again tomorrow."
-          : infoResponse.status === 401 || infoResponse.status === 403 ? "The Yoinku API key was rejected. Check YOINKU_API_KEY in Enzonic."
-          : "This video could not be inspected. It may be private, restricted, or unavailable.";
-        return res.status(infoResponse.status === 429 ? 429 : 502).json({ message });
-      }
-      const formats = info.data.formats;
-      const selected = format === "mp3"
-        ? formats.find((item: any) => item.id === "a-mp3")
-        : formats.find((item: any) => item.id === "v-720") || formats.find((item: any) => item.kind === "video" && item.container === "mp4");
-      if (!selected?.id) return res.status(422).json({ message: format === "mp3" ? "MP3 is not available for this video." : "MP4 video is not available for this video." });
-      const downloadUrl = new URL(apiBase + "/download");
-      downloadUrl.searchParams.set("url", parsed.toString());
-      downloadUrl.searchParams.set("format", String(selected.id));
-      const downloadResponse = await fetch(downloadUrl, { headers, signal: AbortSignal.timeout(60000) });
-      const data: any = await downloadResponse.json().catch(() => null);
-      if (!downloadResponse.ok || data?.ok !== true || typeof data.url !== "string") {
-        const message = downloadResponse.status === 429 ? "The free daily download limit has been reached. Try again tomorrow."
-          : "The converter could not create this download. Please try another video.";
-        return res.status(downloadResponse.status === 429 ? 429 : 502).json({ message });
-      }
-      let download: URL;
-      try { download = new URL(data.url); } catch { return res.status(502).json({ message: "The converter returned an invalid download link." }); }
-      if (download.protocol !== "https:" || !["yoinku.com", "r2.cloudflarestorage.com"].some((host) => download.hostname === host || download.hostname.endsWith("." + host))) {
-        return res.status(502).json({ message: "The converter returned an untrusted download link." });
-      }
-      const fallbackName = format === "mp3" ? "audio.mp3" : "video.mp4";
-      const filename = typeof data.filename === "string" ? data.filename.replace(/[\\/\\r\\n"]/g, "_").slice(0, 160) : fallbackName;
-      res.set("Cache-Control", "no-store, private");
-      return res.json({ downloadUrl: download.toString(), filename });
+      await new Promise<void>((resolve, reject) => {
+        child = spawn(ytdlpPath, args, { stdio: ["ignore", "ignore", "pipe"], windowsHide: true });
+        let stderr = "";
+        const timeout = setTimeout(() => child?.kill("SIGKILL"), 8 * 60 * 1000);
+        child.stderr?.on("data", chunk => { stderr = (stderr + chunk.toString()).slice(-5000); });
+        child.once("error", error => { clearTimeout(timeout); reject(error); });
+        child.once("close", code => {
+          clearTimeout(timeout);
+          if (code === 0) resolve();
+          else reject(new Error(stderr || `yt-dlp exited with code ${code ?? "unknown"}`));
+        });
+      });
+      const files = (await readdir(workDir)).filter(name => /\.(mp3|mp4|mov)$/i.test(name));
+      if (!files.length) throw new Error("yt-dlp finished but did not produce an MP3, MP4 or MOV file. Check that FFmpeg is installed.");
+      const filePath = join(workDir, files[0]);
+      const fileInfo = await stat(filePath);
+      if (!fileInfo.isFile() || fileInfo.size <= 0 || fileInfo.size > 500 * 1024 * 1024) throw new Error("The converted file is empty or exceeds the 500 MB limit.");
+      const safeName = basename(files[0]).replace(/[\r\n"]/g, "_");
+      const contentType = format === "mp3" ? "audio/mpeg" : format === "mov" ? "video/quicktime" : "video/mp4";
+      res.set({
+        "Content-Type": contentType,
+        "Content-Length": String(fileInfo.size),
+        "Content-Disposition": `attachment; filename="${safeName}"`,
+        "Cache-Control": "no-store, private",
+        "X-Content-Type-Options": "nosniff",
+      });
+      const cleanup = () => { void rm(workDir, { recursive: true, force: true }).catch(() => undefined); };
+      res.once("close", cleanup);
+      res.once("finish", cleanup);
+      const stream = createReadStream(filePath);
+      stream.once("error", error => { cleanup(); if (!res.headersSent) res.status(500).json({ message: "Could not stream the converted file." }); else res.destroy(error); });
+      stream.pipe(res);
+      settled = true;
     } catch (error) {
-      console.error("[youtube-converter] request failed:", error);
-      return res.status(502).json({ message: "The free converter service could not be reached. Please try again later." });
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("[youtube-converter] conversion failed:", message);
+      const missingBinary = (error as NodeJS.ErrnoException)?.code === "ENOENT";
+      const userMessage = missingBinary
+        ? "yt-dlp is not installed on this Enzonic server. Install yt-dlp and FFmpeg, then set YTDLP_PATH and FFMPEG_LOCATION if they are not on PATH."
+        : /ffmpeg|ffprobe/i.test(message)
+          ? "FFmpeg and FFprobe are required for MP3 extraction and MP4/MOV processing. Install them on the Enzonic server."
+          : /timed out|SIGKILL/i.test(message)
+            ? "The conversion took too long and was stopped. Try a shorter video or lower quality."
+            : "Conversion failed. The video may be private, restricted, unavailable, or unsupported.";
+      if (!res.headersSent) res.status(502).json({ message: userMessage });
+    } finally {
+      activeYoutubeConversions = Math.max(0, activeYoutubeConversions - 1);
+      if (!settled) await rm(workDir, { recursive: true, force: true }).catch(() => undefined);
     }
   });
 
