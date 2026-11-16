@@ -16,13 +16,13 @@ const silverFeatures = [...bronzeFeatures, ...silverExclusiveFeatures];
 const goldFeatures = ["Uploaded username fonts","Custom multi-stop username gradients","Animated username gradient presets","Advanced profile banner effects","Banner overlay styling","Banner animation presets","Profile gallery layouts","Expanded profile gallery","Animated gallery transitions","Gallery caption styling","Profile widget library","Custom profile widgets","Widget colour controls","Widget layout presets","Widget visibility controls","Profile module ordering","Custom avatar frames","Exclusive avatar frame library","Avatar outline effects","Avatar lighting presets"];
 const diamondFeatures = ["Universe-only animated profile constellations","Personal star-map profile header","Nebula profile background presets","Interactive galaxy banner effects","Orbiting avatar decorations","Animated orbital nameplates","Exclusive cosmic username typography","Multi-layer gradient animations","Reactive profile lighting","Custom profile particle systems","Profile constellation editor","Custom zodiac-style emblems","Animated comet trails","Galaxy glass profile panels","Aurora border animations","Custom profile soundscapes","Profile entrance animations","Profile hover motion presets","Advanced profile layout templates","Multi-banner profile carousel","Custom profile section ordering","Expandable profile widgets","Profile visitor analytics","Profile engagement insights","Profile view history","Profile theme scheduler","Time-based profile themes","Seasonal cosmic themes","Custom profile accent palettes","Per-section profile colours","Animated status aura","Exclusive presence animations","Custom online status messages","Status history archive","Profile spotlight mode","Featured profile showcase","Profile pinboard","Custom profile badges","Animated badge frames","Badge collection display","Exclusive chat message gradients","Cosmic chat nameplates","Animated chat signature","Custom message accent effects","Exclusive reaction animations","Custom reaction sets","Expanded reaction palette","Animated reaction trails","Chat profile quick cards","Custom chat backdrop themes","Advanced chat layout presets","Custom chat bubble shapes","Message highlight themes","Personal chat sound themes","Custom typing indicators","Animated typing effects","Expanded status indicators","Custom presence icons","Priority profile rendering","High-detail avatar effects","Custom avatar lighting","Animated avatar outlines","Avatar particle overlays","Avatar frame creator","Exclusive avatar frame library","Custom banner overlays","Layered banner editor","Banner animation presets","Banner parallax effects","Interactive banner hotspots","Private profile showcase slots","Expanded profile gallery","Custom gallery layouts","Animated gallery transitions","Gallery caption styling","Exclusive profile widgets","Custom widget colours","Widget layout presets","Widget visibility controls","Profile module library","Custom achievement showcase","Expanded achievement slots","Exclusive achievement frames","Animated achievement reveals","Personal milestone timeline","Profile progress visualiser","Custom progress indicators","Expanded saved themes","Theme import and export","Theme version history","Universe creator badge effects","Exclusive seasonal cosmetics","Early access to new cosmetics","Expanded cosmetic inventory","Custom cosmetic combinations","Profile effect presets","Advanced visual effect controls","Priority feature previews","Exclusive Universe community rooms","Diamond supporter showcase"];
 
-export default function Dihtro({ code }: { code?: string }) {
+export default function GS({ code }: { code?: string }) {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const { data: plan, isLoading } = useQuery<any>({ queryKey: ["/api/dihtro/me"] });
+  const { data: plan, isLoading } = useQuery<any>({ queryKey: ["/api/gs/me"] });
   const { data: gift, refetch: refetchGift } = useQuery<any>({
-    queryKey: ["/api/dihtro/gifts", code],
-    queryFn: async () => { const r = await fetch("/api/dihtro/gifts/" + encodeURIComponent(code || "")); const d = await r.json(); if (!r.ok) throw new Error(d.message || "Gift not found."); return d; },
+    queryKey: ["/api/gs/gifts", code],
+    queryFn: async () => { const r = await fetch("/api/gs/gifts/" + encodeURIComponent(code || "")); const d = await r.json(); if (!r.ok) throw new Error(d.message || "Gift not found."); return d; },
     enabled: Boolean(code), retry: false,
   });
   const [claiming, setClaiming] = useState(false);
@@ -34,11 +34,11 @@ export default function Dihtro({ code }: { code?: string }) {
     if (!code || gift?.claimed || claiming) return;
     setClaiming(true);
     try {
-      const r = await fetch("/api/dihtro/gifts/" + encodeURIComponent(code) + "/claim", { method: "POST" });
+      const r = await fetch("/api/gs/gifts/" + encodeURIComponent(code) + "/claim", { method: "POST" });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.message || "Could not claim this gift.");
       toast({ title: "SUBSCRIPTION CLAIMED 🎁", description: `You received ${d.months} month(s)!` });
-      await qc.invalidateQueries({ queryKey: ["/api/dihtro/me"] });
+      await qc.invalidateQueries({ queryKey: ["/api/gs/me"] });
       await qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
       await refetchGift();
     } catch (e: any) { toast({ title: "GIFT NOT CLAIMED", description: e.message, variant: "destructive" }); }
@@ -47,11 +47,11 @@ export default function Dihtro({ code }: { code?: string }) {
   const purchase = async (tier: string) => {
     setBusyTier(tier);
     try {
-      const r = await fetch("/api/dihtro/purchase", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tier }) });
+      const r = await fetch("/api/gs/purchase", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tier }) });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data.message || "Purchase failed.");
       toast({ title: "SUBSCRIPTION ACTIVATED", description: `${tier.toUpperCase()} activated for one month. ${data.coins} Galactic Coins remain.` });
-      await qc.invalidateQueries({ queryKey: ["/api/dihtro/me"] });
+      await qc.invalidateQueries({ queryKey: ["/api/gs/me"] });
       await qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
     } catch (e: any) { toast({ title: "PURCHASE FAILED", description: e.message, variant: "destructive" }); }
     finally { setBusyTier(""); }
@@ -74,7 +74,7 @@ export default function Dihtro({ code }: { code?: string }) {
       <div className="flex items-center gap-3"><span className="rounded-2xl bg-fuchsia-400/15 p-3 text-fuchsia-200"><Crown size={27}/></span><div><p className="text-xs font-bold tracking-[.3em] text-fuchsia-200">GS MEMBERSHIP</p><h1 className="text-3xl font-black text-white">GS — GALAXY SUBSCRIPTION</h1></div></div>
       <p className="mt-3 max-w-2xl text-sm text-white/65">GS stands for Galaxy Subscription. Four subscription levels. Choose your place in the NEXUS universe.</p>
       <div className="mt-5 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border border-white/10 bg-black/20 p-4"><p className="text-xs text-white/45">CURRENT PLAN</p><p className="mt-1 text-lg font-bold text-white">{isLoading ? "Checking…" : plans.find(p => p.id === currentTier)?.name || (plan?.isStaff ? "Universe Diamond (Staff)" : "No subscription")}</p></div>
+        <div className="rounded-xl border border-white/10 bg-black/20 p-4"><p className="text-xs text-white/45">CURRENT PLAN</p><p className="mt-1 text-lg font-bold text-white">{isLoading ? "Checking…" : (plan?.isSuperOwner ? "Universe Diamond · Super Owner" : plans.find(p => p.id === currentTier)?.name || (plan?.isStaff ? "Universe Diamond (Staff)" : "No subscription"))}</p></div>
         <div className="rounded-xl border border-white/10 bg-black/20 p-4"><p className="text-xs text-white/45">TIME REMAINING</p><p className="mt-1 text-lg font-bold text-white">{plan?.isStaff ? "Staff access" : days ? `${days} days` : "—"}</p></div>
         <div className="rounded-xl border border-white/10 bg-black/20 p-4"><p className="text-xs text-white/45">EXPIRES</p><p className="mt-1 text-lg font-bold text-white">{until ? until.toLocaleDateString() : plan?.isStaff ? "Never" : "No active plan"}</p></div>
       </div>
