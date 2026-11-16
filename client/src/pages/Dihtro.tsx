@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
 import { useToast } from "@/hooks/use-toast";
@@ -18,6 +19,7 @@ const diamondFeatures = ["Universe-only animated profile constellations","Person
 
 export default function GS({ code }: { code?: string }) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const qc = useQueryClient();
   const { data: plan, isLoading } = useQuery<any>({ queryKey: ["/api/gs/me"] });
   const { data: gift, refetch: refetchGift } = useQuery<any>({
@@ -70,7 +72,7 @@ export default function GS({ code }: { code?: string }) {
     {code && <section className="rounded-2xl border border-fuchsia-300/25 bg-fuchsia-500/10 p-5">
       <div className="flex items-center gap-2 text-fuchsia-100"><Gift size={20}/><h2 className="font-bold">YOU GOT GIFTED A SUBSCRIPTION 🎁</h2></div>
       {gift?.claimed ? <p className="mt-3 text-sm text-rose-200">This gift has already been redeemed.</p>
-       : gift ? <><p className="mt-2 text-sm text-white/70">You have a gift for {gift.months} month(s)!</p><button onClick={() => void claim()} disabled={claiming} className="mt-4 rounded-xl bg-fuchsia-500 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">{claiming ? "Claiming…" : "CLAIM YOUR GIFT"}</button></>
+       : gift ? <><p className="mt-2 text-sm text-white/70">You have a gift for {gift.months} month(s)!</p>{user ? <button onClick={() => void claim()} disabled={claiming} className="mt-4 rounded-xl bg-fuchsia-500 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">{claiming ? "Claiming…" : "CLAIM YOUR GIFT"}</button> : <a href="/sign-in" className="mt-4 inline-flex rounded-xl bg-fuchsia-500 px-5 py-3 text-sm font-bold text-white">SIGN IN TO CLAIM</a>}</>
        : <p className="mt-2 text-sm text-white/60">Checking gift link…</p>}
     </section>}
     <section className="grid gap-4 md:grid-cols-2">
