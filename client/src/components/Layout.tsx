@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { Globe, MessageSquare, History, ShieldAlert, LogOut, Menu, X, Settings, Blocks, UserRound, ShoppingBag, Gamepad2, Users, ScrollText, Server, Sparkles, Command } from "lucide-react";
+import { Globe, MessageSquare, History, ShieldAlert, LogOut, Menu, X, Settings, Blocks, UserRound, ShoppingBag, ScrollText, Sparkles, Command, Youtube } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Gift } from "lucide-react";
 import { applyNexusAppearance, readNexusAppearance } from "@/lib/appearance";
@@ -16,14 +16,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const navItems = [
     { href: "/proxy", label: "Net Proxy", icon: Globe, section: "Workspace" },
     { href: "/chat", label: "Messages", icon: MessageSquare, section: "Workspace", accent: "violet" },
-    { href: "/servers", label: "Servers", icon: Server, section: "Workspace", accent: "cyan" },
     { href: "/history", label: "History", icon: History, section: "Workspace" },
     { href: "/updates", label: "Update Logs", icon: ScrollText, section: "Workspace" },
+    { href: "/youtube-tools", label: "YouTube Tools", icon: Youtube, section: "Workspace", accent: "red" },
     { href: "/block-blast", label: "Block Blast", icon: Blocks, section: "Playground", accent: "amber" },
     { href: "/shop", label: "Shop", icon: ShoppingBag, section: "Playground", accent: "pink" },
     { href: "/gs", label: "GS · Galaxy Subscription", icon: Gift, section: "Account", accent: "pink" },
-    { href: "/hub", label: "Community Hub", icon: Gamepad2, section: "Playground" },
-    { href: "/hangouts", label: "2D Hangouts", icon: Users, section: "Playground" },
     { href: "/settings", label: "Settings", icon: Settings, section: "Account" },
   ];
   const role = String(user?.role || "").toLowerCase().replace(/_/g, "-");
