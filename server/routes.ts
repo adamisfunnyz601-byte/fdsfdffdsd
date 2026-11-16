@@ -139,25 +139,42 @@ declare module "express-session" {
 
 
 async function syncChatUserProjection() {
+  // Keep only the public fields required by chat queries in Prisma Postgres.
+  // Use one fixed-shape upsert per user: Prisma's connection proxy can reject
+  // dynamically-sized multi-row prepared statements with bind-count errors.
   const { rows } = await enzonicPool.query(
-    "SELECT id, username, display_name, avatar_url, presence_status FROM users",
+    `SELECT id, username, display_name, avatar_url, presence_status,
+            role, nickname, pronouns, username_font, tag_symbol, tag_text, tag_color
+       FROM users`,
   );
-  if (rows.length) {
-    const values: unknown[] = [];
-    const tuples = rows.map((row: any, index: number) => {
-      const offset = index * 5;
-      values.push(row.id, row.username, row.display_name, row.avatar_url, row.presence_status);
-      return `(${offset + 1}, ${offset + 2}, ${offset + 3}, ${offset + 4}, ${offset + 5})`;
-    });
+
+  for (const row of rows) {
     await chatPool.query(
-      `INSERT INTO users (id, username, display_name, avatar_url, presence_status)
-       VALUES ${tuples.join(",")}
-       ON CONFLICT (id) DO UPDATE SET username=EXCLUDED.username,
-         display_name=EXCLUDED.display_name, avatar_url=EXCLUDED.avatar_url,
-         presence_status=EXCLUDED.presence_status`,
-      values,
+      `INSERT INTO users
+         (id, username, display_name, avatar_url, presence_status, role,
+          nickname, pronouns, username_font, tag_symbol, tag_text, tag_color)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       ON CONFLICT (id) DO UPDATE SET
+         username=EXCLUDED.username,
+         display_name=EXCLUDED.display_name,
+         avatar_url=EXCLUDED.avatar_url,
+         presence_status=EXCLUDED.presence_status,
+         role=EXCLUDED.role,
+         nickname=EXCLUDED.nickname,
+         pronouns=EXCLUDED.pronouns,
+         username_font=EXCLUDED.username_font,
+         tag_symbol=EXCLUDED.tag_symbol,
+         tag_text=EXCLUDED.tag_text,
+         tag_color=EXCLUDED.tag_color`,
+      [row.id, row.username, row.display_name, row.avatar_url, row.presence_status,
+       row.role, row.nickname, row.pronouns, row.username_font, row.tag_symbol,
+       row.tag_text, row.tag_color],
     );
-    await chatPool.query("DELETE FROM users WHERE NOT (id = ANY($1::int[]))", [rows.map((row: any) => row.id)]);
+  }
+
+  const keepIds = rows.map((row: any) => Number(row.id)).filter((id: number) => Number.isSafeInteger(id) && id > 0);
+  if (keepIds.length) {
+    await chatPool.query(`DELETE FROM users WHERE id <> ALL(ARRAY[${keepIds.join(",")}]::int[])`);
   } else {
     await chatPool.query("DELETE FROM users");
   }
@@ -170,8 +187,26 @@ async function ensureChatUserProjection() {
       username TEXT NOT NULL,
       display_name TEXT,
       avatar_url TEXT,
-      presence_status TEXT NOT NULL DEFAULT 'offline'
+      presence_status TEXT NOT NULL DEFAULT 'offline',
+      role TEXT NOT NULL DEFAULT 'user',
+      nickname TEXT,
+      pronouns TEXT,
+      username_font TEXT,
+      tag_symbol TEXT,
+      tag_text TEXT,
+      tag_color TEXT
     )
+  `);
+  // Upgrade installations that already have the original minimal projection.
+  await chatPool.query(`
+    ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user',
+      ADD COLUMN IF NOT EXISTS nickname TEXT,
+      ADD COLUMN IF NOT EXISTS pronouns TEXT,
+      ADD COLUMN IF NOT EXISTS username_font TEXT,
+      ADD COLUMN IF NOT EXISTS tag_symbol TEXT,
+      ADD COLUMN IF NOT EXISTS tag_text TEXT,
+      ADD COLUMN IF NOT EXISTS tag_color TEXT
   `);
   await syncChatUserProjection();
   const timer = setInterval(() => {
