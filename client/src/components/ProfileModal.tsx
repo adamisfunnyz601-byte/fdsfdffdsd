@@ -340,7 +340,9 @@ export function ProfileModal({
 
   const isOwn = profile?.id === currentUserId;
   const canEditProfile = Boolean(isOwn && userId != null);
-  const viewerTier = ["owner","admin","super_owner"].includes(String(viewer?.role || "").toLowerCase()) ? "diamond" : (viewer?.dihhroUntil && new Date(viewer.dihhroUntil) > new Date() ? String(viewer?.subscriptionTier || "bronze") : "none");
+  const viewerSubscriptionActive = Boolean(viewer?.dihhroUntil && new Date(viewer.dihhroUntil) > new Date());
+  const viewerStoredTier = String(viewer?.subscriptionTier || "none");
+  const viewerTier = ["owner","admin","super_owner"].includes(String(viewer?.role || "").toLowerCase()) ? "diamond" : (viewerSubscriptionActive ? (viewerStoredTier === "none" ? "bronze" : viewerStoredTier) : "none");
   const canUseDihhro = viewerTier !== "none";
   const canUseAdvancedDihhro = ["silver","gold","diamond"].includes(viewerTier);
   const displayName = profile?.username || ""; 
