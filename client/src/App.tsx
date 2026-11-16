@@ -24,6 +24,7 @@ import UpdatesPage from "@/pages/Updates";
 import Dihtro from "@/pages/Dihtro";
 import GSGifts from "@/pages/GSGifts";
 import TermsPage from "@/pages/Terms";
+import YouTubeTools from "@/pages/YouTubeTools";
 
 const desktopFileApp = window.location.protocol === "file:";
 const nativeApp = Capacitor.isNativePlatform() || desktopFileApp;
@@ -46,6 +47,7 @@ function Router(){return <Switch>
  <Route path="/proxy"><ProtectedRoute component={Proxy}/></Route>
  <Route path="/chat" component={()=>null}/>
  <Route path="/updates"><ProtectedRoute component={UpdatesPage}/></Route>
+ <Route path="/youtube-tools"><ProtectedRoute component={YouTubeTools}/></Route>
  <Route path="/history"><ProtectedRoute component={History}/></Route>
  <Route path="/moderation"><ProtectedRoute component={ModerationPanel}/></Route>
  <Route path="/admin"><ProtectedRoute component={Admin}/></Route>
