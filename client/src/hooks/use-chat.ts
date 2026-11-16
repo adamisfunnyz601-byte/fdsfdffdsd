@@ -45,6 +45,7 @@ export function useChat({ recipientId = null, groupId = null }: ChatChannel = {}
     // unnecessary requests through mobile webviews and reverse proxies.
     refetchInterval: 3000,
     refetchIntervalInBackground: false,
+    refetchOnMount: "always",
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
     staleTime: 250,
