@@ -42,14 +42,24 @@ export const getQueryFn: <T>(options: {
     return await res.json();
   };
 
+function shouldRetryQuery(failureCount: number, error: unknown): boolean {
+  if (failureCount >= 3) return false;
+  if (error instanceof TypeError) return true; // transient network failure
+  const message = error instanceof Error ? error.message : String(error);
+  const status = Number(message.match(/^(\\d{3}):/)?.[1]);
+  return status === 408 || status === 429 || status >= 500;
+}
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
-      refetchOnWindowFocus: false,
-      staleTime: Infinity,
-      retry: false,
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
+      staleTime: 30_000,
+      retry: shouldRetryQuery,
+      retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 8_000),
     },
     mutations: {
       retry: false,
