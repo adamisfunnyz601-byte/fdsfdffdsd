@@ -1,30 +1,106 @@
-
 import { drizzle } from "drizzle-orm/node-postgres";
+import { getTableName } from "drizzle-orm";
 import pg from "pg";
 import * as schema from "@shared/schema";
 
 const { Pool } = pg;
 
 if (!process.env.DATABASE_URL) {
-  throw new Error(
-    "DATABASE_URL must be set. Did you forget to provision a database?",
-  );
+  throw new Error("DATABASE_URL must point to the Prisma Postgres database.");
+}
+if (!process.env.ENZONIC_DATABASE_URL) {
+  throw new Error("ENZONIC_DATABASE_URL must point to the Enzonic accounts database.");
 }
 
 const poolMax = Number.parseInt(process.env.DATABASE_POOL_MAX || "10", 10);
-
-export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+const commonPoolOptions = {
   max: Number.isFinite(poolMax) && poolMax > 0 ? Math.min(poolMax, 20) : 10,
   connectionTimeoutMillis: 10_000,
   idleTimeoutMillis: 30_000,
   keepAlive: true,
   keepAliveInitialDelayMillis: 10_000,
   maxLifetimeSeconds: 1_800,
-});
+};
 
-pool.on("error", (error) => {
-  console.error("[database] Unexpected idle-client error:", error);
-});
+export const chatPool = new Pool({ ...commonPoolOptions, connectionString: process.env.DATABASE_URL });
+export const enzonicPool = new Pool({ ...commonPoolOptions, connectionString: process.env.ENZONIC_DATABASE_URL, max: 5 });
 
-export const db = drizzle(pool, { schema });
+for (const [name, target] of [["prisma", chatPool], ["enzonic", enzonicPool]] as const) {
+  target.on("error", (error) => console.error(`[${name}-database] Unexpected idle-client error:`, error));
+}
+
+export const chatDb = drizzle(chatPool, { schema });
+export const enzonicDb = drizzle(enzonicPool, { schema });
+
+// Account identity/profile/security remains in Enzonic. All chat content and
+// community-chat structures are routed to Prisma Postgres (DATABASE_URL).
+const CHAT_TABLES = new Set([
+  "group_chats", "group_chat_members", "community_servers",
+  "community_server_members", "community_server_categories",
+  "community_server_channels", "community_server_messages",
+  "messages", "chat_message_reactions", "chat_polls",
+  "chat_poll_options", "chat_poll_votes",
+]);
+
+function isChatSql(value: unknown): boolean {
+  const sqlText = typeof value === "string" ? value :
+    value && typeof value === "object" && "text" in value ? String((value as { text: unknown }).text) :
+    value && typeof value === "object" && "sql" in value ? String((value as { sql: unknown }).sql) : "";
+  return /\b(group_chats|group_chat_members|community_servers|community_server_members|community_server_categories|community_server_channels|community_server_messages|messages|chat_message_reactions|chat_polls|chat_poll_options|chat_poll_votes|nexus_chat_gif_attachments|nexus_voice_calls|nexus_voice_signals|nexus_chat_mention_notifications)\b/i.test(sqlText);
+}
+
+function databaseForTable(table: unknown) {
+  try { return CHAT_TABLES.has(getTableName(table as never)) ? chatDb : enzonicDb; }
+  catch { return enzonicDb; }
+}
+
+function routedBuilder(builder: any, chooseFrom = false): any {
+  return new Proxy(builder, {
+    get(target, property) {
+      if (chooseFrom && property === "from") {
+        return (table: unknown) => routedBuilder(databaseForTable(table).select(), false).from(table);
+      }
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
+// Preserve the existing Drizzle API while selecting the correct database from
+// the table being queried. This keeps legacy account routes on Enzonic and
+// migrates chat-table reads/writes to Prisma without changing every route.
+export const db = new Proxy(enzonicDb, {
+  get(target, property) {
+    if (property === "select") return (...args: unknown[]) => {
+      const builder = (enzonicDb.select as (...a: unknown[]) => any)(...args);
+      return new Proxy(builder, {
+        get(inner, key) {
+          if (key === "from") return (table: unknown) => {
+            const selected = databaseForTable(table);
+            return (selected.select as (...a: unknown[]) => any)(...args).from(table);
+          };
+          const value = Reflect.get(inner, key, inner);
+          return typeof value === "function" ? value.bind(inner) : value;
+        },
+      });
+    };
+    if (property === "insert" || property === "update" || property === "delete") {
+      return (table: unknown) => (databaseForTable(table) as any)[property](table);
+    }
+    if (property === "execute") return (query: unknown) =>
+      (isChatSql(query) ? chatDb : enzonicDb).execute(query as never);
+    const value = Reflect.get(target, property, target);
+    return typeof value === "function" ? value.bind(target) : value;
+  },
+}) as typeof enzonicDb;
+
+// Raw SQL is routed by referenced table. Transaction clients remain Enzonic
+// by default; chat transaction code should use chatPool.connect() explicitly.
+export const pool = new Proxy(enzonicPool, {
+  get(target, property) {
+    if (property === "query") return (...args: unknown[]) =>
+      ((isChatSql(args[0]) ? chatPool : enzonicPool).query as (...a: unknown[]) => any)(...args);
+    const value = Reflect.get(target, property, target);
+    return typeof value === "function" ? value.bind(target) : value;
+  },
+}) as typeof enzonicPool;
