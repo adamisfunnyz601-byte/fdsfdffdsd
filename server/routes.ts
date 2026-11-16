@@ -2010,6 +2010,11 @@ export async function registerRoutes(
         update.avatarUrl = typeof avatarUrl === 'string' && avatarUrl.length > 0 ? avatarUrl : null;
       }
       if (bannerUrl !== undefined && !isProfileImageProxyUrl(bannerUrl, req.session.userId!, "banner")) {
+        const current = await storage.getUser(req.session.userId!);
+        const staff = ["owner", "admin", "super_owner"].includes(String(current?.role || "").toLowerCase());
+        const active = Boolean(current?.dihhroUntil && new Date(current.dihhroUntil) > new Date());
+        const tier = staff ? "diamond" : active ? (current?.subscriptionTier === "none" ? "bronze" : String(current?.subscriptionTier || "bronze")) : "none";
+        if (bannerUrl && !["gold", "diamond"].includes(tier)) return res.status(403).json({ message: "Profile banners require Galaxy Gold or Universe Diamond." });
         update.bannerUrl = typeof bannerUrl === 'string' && bannerUrl.length > 0 ? bannerUrl : null;
       }
       if (usernameFont !== undefined) {
@@ -2020,8 +2025,12 @@ export async function registerRoutes(
         if (customFont && rawFont.length > 400000) return res.status(413).json({ message: "Uploaded fonts must be 256 KB or smaller." });
         if (!fonts.includes(rawFont) && !customText && !customFont) return res.status(400).json({message:"Unsupported font or text gradient."});
         const current = await storage.getUser(req.session.userId!);
-        const hasDihtro = ["owner", "admin"].includes(String(current?.role || "").toLowerCase()) || Boolean(current?.dihhroUntil && new Date(current.dihhroUntil) > new Date());
-        if ((rawFont === "comic-sans" || rawFont.startsWith("custom-")) && !hasDihtro) return res.status(403).json({ message: "This font and custom text styling require active Dihtro." });
+        const staff = ["owner", "admin", "super_owner"].includes(String(current?.role || "").toLowerCase());
+        const active = Boolean(current?.dihhroUntil && new Date(current.dihhroUntil) > new Date());
+        const tier = staff ? "diamond" : active ? (current?.subscriptionTier === "none" ? "bronze" : String(current?.subscriptionTier || "bronze")) : "none";
+        const rank = ({ none: 0, bronze: 1, silver: 2, gold: 3, diamond: 4 } as Record<string, number>)[tier] || 0;
+        if (rawFont !== "default" && rank < 2) return res.status(403).json({ message: "Username fonts require Solar System Silver or higher." });
+        if ((rawFont.startsWith("custom-")) && rank < 3) return res.status(403).json({ message: "Custom username gradients and uploaded fonts require Galaxy Gold or higher." });
         const fontName = customText ? rawFont.split("|")[1] : rawFont;
 
         update.usernameFont = rawFont || null;
@@ -2053,6 +2062,12 @@ export async function registerRoutes(
           return res.status(400).json({ message: "Tag text must be a string" });
         }
 
+        const current = await storage.getUser(req.session.userId!);
+        const staff = ["owner", "admin", "super_owner"].includes(String(current?.role || "").toLowerCase());
+        const active = Boolean(current?.dihhroUntil && new Date(current.dihhroUntil) > new Date());
+        const tier = staff ? "diamond" : active ? (current?.subscriptionTier === "none" ? "bronze" : String(current?.subscriptionTier || "bronze")) : "none";
+        const rank = ({ none: 0, bronze: 1, silver: 2, gold: 3, diamond: 4 } as Record<string, number>)[tier] || 0;
+        if (tagText && String(tagText).trim() && rank < 2) return res.status(403).json({ message: "Custom profile tags require Solar System Silver or higher." });
         const [currentUser] = await db
           .select({
             tagSymbol: users.tagSymbol,
