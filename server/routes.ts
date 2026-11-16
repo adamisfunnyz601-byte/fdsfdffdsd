@@ -163,8 +163,8 @@ async function ensureChatGifTable() {
   await db.execute(sql.raw(`
     CREATE TABLE IF NOT EXISTS nexus_voice_calls (
       call_id TEXT PRIMARY KEY,
-      caller_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      callee_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      caller_id INTEGER NOT NULL,
+      callee_id INTEGER NOT NULL,
       with_video BOOLEAN NOT NULL DEFAULT FALSE,
       status TEXT NOT NULL DEFAULT 'ringing',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -174,7 +174,7 @@ async function ensureChatGifTable() {
   await db.execute(sql.raw(`
     CREATE TABLE IF NOT EXISTS nexus_voice_signals (
       id BIGSERIAL PRIMARY KEY,
-      recipient_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      recipient_id INTEGER NOT NULL,
       call_id TEXT,
       payload JSONB NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -193,13 +193,13 @@ async function ensureCommunityServerTables() {
       description TEXT NOT NULL DEFAULT '',
       visibility TEXT NOT NULL DEFAULT 'private',
       invite_code TEXT NOT NULL UNIQUE,
-      owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      owner_id INTEGER NOT NULL,
       created_at TIMESTAMP DEFAULT NOW()
     )`,
     `CREATE TABLE IF NOT EXISTS community_server_members (
       id SERIAL PRIMARY KEY,
       server_id INTEGER NOT NULL REFERENCES community_servers(id) ON DELETE CASCADE,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL,
       role TEXT NOT NULL DEFAULT 'member',
       joined_at TIMESTAMP DEFAULT NOW()
     )`,
@@ -223,7 +223,7 @@ async function ensureCommunityServerTables() {
     )`,
     `CREATE TABLE IF NOT EXISTS passkey_credentials (
       id SERIAL PRIMARY KEY,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL,
       credential_id TEXT NOT NULL UNIQUE,
       public_key TEXT NOT NULL,
       counter INTEGER NOT NULL DEFAULT 0,
@@ -241,7 +241,7 @@ async function ensureCommunityServerTables() {
     )`,
     `CREATE TABLE IF NOT EXISTS dihhro_awards (
       id SERIAL PRIMARY KEY,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL,
       month_key TEXT NOT NULL UNIQUE,
       score INTEGER NOT NULL,
       expires_at TIMESTAMP NOT NULL,
@@ -251,14 +251,14 @@ async function ensureCommunityServerTables() {
       id SERIAL PRIMARY KEY,
       server_id INTEGER NOT NULL REFERENCES community_servers(id) ON DELETE CASCADE,
       channel_id INTEGER NOT NULL REFERENCES community_server_channels(id) ON DELETE CASCADE,
-      author_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      author_id INTEGER NOT NULL,
       content TEXT NOT NULL,
       created_at TIMESTAMP DEFAULT NOW(),
       edited_at TIMESTAMP
     )`,
     `CREATE TABLE IF NOT EXISTS apple_2fa_challenges (
       id TEXT PRIMARY KEY,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL,
       state TEXT NOT NULL DEFAULT 'waiting',
       code_ciphertext TEXT,
       code_iv TEXT,
@@ -269,7 +269,7 @@ async function ensureCommunityServerTables() {
     `CREATE INDEX IF NOT EXISTS apple_2fa_challenges_expiry_idx ON apple_2fa_challenges(expires_at)`,
     `CREATE TABLE IF NOT EXISTS nexus_chat_mention_notifications (
       id BIGSERIAL PRIMARY KEY,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL,
       message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       UNIQUE(user_id, message_id)
@@ -3093,8 +3093,8 @@ async function ensureVoiceCallTables() {
   await db.execute(sql.raw(`
     CREATE TABLE IF NOT EXISTS nexus_voice_calls (
       call_id TEXT PRIMARY KEY,
-      caller_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      callee_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      caller_id INTEGER NOT NULL,
+      callee_id INTEGER NOT NULL,
       with_video BOOLEAN NOT NULL DEFAULT FALSE,
       status TEXT NOT NULL DEFAULT 'ringing',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -3104,7 +3104,7 @@ async function ensureVoiceCallTables() {
   await db.execute(sql.raw(`
     CREATE TABLE IF NOT EXISTS nexus_voice_signals (
       id BIGSERIAL PRIMARY KEY,
-      recipient_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      recipient_id INTEGER NOT NULL,
       call_id TEXT,
       payload JSONB NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -3123,13 +3123,13 @@ async function ensureCommunityServerTables() {
       description TEXT NOT NULL DEFAULT '',
       visibility TEXT NOT NULL DEFAULT 'private',
       invite_code TEXT NOT NULL UNIQUE,
-      owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      owner_id INTEGER NOT NULL,
       created_at TIMESTAMP DEFAULT NOW()
     )`,
     `CREATE TABLE IF NOT EXISTS community_server_members (
       id SERIAL PRIMARY KEY,
       server_id INTEGER NOT NULL REFERENCES community_servers(id) ON DELETE CASCADE,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL,
       role TEXT NOT NULL DEFAULT 'member',
       joined_at TIMESTAMP DEFAULT NOW()
     )`,
@@ -3153,7 +3153,7 @@ async function ensureCommunityServerTables() {
     )`,
     `CREATE TABLE IF NOT EXISTS passkey_credentials (
       id SERIAL PRIMARY KEY,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL,
       credential_id TEXT NOT NULL UNIQUE,
       public_key TEXT NOT NULL,
       counter INTEGER NOT NULL DEFAULT 0,
@@ -3171,7 +3171,7 @@ async function ensureCommunityServerTables() {
     )`,
     `CREATE TABLE IF NOT EXISTS dihhro_awards (
       id SERIAL PRIMARY KEY,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL,
       month_key TEXT NOT NULL UNIQUE,
       score INTEGER NOT NULL,
       expires_at TIMESTAMP NOT NULL,
@@ -3181,14 +3181,14 @@ async function ensureCommunityServerTables() {
       id SERIAL PRIMARY KEY,
       server_id INTEGER NOT NULL REFERENCES community_servers(id) ON DELETE CASCADE,
       channel_id INTEGER NOT NULL REFERENCES community_server_channels(id) ON DELETE CASCADE,
-      author_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      author_id INTEGER NOT NULL,
       content TEXT NOT NULL,
       created_at TIMESTAMP DEFAULT NOW(),
       edited_at TIMESTAMP
     )`,
     `CREATE TABLE IF NOT EXISTS apple_2fa_challenges (
       id TEXT PRIMARY KEY,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL,
       state TEXT NOT NULL DEFAULT 'waiting',
       code_ciphertext TEXT,
       code_iv TEXT,
@@ -3199,7 +3199,7 @@ async function ensureCommunityServerTables() {
     `CREATE INDEX IF NOT EXISTS apple_2fa_challenges_expiry_idx ON apple_2fa_challenges(expires_at)`,
     `CREATE TABLE IF NOT EXISTS nexus_chat_mention_notifications (
       id BIGSERIAL PRIMARY KEY,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL,
       message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       UNIQUE(user_id, message_id)
