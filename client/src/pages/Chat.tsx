@@ -2907,6 +2907,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
                   value={inputContent}
                   onChange={e => setInputContent(e.target.value)}
                   onKeyDown={handleComposerKeyDown}
+                  onFocus={e => { const target = e.currentTarget; window.setTimeout(() => target.scrollIntoView({ block: "nearest", behavior: "smooth" }), 250); }}
                   placeholder="Message... (type / for commands)"
                   aria-label="Write a message"
                   className="block box-border h-10 min-h-10 w-full min-w-0 rounded-xl border border-border bg-input/90 px-4 text-sm leading-5 text-foreground caret-white placeholder:text-muted-foreground shadow-inner outline-none transition-colors focus:border-violet-400/60 focus:ring-2 focus:ring-violet-400/30"
