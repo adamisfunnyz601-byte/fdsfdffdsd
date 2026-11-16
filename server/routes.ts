@@ -606,7 +606,7 @@ export async function registerRoutes(
     );
     const requestProtocol = req.get("x-forwarded-proto") || req.protocol;
     const requestHost = req.get("x-forwarded-host") || req.get("host");
-    const appOrigin = (process.env.APP_ORIGIN || `${requestProtocol}://${requestHost}`).replace(/\\/+$/, "");
+    const appOrigin = (process.env.APP_ORIGIN || `${requestProtocol}://${requestHost}`).replace(/\/+$/, "");
     return res.status(201).json({ ...result.rows[0], claimPath: `/gs/claim/${code}`, claimUrl: `${appOrigin}/gs/claim/${code}` });
   });
 
