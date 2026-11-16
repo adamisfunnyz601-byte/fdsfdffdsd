@@ -24,7 +24,9 @@ export default function GSGifts() {
   const [creating, setCreating] = useState(false);
   const role = String(user?.role || "").toLowerCase();
   const isStaff = ["owner", "admin", "super_owner"].includes(role);
-  const isSuperOwner = role === "super_owner";
+  const { data: gsMe } = useQuery<any>({ queryKey: ["/api/gs/me"] });
+  // The public account payload intentionally labels the super owner as "owner"; use the private GS status endpoint for the real capability.
+  const isSuperOwner = Boolean(gsMe?.isSuperOwner);
 
   const { data: gifts = [], isLoading, error } = useQuery<GiftLink[]>({
     queryKey: ["/api/gs/gifts"],
