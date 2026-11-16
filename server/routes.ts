@@ -555,8 +555,47 @@ export async function registerRoutes(
     const account = await storage.getUser(Number(req.session.userId!));
     if (!account) return res.status(404).json({ message: "Account not found." });
     const until = account.dihhroUntil ? new Date(account.dihhroUntil) : null;
-    const active = ["owner", "admin"].includes(String(account.role).toLowerCase()) || Boolean(until && until.getTime() > Date.now());
-    return res.json({ active, until: until?.toISOString() || null, isStaff: ["owner", "admin"].includes(String(account.role).toLowerCase()) });
+    const isStaff = ["owner", "admin", "super_owner"].includes(String(account.role).toLowerCase());
+    const active = isStaff || Boolean(until && until.getTime() > Date.now());
+    const tier = isStaff ? "diamond" : active ? String(account.subscriptionTier || "bronze") : "none";
+    return res.json({ active, tier, until: until?.toISOString() || null, isStaff, prices: { bronze: 250, silver: 750, gold: 1800, diamond: 4000 } });
+  });
+
+  app.post("/api/dihtro/purchase", requireAuth, async (req, res) => {
+    const tier = String(req.body?.tier || "").toLowerCase();
+    const prices: Record<string, number> = { bronze: 250, silver: 750, gold: 1800, diamond: 4000 };
+    const price = prices[tier];
+    if (!price) return res.status(400).json({ message: "Choose a valid subscription." });
+    const userId = Number(req.session.userId!);
+    const account = await storage.getUser(userId);
+    if (!account) return res.status(404).json({ message: "Account not found." });
+    if (["owner", "admin", "super_owner"].includes(String(account.role).toLowerCase())) {
+      return res.status(400).json({ message: "Staff already have full Universe Diamond access." });
+    }
+    const balance = Number(account.coins || 0);
+    if (!Number.isSafeInteger(balance) || balance < price) return res.status(400).json({ message: "Not enough Galactic Coins." });
+    const now = new Date();
+    const oldExpiry = account.dihhroUntil && new Date(account.dihhroUntil) > now ? new Date(account.dihhroUntil) : now;
+    const until = new Date(oldExpiry); until.setUTCMonth(until.getUTCMonth() + 1);
+    await db.update(users).set({ coins: String(balance - price), subscriptionTier: tier, dihhroUntil: until }).where(eq(users.id, userId));
+    return res.json({ success: true, tier, coins: balance - price, until: until.toISOString() });
+  });
+
+  app.post("/api/admin/dihtro/grant", requireAdmin, async (req, res) => {
+    const targetId = Number(req.body?.userId);
+    const tier = String(req.body?.tier || "").toLowerCase();
+    const months = Number(req.body?.months ?? 1);
+    if (!Number.isSafeInteger(targetId) || targetId <= 0) return res.status(400).json({ message: "Choose a valid account." });
+    if (!["bronze", "silver", "gold"].includes(tier)) return res.status(400).json({ message: "Admins can grant Bronze, Silver or Gold." });
+    if (!Number.isInteger(months) || months < 1 || months > 24) return res.status(400).json({ message: "Choose 1–24 months." });
+    const target = await storage.getUser(targetId);
+    if (!target) return res.status(404).json({ message: "Account not found." });
+    const now = new Date();
+    const oldExpiry = target.dihhroUntil && new Date(target.dihhroUntil) > now ? new Date(target.dihhroUntil) : now;
+    const until = new Date(oldExpiry); until.setUTCMonth(until.getUTCMonth() + months);
+    await db.update(users).set({ subscriptionTier: tier, dihhroUntil: until }).where(eq(users.id, targetId));
+    await db.insert(moderationLogs).values({ actorId: Number(req.session.userId!), targetId, action: "dihtro_subscription_grant", reason: "Staff subscription grant", metadata: { tier, months } });
+    return res.json({ success: true, userId: targetId, tier, months, until: until.toISOString() });
   });
 
   app.post("/api/dihtro/gifts", requireAdmin, async (req, res) => {
@@ -1409,7 +1448,7 @@ export async function registerRoutes(
     const now = new Date();
     const oldExpiry = winner?.dihhroUntil && new Date(winner.dihhroUntil) > now ? new Date(winner.dihhroUntil) : now;
     const until = new Date(oldExpiry); until.setUTCMonth(until.getUTCMonth() + 1);
-    await db.update(users).set({ coins: String(Math.min(2147483647, balance + 500)), dihhroUntil: until }).where(eq(users.id, champion.userId));
+    await db.update(users).set({ coins: String(Math.min(2147483647, balance + 500)), subscriptionTier: "silver", dihhroUntil: until }).where(eq(users.id, champion.userId));
   };
 
   const ensureBlockBlastChatRoom = async (userId:number) => {
@@ -1994,8 +2033,10 @@ export async function registerRoutes(
         );
         if ((!gradients.includes(selectedGradient) && !customProfile) || !validStyle2) return res.status(400).json({message:"Invalid profile gradient settings."});
         const current = await storage.getUser(req.session.userId!);
-        const hasDihtro = ["owner", "admin"].includes(String(current?.role || "").toLowerCase()) || Boolean(current?.dihhroUntil && new Date(current.dihhroUntil) > new Date());
-        if ((selectedGradient !== "none" || customProfile || isStyle2) && !hasDihtro) return res.status(403).json({ message: "Custom profile gradients require active Dihtro." });
+        const hasDihtro = ["owner", "admin", "super_owner"].includes(String(current?.role || "").toLowerCase()) || Boolean(current?.dihhroUntil && new Date(current.dihhroUntil) > new Date());
+        // A default style2 payload with gradient "none" is ordinary profile styling,
+        // so saving a profile never requires a subscription unless a gradient is selected.
+        if ((selectedGradient !== "none" || customProfile) && !hasDihtro) return res.status(403).json({ message: "Profile gradients require Planet Bronze or higher." });
 
         update.profileGradient = selectedGradient === "none" && !isStyle2 ? null : rawGradient;
       }
