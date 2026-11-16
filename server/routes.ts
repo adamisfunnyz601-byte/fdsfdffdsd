@@ -485,40 +485,47 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Only HTTPS YouTube video links are supported." });
     }
     if (!format) return res.status(400).json({ message: "Choose MP3 or MP4." });
-    const configuredApi = String(process.env.COBALT_API_URL || "").trim();
-    if (!configuredApi) return res.status(503).json({ message: "The converter service is not connected yet. The NEXUS converter is ready, but its private Cobalt service must be deployed and COBALT_API_URL configured." });
+    const provider = String(process.env.YOUTUBE_PROVIDER || "cobalt").trim().toLowerCase();
+    if (!["tunelio", "cobalt"].includes(provider)) return res.status(503).json({ message: "YOUTUBE_PROVIDER must be tunelio or cobalt." });
+    const apiKey = String(provider === "tunelio" ? process.env.TUNELIO_API_KEY || "" : process.env.COBALT_API_KEY || "").trim();
+    const configuredApi = String(provider === "tunelio" ? "https://tunelio.dev" : process.env.COBALT_API_URL || "").trim();
+    if (!apiKey || !configuredApi) return res.status(503).json({ message: provider === "tunelio"
+      ? "The hosted converter is not connected yet. Set TUNELIO_API_KEY in Enzonic."
+      : "Configure your private Cobalt instance URL and API key." });
     let apiUrl: URL;
-    try {
-      apiUrl = new URL(configuredApi);
-      if (apiUrl.protocol !== "https:" && !(process.env.NODE_ENV !== "production" && apiUrl.hostname === "localhost")) throw new Error("HTTPS required");
-    } catch {
-      return res.status(503).json({ message: "COBALT_API_URL must be a valid HTTPS address." });
-    }
+    try { apiUrl = new URL(configuredApi); if (apiUrl.protocol !== "https:") throw new Error("HTTPS required"); }
+    catch { return res.status(503).json({ message: "The converter API address must use HTTPS." }); }
     try {
       const headers: Record<string, string> = { Accept: "application/json", "Content-Type": "application/json" };
-      if (process.env.COBALT_API_KEY) headers.Authorization = `Api-Key ${process.env.COBALT_API_KEY}`;
-      const payload = format === "mp3"
-        ? { url: parsed.toString(), downloadMode: "audio", audioFormat: "mp3", audioBitrate: "192", filenameStyle: "pretty" }
-        : { url: parsed.toString(), downloadMode: "auto", videoQuality: "720", youtubeVideoCodec: "h264", youtubeVideoContainer: "mp4", filenameStyle: "pretty" };
-      const upstream = await fetch(apiUrl.toString().replace(/\/+$/, "") + "/", {
-        method: "POST", headers, body: JSON.stringify(payload), signal: AbortSignal.timeout(30000),
-      });
+      let requestUrl: URL;
+      let requestOptions: RequestInit;
+      if (provider === "tunelio") {
+        requestUrl = new URL("/create", apiUrl);
+        requestUrl.searchParams.set("url", parsed.toString());
+        requestUrl.searchParams.set("quality", format === "mp3" ? "mp3" : "720p");
+        headers.Authorization = `Bearer ${apiKey}`;
+        requestOptions = { method: "GET", headers, signal: AbortSignal.timeout(30000) };
+      } else {
+        requestUrl = new URL("/", apiUrl);
+        headers.Authorization = `Api-Key ${apiKey}`;
+        const payload = format === "mp3"
+          ? { url: parsed.toString(), downloadMode: "audio", audioFormat: "mp3", audioBitrate: "192", filenameStyle: "pretty" }
+          : { url: parsed.toString(), downloadMode: "auto", videoQuality: "720", youtubeVideoCodec: "h264", youtubeVideoContainer: "mp4", filenameStyle: "pretty" };
+        requestOptions = { method: "POST", headers, body: JSON.stringify(payload), signal: AbortSignal.timeout(30000) };
+      }
+      const upstream = await fetch(requestUrl, requestOptions);
       const data: any = await upstream.json().catch(() => null);
       if (!upstream.ok || !data || data.status === "error") {
-        const code = String(data?.error?.code || "");
-        const message = code.includes("rate") ? "The converter is busy. Try again shortly."
-          : code.includes("youtube") ? "YouTube could not provide this video. It may be private, restricted, or unavailable."
-          : "The converter could not process this video. Try another public video.";
+        const message = upstream.status === 429 ? "The converter is busy. Try again shortly."
+          : upstream.status === 401 || upstream.status === 403 ? "The converter API key was rejected. Check the key in Enzonic."
+          : "The converter could not process this video. It may be private, restricted, or unavailable.";
         return res.status(upstream.status === 429 ? 429 : 502).json({ message });
       }
-      if (!["tunnel", "redirect"].includes(data.status) || typeof data.url !== "string") {
-        return res.status(502).json({ message: "The converter returned an unsupported response. Try another video." });
-      }
+      const validStatus = provider === "tunelio" ? data.status === "ok" : ["tunnel", "redirect"].includes(data.status);
+      if (!validStatus || typeof data.url !== "string") return res.status(502).json({ message: "The converter returned an unsupported response." });
       let download: URL;
       try { download = new URL(data.url); } catch { return res.status(502).json({ message: "The converter returned an invalid download link." }); }
-      if (download.protocol !== "https:" && !(process.env.NODE_ENV !== "production" && download.hostname === "localhost")) {
-        return res.status(502).json({ message: "The converter returned an insecure download link." });
-      }
+      if (download.protocol !== "https:") return res.status(502).json({ message: "The converter returned an insecure download link." });
       const fallbackName = format === "mp3" ? "audio.mp3" : "video.mp4";
       const filename = typeof data.filename === "string" ? data.filename.replace(/[\\/\\r\\n"]/g, "_").slice(0, 160) : fallbackName;
       res.set("Cache-Control", "no-store, private");
