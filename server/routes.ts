@@ -1036,8 +1036,9 @@ export async function registerRoutes(
       return res.status(403).json({ message: "Owners cannot delete admin or owner accounts." });
     }
 
-    await db.transaction(async tx => {
-      // Remove rows with restrictive user foreign keys before deleting the account.
+    try {
+      await db.transaction(async tx => {
+        // Remove rows with restrictive user foreign keys before deleting the account.
       const ownedGroups = await tx.select({ id: groupChats.id }).from(groupChats).where(eq(groupChats.ownerId, targetId));
       const ownedGroupIds = ownedGroups.map(group => group.id);
       if (ownedGroupIds.length) {
@@ -1063,8 +1064,12 @@ export async function registerRoutes(
         reason: `Deleted account ${target.username} (#${target.id})`,
         metadata: { deletedUserId: target.id, deletedUsername: target.username, deletedRole: targetRole, actorRole },
       });
-      await tx.delete(users).where(eq(users.id, targetId));
-    });
+        await tx.delete(users).where(eq(users.id, targetId));
+      });
+    } catch (error) {
+      console.error("[account-delete] Failed to delete account", { actorId, targetId, error });
+      return res.status(500).json({ message: "Account deletion failed. No changes were saved; please try again." });
+    }
     return res.json({ success: true, message: "Account deleted." });
   });
 
