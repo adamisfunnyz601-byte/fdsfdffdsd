@@ -1,4 +1,4 @@
-import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
+import { Switch, Route, Router as WouterRouter, useLocation, Redirect } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -25,6 +25,7 @@ import Chat from "@/pages/Chat";
 import UpdatesPage from "@/pages/Updates";
 import ServersPage from "@/pages/Servers";
 import Dihtro from "@/pages/Dihtro";
+import GSGifts from "@/pages/GSGifts";
 import TermsPage from "@/pages/Terms";
 
 const desktopFileApp = window.location.protocol === "file:";
@@ -53,8 +54,11 @@ function Router(){return <Switch>
  <Route path="/moderation"><ProtectedRoute component={ModerationPanel}/></Route>
  <Route path="/admin"><ProtectedRoute component={Admin}/></Route>
  <Route path="/shop"><ProtectedRoute component={Shop}/></Route>
- <Route path="/dihtro"><ProtectedRoute component={Dihtro}/></Route>
- <Route path="/dihtro/claim/:code">{params => <ProtectedRoute component={() => <Dihtro code={params.code}/>} />}</Route>
+ <Route path="/gs"><ProtectedRoute component={Dihtro}/></Route>
+ <Route path="/gs/claim/:code">{params => <ProtectedRoute component={() => <Dihtro code={params.code}/>} />}</Route>
+ <Route path="/gs/gifts"><ProtectedRoute component={GSGifts}/></Route>
+ <Route path="/dihtro/claim/:code">{params => <Redirect to={`/gs/claim/${params.code}`}/>}</Route>
+ <Route path="/dihtro"><Redirect to="/gs"/></Route>
  <Route path="/profile"><ProtectedRoute component={MyProfile}/></Route>
  <Route path="/settings"><ProtectedRoute component={SettingsPage}/></Route>
  <Route path="/block-blast"><ProtectedRoute component={BlockBlast}/></Route>
