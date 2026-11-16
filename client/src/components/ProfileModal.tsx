@@ -345,6 +345,7 @@ export function ProfileModal({
   const viewerTier = ["owner","admin","super_owner"].includes(String(viewer?.role || "").toLowerCase()) ? "diamond" : (viewerSubscriptionActive ? (viewerStoredTier === "none" ? "bronze" : viewerStoredTier) : "none");
   const canUseDihhro = viewerTier !== "none";
   const canUseAdvancedDihhro = ["silver","gold","diamond"].includes(viewerTier);
+  const canUseGoldDihhro = ["gold","diamond"].includes(viewerTier);
   const displayName = profile?.username || ""; 
   const uploadedFontSource = getUploadedFontSource(editing ? form.usernameFont : profile?.usernameFont);
   const profileDecoration = profileShopItems.find((item:any) => item.type === "decoration" && String(item.id) === String(profile?.decorationId));
@@ -403,7 +404,7 @@ export function ProfileModal({
               >
                 <X className="w-3.5 h-3.5 text-primary" />
               </button>
-              {editing && (
+              {editing && canUseGoldDihhro && (
                 <>
                   <button
                     onClick={() => bannerFileRef.current?.click()}
@@ -689,7 +690,7 @@ export function ProfileModal({
                       </Field>
                       <Field label="CUSTOM NAME GRADIENT (DIHTRO)">
                         <div className="mb-2 flex gap-2">
-                          <button type="button" disabled={!canUseAdvancedDihhro} onClick={() => setForm({ ...form, usernameFont: form.usernameFont?.startsWith("custom-font|") ? "custom-font|" + form.usernameFont.split("|")[1] + "|" + (form.customTextStart || "#22d3ee") + "|" + (form.customTextMiddle || "#a78bfa") + "|" + (form.customTextEnd || "#f472b6") : "custom-gradient|" + (form.usernameFont?.startsWith("custom-gradient|") ? form.usernameFont.split("|")[1] : (form.usernameFont || "default")) + "|" + (form.customTextStart || "#22d3ee") + "|" + (form.customTextMiddle || "#a78bfa") + "|" + (form.customTextEnd || "#f472b6") })} className={cn("rounded border px-3 py-2 text-[9px] uppercase", form.usernameFont?.startsWith("custom-gradient|") || form.usernameFont?.startsWith("custom-font|") ? "border-primary bg-primary/20 text-primary" : "border-white/15 text-white/60")}>Use custom gradient</button>
+                          <button type="button" disabled={!canUseGoldDihhro} onClick={() => setForm({ ...form, usernameFont: form.usernameFont?.startsWith("custom-font|") ? "custom-font|" + form.usernameFont.split("|")[1] + "|" + (form.customTextStart || "#22d3ee") + "|" + (form.customTextMiddle || "#a78bfa") + "|" + (form.customTextEnd || "#f472b6") : "custom-gradient|" + (form.usernameFont?.startsWith("custom-gradient|") ? form.usernameFont.split("|")[1] : (form.usernameFont || "default")) + "|" + (form.customTextStart || "#22d3ee") + "|" + (form.customTextMiddle || "#a78bfa") + "|" + (form.customTextEnd || "#f472b6") })} className={cn("rounded border px-3 py-2 text-[9px] uppercase", form.usernameFont?.startsWith("custom-gradient|") || form.usernameFont?.startsWith("custom-font|") ? "border-primary bg-primary/20 text-primary" : "border-white/15 text-white/60")}>Use custom gradient</button>
                           <button type="button" disabled={!canUseAdvancedDihhro} onClick={() => setForm({ ...form, usernameFont: form.usernameFont?.startsWith("custom-font|") ? "custom-font|" + form.usernameFont.split("|")[1] : form.usernameFont?.startsWith("custom-gradient|") ? form.usernameFont.split("|")[1] || "default" : form.usernameFont || "default" })} className="rounded border border-white/15 px-3 py-2 text-[9px] uppercase text-white/60">Use font only</button>
                         </div>
                         <div className="grid grid-cols-3 gap-2">
@@ -701,7 +702,7 @@ export function ProfileModal({
                         <div className="text-[9px] text-white/50 mb-2">Upload a .WOFF, .WOFF2, .TTF or .OTF font. DIHTRO members only.</div>
                         <input ref={fontFileRef} type="file" accept=".woff,.woff2,.ttf,.otf,font/woff,font/woff2,font/ttf,font/otf" className="hidden" onChange={e=>{const file=e.target.files?.[0];if(!file)return;const extension=file.name.split(".").pop()?.toLowerCase();if(!["woff","woff2","ttf","otf"].includes(extension||"")){toast({title:"UNSUPPORTED_FONT",description:"Choose a WOFF, WOFF2, TTF or OTF file.",variant:"destructive"});e.target.value="";return;}if(file.size>256*1024){toast({title:"FONT_TOO_LARGE",description:"Font files must be 256 KB or smaller.",variant:"destructive"});e.target.value="";return;}const reader=new FileReader();reader.onload=()=>{const data=String(reader.result||"");const fontData=data.replace(/^data:[^;]+;/,"data:font/"+(extension==="woff2"?"woff2":extension==="woff"?"woff":extension==="ttf"?"ttf":"otf")+";");setForm({...form,usernameFont:"custom-font|"+fontData});toast({title:"DIHTRO_FONT_LOADED",description:file.name+" is ready. Save your profile to apply it."});};reader.onerror=()=>toast({title:"FONT_UPLOAD_FAILED",description:"Could not read that font file.",variant:"destructive"});reader.readAsDataURL(file);e.target.value="";}} />
                         <div className="flex flex-wrap gap-2">
-                          <button type="button" disabled={!canUseAdvancedDihhro} onClick={()=>fontFileRef.current?.click()} className="rounded border border-fuchsia-400/40 bg-fuchsia-400/10 px-3 py-2 text-[9px] font-mono text-fuchsia-200 disabled:opacity-40"><Upload className="mr-1 inline h-3 w-3"/>UPLOAD FONT</button>
+                          <button type="button" disabled={!canUseGoldDihhro} onClick={()=>fontFileRef.current?.click()} className="rounded border border-fuchsia-400/40 bg-fuchsia-400/10 px-3 py-2 text-[9px] font-mono text-fuchsia-200 disabled:opacity-40"><Upload className="mr-1 inline h-3 w-3"/>UPLOAD FONT</button>
                           {form.usernameFont?.startsWith("custom-font|") && <button type="button" onClick={()=>setForm({...form,usernameFont:"default"})} className="rounded border border-white/20 px-3 py-2 text-[9px] text-white/70">REMOVE UPLOADED FONT</button>}
                         </div>
                         <div className="mt-2 rounded-lg border border-white/10 bg-black/30 p-3 text-center text-xl font-black" style={{...getUsernameFontStyle(form.usernameFont),...getUsernameGradientStyle(form.usernameFont)}}>DIHTRO PREVIEW</div>
