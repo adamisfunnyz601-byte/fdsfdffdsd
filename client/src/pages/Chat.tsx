@@ -44,6 +44,11 @@ const apiFetch: typeof fetch = (input, init) => {
 // ============================================================
 const SESSION_CRYPT = "X-256-CHA-CHA-POLY";
 
+// Chat emote audio is globally single-instance and each message may play only once
+// per page session, even if React remounts the message list after tab navigation.
+const playedChatEmoteIds = new Set<string>();
+let activeChatEmoteAudio: HTMLAudioElement | null = null;
+
 // GIF search is proxied through the server so the GIPHY API key stays private.
 
 const VOICE_AUDIO_CONSTRAINTS: MediaTrackConstraints = {
@@ -484,16 +489,28 @@ const TerminalMessage = ({
   const chatEmoteMatch = typeof displayContent === "string" ? displayContent.match(/^\[CHAT_EMOTE:(\d+)\]$/) : null;
   let chatEmoteStyles:any = {};
   try { chatEmoteStyles = typeof emoteItem?.cssStyles === "string" ? JSON.parse(emoteItem.cssStyles) : (emoteItem?.cssStyles || {}); } catch {}
-  const playedChatEmoteRef = useRef(false);
   useEffect(() => {
-    if (!shouldAutoplayEmote || !chatEmoteMatch || !chatEmoteStyles.audioUrl || playedChatEmoteRef.current) return;
-    playedChatEmoteRef.current = true;
+    const messageKey = String(msg.id);
+    if (!shouldAutoplayEmote || !chatEmoteMatch || !chatEmoteStyles.audioUrl || playedChatEmoteIds.has(messageKey)) return;
+    // Mark before play() so a fast rerender/tab switch cannot enqueue it twice.
+    playedChatEmoteIds.add(messageKey);
+    if (activeChatEmoteAudio) {
+      activeChatEmoteAudio.pause();
+      activeChatEmoteAudio.currentTime = 0;
+    }
     const audio = new Audio(chatEmoteStyles.audioUrl);
+    activeChatEmoteAudio = audio;
     audio.volume = 1;
+    audio.onended = () => { if (activeChatEmoteAudio === audio) activeChatEmoteAudio = null; };
     audio.play().catch(() => {
+      if (activeChatEmoteAudio === audio) activeChatEmoteAudio = null;
       // Browsers may block sound until the recipient has interacted with the page.
     });
-    return () => { audio.pause(); audio.currentTime = 0; };
+    return () => {
+      audio.pause();
+      audio.currentTime = 0;
+      if (activeChatEmoteAudio === audio) activeChatEmoteAudio = null;
+    };
   }, [msg.id, chatEmoteMatch?.[1], chatEmoteStyles.audioUrl, shouldAutoplayEmote]);
   const dihhroGiftMatch = typeof displayContent === "string" ? displayContent.match(/https?:\/\/[^\s]+\/gift\/([A-Za-z0-9-]+)/) : null;
 
@@ -2868,7 +2885,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
           </AnimatePresence>
 
           {/* Input */}
-          <div className="chat-composer relative flex-shrink-0 border-t border-violet-300/10 p-3">
+          <div className="chat-composer sticky bottom-0 z-30 relative flex-shrink-0 border-t border-violet-300/10 bg-[#080511]/95 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))] backdrop-blur-xl">
             <form onSubmit={handleTransmit} className="chat-composer-form flex min-w-0 flex-nowrap items-center gap-2">
               <button type="button" onClick={() => fileInputRef.current?.click()}
                 className={cn("w-10 h-10 rounded flex items-center justify-center transition-all flex-shrink-0",
