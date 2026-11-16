@@ -14,8 +14,18 @@ function mbBytes(value: string | undefined, fallback: number): number {
 }
 
 const enzonicPool = process.env.ENZONIC_DATABASE_URL
-  ? new Pool({ connectionString: process.env.ENZONIC_DATABASE_URL, max: 2, idleTimeoutMillis: 30_000 })
+  ? new Pool({
+      connectionString: process.env.ENZONIC_DATABASE_URL,
+      max: 2,
+      connectionTimeoutMillis: 10_000,
+      idleTimeoutMillis: 30_000,
+      keepAlive: true,
+    })
   : null;
+
+enzonicPool?.on("error", (error) => {
+  console.error("[enzonic-cleanup] Unexpected idle-client error:", error);
+});
 
 async function runEnzonicCleanup(): Promise<void> {
   if (!enzonicPool) return;
@@ -136,12 +146,27 @@ async function runEnzonicCleanup(): Promise<void> {
   }
 }
 
+let cleanupTimer: ReturnType<typeof setInterval> | null = null;
+
 export function startEnzonicStorageCleanup(): void {
   if (!enzonicPool) {
     console.warn("[enzonic-cleanup] ENZONIC_DATABASE_URL is not configured; cleanup is disabled.");
     return;
   }
-  void runEnzonicCleanup();
-  const timer = setInterval(() => void runEnzonicCleanup(), CHECK_INTERVAL_MS);
-  timer.unref?.();
+  if (cleanupTimer) return;
+  void runEnzonicCleanup().catch((error) => {
+    console.error("[enzonic-cleanup] Initial cleanup failed:", error);
+  });
+  cleanupTimer = setInterval(() => {
+    void runEnzonicCleanup().catch((error) => {
+      console.error("[enzonic-cleanup] Scheduled cleanup failed:", error);
+    });
+  }, CHECK_INTERVAL_MS);
+  cleanupTimer.unref?.();
+}
+
+export async function closeEnzonicStorageCleanup(): Promise<void> {
+  if (cleanupTimer) clearInterval(cleanupTimer);
+  cleanupTimer = null;
+  if (enzonicPool) await enzonicPool.end();
 }
