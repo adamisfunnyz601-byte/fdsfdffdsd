@@ -1,37 +1,35 @@
-# NEXUS YouTube converter service
+# NEXUS YouTube converter (yt-dlp)
 
-The NEXUS web page and API are included in the app. Conversion is performed by a separate, operator-controlled Cobalt instance; NEXUS does not download, buffer, cache, or store media bytes. Only the source URL is sent to Cobalt and a temporary download URL is returned to the browser.
+NEXUS runs yt-dlp locally in its existing Node.js server. It does not use a paid conversion API, API credits, a daily provider quota, Docker, or a separate conversion host.
 
-## Why a separate service is required
+## Runtime requirements
 
-Cobalt's maintainers say hosted instances are not a public API for third-party apps. Run your own instance or obtain explicit permission from an instance owner. See the [Cobalt run-an-instance guide](https://github.com/imputnet/cobalt/blob/main/docs/run-an-instance.md) and [API documentation](https://github.com/imputnet/cobalt/blob/main/docs/api.md).
+The Enzonic app server must have:
+- yt-dlp (current release) available on PATH, or set `YTDLP_PATH` to its executable.
+- FFmpeg and FFprobe available on PATH, or set `FFMPEG_LOCATION` to the FFmpeg executable or its containing directory.
+- Permission to spawn child processes and write temporary files under the OS temporary directory.
 
-## Deploy Cobalt
+yt-dlp's official documentation recommends FFmpeg/FFprobe for merging separate audio/video streams and post-processing. See [yt-dlp](https://github.com/yt-dlp/yt-dlp).
 
-1. Deploy the official Cobalt Docker image on a separate Docker-capable host with a public HTTPS hostname, for example `cobalt.example.com`.
-2. Configure its public `API_URL` to that exact HTTPS origin.
-3. Enable API-key authentication. Create a `keys.json` file on the Cobalt host:
-   ```json
-   {
-     "GENERATE-A-NEW-UUID-V4-KEY": {
-       "name": "NEXUS",
-       "limit": 10
-     }
-   }
-   ```
-   Generate a real key with `node -e "console.log(crypto.randomUUID())"`. Do not use the placeholder.
-4. Configure Cobalt with `API_AUTH_REQUIRED=1`, `API_KEY_URL=file:///keys.json`, and mount that file read-only into the container. Put TLS in front of the service; do not expose an unauthenticated Cobalt API to the internet.
-5. In Enzonic's NEXUS environment variables, set:
-   - `COBALT_API_URL=https://cobalt.example.com/`
-   - `COBALT_API_KEY=` the exact UUID key generated for NEXUS.
-6. Restart/redeploy NEXUS. The YouTube Tools page will then be able to convert supported public videos.
+## Enzonic environment variables
 
-The official Docker image and port are documented in Cobalt's sample compose file: [official docker-compose example](https://github.com/imputnet/cobalt/blob/main/docs/examples/docker-compose.example.yml).
+These are optional if both tools are already on PATH:
 
-## Storage and privacy
+- `YTDLP_PATH`: absolute path to the yt-dlp executable (or simply `yt-dlp`).
+- `FFMPEG_LOCATION`: absolute path to ffmpeg, or the directory containing ffmpeg and ffprobe.
 
-- No video or audio bytes are uploaded to NEXUS.
-- No video/audio files, URLs, or conversion jobs are written to Neon or Enzonic databases.
-- NEXUS returns Cobalt's temporary download URL directly to the browser.
-- The separate Cobalt instance processes the media in its own service environment. Review its storage, logging, and retention settings separately.
-- Conversion is intended only for content the user owns or is authorised to download. Users must follow copyright law and YouTube's terms.
+After installing the runtime tools, restart/redeploy NEXUS. No API key or conversion-provider account is required.
+
+## Formats and quality
+
+- MP4 and MOV: best available up to 360p, 480p, 720p, 1080p, 1440p, or unrestricted best.
+- MP3: 128, 192, 256, or 320 kbps.
+- Playlists are disabled; maximum output size is 500 MB; each conversion has an eight-minute timeout; two conversions can run concurrently per app process.
+
+## Storage
+
+- The converted file is written to a unique OS temporary directory, streamed to the requesting browser, and the directory is removed after the response finishes or closes.
+- No video/audio file, source URL, conversion job, or download history is written to Neon or Enzonic databases.
+- Temporary files are not permanent storage. The host may retain filesystem data briefly until cleanup runs or the process exits.
+
+Only download content you own or are authorised to download, and comply with applicable copyright law and YouTube's terms.
