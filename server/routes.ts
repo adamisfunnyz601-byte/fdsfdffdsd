@@ -318,10 +318,12 @@ async function ensureCommunityServerTables() {
       code TEXT NOT NULL UNIQUE,
       created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       months INTEGER NOT NULL CHECK (months BETWEEN 1 AND 24),
+      tier TEXT NOT NULL DEFAULT 'bronze',
       claimed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
       claimed_at TIMESTAMP,
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     )`,
+    `ALTER TABLE dihtro_gifts ADD COLUMN IF NOT EXISTS tier TEXT NOT NULL DEFAULT 'bronze'`,
     `CREATE TABLE IF NOT EXISTS dihhro_awards (
       id SERIAL PRIMARY KEY,
       user_id INTEGER NOT NULL,
