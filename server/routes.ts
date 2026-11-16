@@ -1,5 +1,5 @@
 
-import { db, pool } from "./db";
+import { db, pool, chatPool, enzonicPool } from "./db";
 import { users, accessKeys, searchHistory, messages, groupChats, groupChatMembers, customEmojis, friendRequests, blocks, moderationLogs, blockBlastScores, dihhroAwards, communityServers, communityServerMembers, communityServerCategories, communityServerChannels, communityServerMessages, chatMessageReactions, chatPolls, chatPollOptions, chatPollVotes, passkeyCredentials } from "@shared/schema";
 import { eq, desc, and, or, gt, sql, inArray } from "drizzle-orm";
 import type { Express, Request } from "express";
@@ -135,6 +135,49 @@ declare module "express-session" {
     userId: number;
     role: string;
   }
+}
+
+
+async function syncChatUserProjection() {
+  const { rows } = await enzonicPool.query(
+    "SELECT id, username, display_name, avatar_url, presence_status FROM users",
+  );
+  if (rows.length) {
+    const values: unknown[] = [];
+    const tuples = rows.map((row: any, index: number) => {
+      const offset = index * 5;
+      values.push(row.id, row.username, row.display_name, row.avatar_url, row.presence_status);
+      return `(${offset + 1}, ${offset + 2}, ${offset + 3}, ${offset + 4}, ${offset + 5})`;
+    });
+    await chatPool.query(
+      `INSERT INTO users (id, username, display_name, avatar_url, presence_status)
+       VALUES ${tuples.join(",")}
+       ON CONFLICT (id) DO UPDATE SET username=EXCLUDED.username,
+         display_name=EXCLUDED.display_name, avatar_url=EXCLUDED.avatar_url,
+         presence_status=EXCLUDED.presence_status`,
+      values,
+    );
+    await chatPool.query("DELETE FROM users WHERE NOT (id = ANY($1::int[]))", [rows.map((row: any) => row.id)]);
+  } else {
+    await chatPool.query("DELETE FROM users");
+  }
+}
+
+async function ensureChatUserProjection() {
+  await chatPool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY,
+      username TEXT NOT NULL,
+      display_name TEXT,
+      avatar_url TEXT,
+      presence_status TEXT NOT NULL DEFAULT 'offline'
+    )
+  `);
+  await syncChatUserProjection();
+  const timer = setInterval(() => {
+    void syncChatUserProjection().catch(error => console.error("[chat-user-sync] Failed:", error));
+  }, 30_000);
+  timer.unref?.();
 }
 
 async function ensureSessionStoreTable() {
@@ -283,6 +326,7 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  await ensureChatUserProjection();
   await ensureCommunityServerTables();
   // Promote the existing, reserved AdamisFunnyz account to the internal super-owner role.
   const [bootstrapSuperOwner] = await db.select({ id: users.id }).from(users)
