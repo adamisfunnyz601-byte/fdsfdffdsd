@@ -45,7 +45,8 @@ const CHAT_TABLES = new Set([
 function isChatSql(value: unknown): boolean {
   const sqlText = typeof value === "string" ? value :
     value && typeof value === "object" && "text" in value ? String((value as { text: unknown }).text) :
-    value && typeof value === "object" && "sql" in value ? String((value as { sql: unknown }).sql) : "";
+    value && typeof value === "object" && "sql" in value ? String((value as { sql: unknown }).sql) :
+    value && typeof value === "object" ? JSON.stringify(value) : "";
   return /\b(group_chats|group_chat_members|community_servers|community_server_members|community_server_categories|community_server_channels|community_server_messages|messages|chat_message_reactions|chat_polls|chat_poll_options|chat_poll_votes|nexus_chat_gif_attachments|nexus_voice_calls|nexus_voice_signals|nexus_chat_mention_notifications)\b/i.test(sqlText);
 }
 
