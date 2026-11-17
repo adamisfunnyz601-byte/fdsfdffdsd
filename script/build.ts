@@ -1,6 +1,6 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
-import { copyFile, mkdir, rm, readFile } from "fs/promises";
+import { copyFile, cp, mkdir, rm, readFile, access } from "fs/promises";
 
 // server deps to bundle to reduce openat(2) syscalls
 // which helps cold start times
@@ -64,6 +64,15 @@ async function buildAll() {
   // Keep it beside dist/index.cjs so automatic session-table creation works.
   await mkdir("dist", { recursive: true });
   await copyFile("node_modules/connect-pg-simple/table.sql", "dist/table.sql");
+
+  // Serverless deployments commonly package only dist/. The media installer
+  // runs before this build and places native tools in vendor/bin, so explicitly
+  // include those binaries in the runtime bundle after dist has been recreated.
+  await access("vendor/bin/yt-dlp");
+  await access("vendor/bin/ffmpeg");
+  await access("vendor/bin/ffprobe");
+  await cp("vendor/bin", "dist/vendor/bin", { recursive: true, force: true });
+  console.log("Media tools copied to dist/vendor/bin");
 }
 
 buildAll().catch((err) => {
