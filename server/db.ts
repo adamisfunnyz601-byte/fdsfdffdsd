@@ -12,6 +12,25 @@ if (!process.env.ENZONIC_DATABASE_URL) {
   throw new Error("ENZONIC_DATABASE_URL must point to the Enzonic accounts database.");
 }
 
+// pg-connection-string currently treats these modes as verify-full aliases.
+ // Make that behavior explicit now so pg v9/libpq-compat upgrades do not
+ // silently weaken TLS verification.
+function explicitSslMode(connectionString: string): string {
+  try {
+    const parsed = new URL(connectionString);
+    const mode = parsed.searchParams.get("sslmode")?.toLowerCase();
+    if (mode && ["prefer", "require", "verify-ca"].includes(mode)) {
+      parsed.searchParams.set("sslmode", "verify-full");
+    }
+    return parsed.toString();
+  } catch {
+    return connectionString;
+  }
+}
+
+const chatConnectionString = explicitSslMode(process.env.DATABASE_URL);
+const enzonicConnectionString = explicitSslMode(process.env.ENZONIC_DATABASE_URL);
+
 const poolMax = Number.parseInt(process.env.DATABASE_POOL_MAX || "10", 10);
 const commonPoolOptions = {
   max: Number.isFinite(poolMax) && poolMax > 0 ? Math.min(poolMax, 20) : 10,
@@ -22,8 +41,8 @@ const commonPoolOptions = {
   maxLifetimeSeconds: 1_800,
 };
 
-export const chatPool = new Pool({ ...commonPoolOptions, connectionString: process.env.DATABASE_URL });
-export const enzonicPool = new Pool({ ...commonPoolOptions, connectionString: process.env.ENZONIC_DATABASE_URL, max: 5 });
+export const chatPool = new Pool({ ...commonPoolOptions, connectionString: chatConnectionString });
+export const enzonicPool = new Pool({ ...commonPoolOptions, connectionString: enzonicConnectionString, max: 5 });
 
 for (const [name, target] of [["prisma", chatPool], ["enzonic", enzonicPool]] as const) {
   target.on("error", (error) => console.error(`[${name}-database] Unexpected idle-client error:`, error));
