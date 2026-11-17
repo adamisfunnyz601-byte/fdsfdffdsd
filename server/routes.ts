@@ -498,9 +498,25 @@ export async function registerRoutes(
     if (activeYoutubeConversions >= 2) return res.status(429).json({ message: "NEXUS is already converting two files. Try again shortly." });
 
     const { resolve } = await import("node:path");
-    const bundledBinDir = resolve(process.cwd(), "vendor", "bin");
-    const ytdlpPath = String(process.env.YTDLP_PATH || resolve(bundledBinDir, "yt-dlp")).trim();
-    const ffmpegLocation = String(process.env.FFMPEG_LOCATION || bundledBinDir).trim();
+    const { existsSync } = await import("node:fs");
+    // Support both source-tree installs and serverless packages that contain
+    // only dist/. Prefer an explicitly configured path only when it exists.
+    const binCandidates = [
+      resolve(process.cwd(), "dist", "vendor", "bin"),
+      resolve(process.cwd(), "vendor", "bin"),
+      resolve(process.cwd(), "vendor", "media-tools"),
+    ];
+    const configuredYtdlp = String(process.env.YTDLP_PATH || "").trim();
+    const configuredBin = String(process.env.FFMPEG_LOCATION || "").trim();
+    const ytdlpCandidates = [configuredYtdlp, ...binCandidates.map(dir => resolve(dir, process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp"))].filter(Boolean);
+    const ytdlpPath = ytdlpCandidates.find(candidate => existsSync(candidate)) || ytdlpCandidates[0];
+    const ffmpegLocation = configuredBin && existsSync(configuredBin)
+      ? configuredBin
+      : binCandidates.find(dir => existsSync(resolve(dir, process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg"))) || binCandidates[0];
+    if (!existsSync(ytdlpPath)) {
+      throw Object.assign(new Error(`yt-dlp executable not found. Checked: ${ytdlpCandidates.join(", ")}`), { code: "ENOENT" });
+    }
+    console.log(`[youtube-converter] Using yt-dlp at ${ytdlpPath}; FFmpeg directory ${ffmpegLocation}`);
     const workDir = await mkdtemp(join(tmpdir(), "nexus-ytdlp-"));
     const outputTemplate = join(workDir, "%(id)s.%(ext)s");
     const args = [
