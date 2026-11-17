@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { mkdir, copyFile, chmod } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { mkdir, copyFile, chmod, access, stat } from "node:fs/promises";
+import { resolve } from "node:path";
 
 const root = process.cwd();
 const binDir = resolve(root, "vendor/bin");
@@ -27,6 +27,10 @@ if (process.platform !== "win32") {
   await chmod(resolve(binDir, ffmpegName), 0o755);
   await chmod(resolve(binDir, ffprobeName), 0o755);
 }
+for (const file of [resolve(binDir, ffmpegName), resolve(binDir, ffprobeName)]) {
+  const info = await stat(file);
+  if (!info.isFile() || info.size === 0) throw new Error(`Invalid media binary: ${file}`);
+}
 
 console.log("[media-tools] Downloading yt-dlp standalone release...");
 // Use yt-dlp's musllinux standalone build on Linux. It avoids relying on
@@ -34,16 +38,21 @@ console.log("[media-tools] Downloading yt-dlp standalone release...");
 // runtimes such as the one used by this deployment.
 const ytName = process.platform === "win32" ? "yt-dlp.exe"
   : process.platform === "darwin" ? "yt-dlp_macos"
-  : process.arch === "arm64" ? "yt-dlp_musllinux_aarch64"
-  : "yt-dlp_musllinux";
+  : process.platform === "linux" && process.arch === "arm64" ? "yt-dlp_musllinux_aarch64"
+  : process.platform === "linux" && process.arch === "x64" ? "yt-dlp_musllinux"
+  : null;
+if (!ytName) throw new Error(`No supported yt-dlp binary for ${process.platform}/${process.arch}.`);
 const ytUrl = `https://github.com/yt-dlp/yt-dlp/releases/latest/download/${ytName}`;
-const response = await fetch(ytUrl, { redirect: "follow" });
+const response = await fetch(ytUrl, { redirect: "follow", signal: AbortSignal.timeout(120_000) });
 if (!response.ok) throw new Error(`yt-dlp download failed: HTTP ${response.status}`);
 const ytPath = resolve(binDir, process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp");
 const bytes = Buffer.from(await response.arrayBuffer());
 if (bytes.length < 1_000_000) throw new Error("Downloaded yt-dlp file is unexpectedly small.");
 await (await import("node:fs/promises")).writeFile(ytPath, bytes);
 if (process.platform !== "win32") await chmod(ytPath, 0o755);
+const ytInfo = await stat(ytPath);
+if (!ytInfo.isFile() || ytInfo.size < 1_000_000) throw new Error("Downloaded yt-dlp executable failed validation.");
+await access(ytPath, process.platform === "win32" ? undefined : (await import("node:fs")).constants.X_OK);
 
 console.log("[media-tools] Installed binaries:");
 console.log("YTDLP_PATH=" + ytPath);
