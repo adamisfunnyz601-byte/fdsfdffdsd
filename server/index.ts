@@ -104,8 +104,8 @@ app.use((req, res, next) => {
   app.get("/readyz", async (_req, res) => {
     try {
       await Promise.all([
-        chatPool.query({ text: "SELECT 1", query_timeout: 5_000 }),
-        enzonicPool.query({ text: "SELECT 1", query_timeout: 5_000 }),
+        chatPool.query("SELECT 1"),
+        enzonicPool.query("SELECT 1"),
       ]);
       res.status(200).json({ status: "ready", service: "nexus-api", databases: { prisma: "ok", enzonic: "ok" } });
     } catch (error) {
