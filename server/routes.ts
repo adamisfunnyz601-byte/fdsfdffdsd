@@ -497,8 +497,10 @@ export async function registerRoutes(
     if (!validQuality) return res.status(400).json({ message: "Choose a supported quality." });
     if (activeYoutubeConversions >= 2) return res.status(429).json({ message: "NEXUS is already converting two files. Try again shortly." });
 
-    const ytdlpPath = String(process.env.YTDLP_PATH || "yt-dlp").trim();
-    const ffmpegLocation = String(process.env.FFMPEG_LOCATION || "").trim();
+    const { resolve } = await import("node:path");
+    const bundledBinDir = resolve(process.cwd(), "vendor", "bin");
+    const ytdlpPath = String(process.env.YTDLP_PATH || resolve(bundledBinDir, "yt-dlp")).trim();
+    const ffmpegLocation = String(process.env.FFMPEG_LOCATION || bundledBinDir).trim();
     const workDir = await mkdtemp(join(tmpdir(), "nexus-ytdlp-"));
     const outputTemplate = join(workDir, "%(id)s.%(ext)s");
     const args = [
@@ -561,9 +563,9 @@ export async function registerRoutes(
       console.error("[youtube-converter] conversion failed:", message);
       const missingBinary = (error as NodeJS.ErrnoException)?.code === "ENOENT";
       const userMessage = missingBinary
-        ? "yt-dlp is not installed on this Enzonic server. Install yt-dlp and FFmpeg, then set YTDLP_PATH and FFMPEG_LOCATION if they are not on PATH."
+        ? "The bundled yt-dlp executable is missing. Redeploy so the media-tools build step can install it."
         : /ffmpeg|ffprobe/i.test(message)
-          ? "FFmpeg and FFprobe are required for MP3 extraction and MP4/MOV processing. Install them on the Enzonic server."
+          ? "The bundled FFmpeg/FFprobe tools are missing. Redeploy so the media-tools build step can install them."
           : /timed out|SIGKILL/i.test(message)
             ? "The conversion took too long and was stopped. Try a shorter video or lower quality."
             : "Conversion failed. The video may be private, restricted, unavailable, or unsupported.";
