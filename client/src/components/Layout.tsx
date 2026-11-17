@@ -8,28 +8,29 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Avatar } from "./ProfileModal";
 import { UserProfileTag } from "./UserProfileTag";
+import { AppIcon } from "./AppIcon";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const [location] = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const navItems = [
-    { href: "/proxy", label: "Net Proxy", icon: Globe, section: "Workspace" },
-    { href: "/chat", label: "Messages", icon: MessageSquare, section: "Workspace", accent: "violet" },
-    { href: "/history", label: "History", icon: History, section: "Workspace" },
-    { href: "/updates", label: "Update Logs", icon: ScrollText, section: "Workspace" },
-    { href: "/youtube-tools", label: "YouTube Tools", icon: Youtube, section: "Workspace", accent: "red" },
-    { href: "/block-blast", label: "Block Blast", icon: Blocks, section: "Playground", accent: "amber" },
-    { href: "/shop", label: "Shop", icon: ShoppingBag, section: "Playground", accent: "pink" },
-    { href: "/gs", label: "GS · Galaxy Subscription", icon: Gift, section: "Account", accent: "pink" },
-    { href: "/settings", label: "Settings", icon: Settings, section: "Account" },
+    { href: "/proxy", label: "Net Proxy", icon: Globe, iconName: "net-proxy", section: "Workspace" },
+    { href: "/chat", label: "Messages", icon: MessageSquare, iconName: "messages", section: "Workspace", accent: "violet" },
+    { href: "/history", label: "History", icon: History, iconName: "history", section: "Workspace" },
+    { href: "/updates", label: "Update Logs", icon: ScrollText, iconName: "updates", section: "Workspace" },
+    { href: "/youtube-tools", label: "YouTube Tools", icon: Youtube, iconName: "youtube-tools", section: "Workspace", accent: "red" },
+    { href: "/block-blast", label: "Block Blast", icon: Blocks, iconName: "block-blast", section: "Playground", accent: "amber" },
+    { href: "/shop", label: "Shop", icon: ShoppingBag, iconName: "shop", section: "Playground", accent: "pink" },
+    { href: "/gs", label: "GS · Galaxy Subscription", icon: Gift, iconName: "galaxy-subscription", section: "Account", accent: "pink" },
+    { href: "/settings", label: "Settings", icon: Settings, iconName: "settings", section: "Account" },
   ];
   const role = String(user?.role || "").toLowerCase().replace(/_/g, "-");
   if (["owner","admin","trial-admin","moderator","trial-moderator","helper","trial-helper"].includes(role))
-    navItems.push({ href: "/moderation", label: "Moderation", icon: ShieldAlert, section: "Staff" });
+    navItems.push({ href: "/moderation", label: "Moderation", icon: ShieldAlert, iconName: "moderation", section: "Staff" });
   if (["owner","admin","trial-admin"].includes(role))
-    navItems.push({ href: "/admin", label: "Admin Console", icon: Command, section: "Staff" });
-  if (["owner", "admin", "super-owner"].includes(role)) navItems.push({ href: "/gs/gifts", label: "GS Gift Links", icon: Gift, section: "Account", accent: "pink" });
+    navItems.push({ href: "/admin", label: "Admin Console", icon: Command, iconName: "admin-console", section: "Staff" });
+  if (["owner", "admin", "super-owner"].includes(role)) navItems.push({ href: "/gs/gifts", label: "GS Gift Links", icon: Gift, iconName: "gs-gifts", section: "Account", accent: "pink" });
   const sections = Array.from(new Set(navItems.map(item => item.section)));
   const closeMenu = () => setIsMobileMenuOpen(false);
   const canGiftGS = ["owner", "admin", "super-owner"].includes(role);
@@ -57,7 +58,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <div className="nexus-shell min-h-screen flex flex-col md:flex-row">
       <header className="nexus-mobilebar flex lg:hidden">
         <button className="nexus-brand-mark" onClick={() => setIsMobileMenuOpen(v => !v)} aria-label="Toggle navigation">
-          {isMobileMenuOpen ? <X size={19}/> : <Menu size={19}/>}
+          {isMobileMenuOpen ? <AppIcon name="close" fallback={X} size={19}/> : <AppIcon name="menu" fallback={Menu} size={19}/>}
         </button>
         <div className="flex items-center gap-2"><span className="nexus-brand-orb"><img src="/nexus-icon.svg" alt="NEXUS" className="h-5 w-5 object-contain"/></span><span className="font-black tracking-[.18em] text-sm">NEXUS</span></div>
         <span className="nexus-live-pill"><i/> LIVE</span>
@@ -93,7 +94,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     <Link key={item.href} href={item.href} onClick={closeMenu}
                       className={cn("nexus-nav-link", active && "is-active", `nav-motion-${(navItems.indexOf(item) % 8) + 1}`)}
                       aria-current={active ? "page" : undefined}>
-                      <span className="nexus-nav-icon"><Icon size={17}/></span>
+                      <span className="nexus-nav-icon"><AppIcon name={(item as typeof item & { iconName?: string }).iconName || "default"} fallback={Icon} size={17}/></span>
                       <span className="min-w-0 flex-1 truncate">{item.label}</span>
                       {active && <motion.span layoutId="nexus-active-indicator" className="nexus-nav-active-indicator"/>}
                       {item.href === "/chat" && <span className="nexus-nav-signal"/>}
@@ -112,14 +113,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <div className="flex min-w-0 items-center gap-1"><span className="truncate text-[12px] font-bold text-white">{user?.username || "Loading…"}</span><UserProfileTag tagSymbol={user?.tagSymbol} tagText={user?.tagText} tagColor={user?.tagColor} size="compact"/></div>
               <div className="mt-0.5 truncate text-[10px] text-emerald-300/80">{String(user?.role || "user").replace(/-/g," ")} · {user?.presenceStatus || "offline"}</div>
             </div>
-            <button className="nexus-icon-button" onClick={() => logout()} title="Sign out" aria-label="Sign out"><LogOut size={15}/></button>
+            <button className="nexus-icon-button" onClick={() => logout()} title="Sign out" aria-label="Sign out"><AppIcon name="sign-out" fallback={LogOut} size={15}/></button>
           </div>
-          <Link href="/profile" onClick={closeMenu} className={cn("nexus-profile-link", location === "/profile" && "is-active")}><UserRound size={15}/> Open my profile <span>↗</span></Link>
+          <Link href="/profile" onClick={closeMenu} className={cn("nexus-profile-link", location === "/profile" && "is-active")}><AppIcon name="profile" fallback={UserRound} size={15}/> Open my profile <span>↗</span></Link>
           <div className="nexus-footer-meta"><span>● ALL SYSTEMS NOMINAL</span><span>SECURE SESSION</span></div><div className="mt-2 space-y-1 px-1 text-[10px] text-white/35"><Link href="/terms" onClick={closeMenu} className="transition hover:text-violet-300">Terms and Conditions</Link><div>© 2026 AdamisFunnyz · NEXUS™</div></div>
         </div>
       </aside>
 
-      {canGiftGS && <button type="button" onClick={() => void giftGS()} title="Gift subscription" aria-label="Gift GS" className="fixed bottom-5 right-5 z-[90] flex h-14 w-14 items-center justify-center rounded-full border border-fuchsia-300/40 bg-gradient-to-br from-fuchsia-500 to-violet-600 text-white shadow-[0_8px_32px_rgba(168,85,247,.45)] transition hover:scale-105"><Gift size={23}/></button>}\n      <main className="nexus-main flex min-w-0 flex-1 flex-col">
+      {canGiftGS && <button type="button" onClick={() => void giftGS()} title="Gift subscription" aria-label="Gift GS" className="fixed bottom-5 right-5 z-[90] flex h-14 w-14 items-center justify-center rounded-full border border-fuchsia-300/40 bg-gradient-to-br from-fuchsia-500 to-violet-600 text-white shadow-[0_8px_32px_rgba(168,85,247,.45)] transition hover:scale-105"><AppIcon name="gift" fallback={Gift} size={23}/></button>}\n      <main className="nexus-main flex min-w-0 flex-1 flex-col">
         <header className="nexus-topbar hidden h-[58px] shrink-0 items-center justify-between px-7 lg:flex">
           <div className="flex items-center gap-3"><span className="nexus-breadcrumb-dot"/><span className="text-[11px] font-semibold uppercase tracking-[.16em] text-white/45">Nexus Network</span><span className="text-white/15">/</span><span className="text-[11px] font-semibold text-white/85">{navItems.find(item => item.href === location)?.label || (location === "/profile" ? "My Profile" : "Workspace")}</span></div>
           <div className="flex items-center gap-4"><span className="nexus-encryption"><span/> AES-256 SESSION</span><span className="h-4 w-px bg-white/10"/><span className="inline-flex items-center gap-2 text-[10px] tracking-widest text-white/30"><img src="/nexus-icon.svg" alt="NEXUS" className="h-4 w-4 object-contain"/> NEXUS / 02.06</span></div>
