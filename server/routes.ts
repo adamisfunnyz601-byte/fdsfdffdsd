@@ -497,26 +497,34 @@ export async function registerRoutes(
     if (!validQuality) return res.status(400).json({ message: "Choose a supported quality." });
     if (activeYoutubeConversions >= 2) return res.status(429).json({ message: "NEXUS is already converting two files. Try again shortly." });
 
-    const { resolve } = await import("node:path");
-    const { existsSync } = await import("node:fs");
-    // Support both source-tree installs and serverless packages that contain
-    // only dist/. Prefer an explicitly configured path only when it exists.
-    const binCandidates = [
-      resolve(process.cwd(), "dist", "vendor", "bin"),
-      resolve(process.cwd(), "vendor", "bin"),
-      resolve(process.cwd(), "vendor", "media-tools"),
-    ];
-    const configuredYtdlp = String(process.env.YTDLP_PATH || "").trim();
-    const configuredBin = String(process.env.FFMPEG_LOCATION || "").trim();
-    const ytdlpCandidates = [configuredYtdlp, ...binCandidates.map(dir => resolve(dir, process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp"))].filter(Boolean);
-    const ytdlpPath = ytdlpCandidates.find(candidate => existsSync(candidate)) || ytdlpCandidates[0];
-    const ffmpegLocation = configuredBin && existsSync(configuredBin)
-      ? configuredBin
-      : binCandidates.find(dir => existsSync(resolve(dir, process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg"))) || binCandidates[0];
-    if (!existsSync(ytdlpPath)) {
-      throw Object.assign(new Error(`yt-dlp executable not found. Checked: ${ytdlpCandidates.join(", ")}`), { code: "ENOENT" });
+    const { resolve, dirname } = await import("node:path");
+    const { existsSync, statSync } = await import("node:fs");
+    // In serverless deployments process.cwd() can be the function directory,
+    // while the bundled entrypoint itself lives in dist/. Search both roots.
+    const runtimeDir = typeof __dirname === "string" ? __dirname : process.cwd();
+    const roots = [process.cwd(), runtimeDir, dirname(runtimeDir)];
+    const binCandidates = [...new Set(roots.flatMap(root => [
+      resolve(root, "dist", "vendor", "bin"),
+      resolve(root, "vendor", "bin"),
+      resolve(root, "vendor", "media-tools"),
+    ]))];
+    const absoluteConfiguredPath = (value: string) => value
+      ? (value.startsWith("/") || /^[A-Za-z]:[\\\\/]/.test(value) ? resolve(value) : resolve(process.cwd(), value))
+      : "";
+    const configuredYtdlp = absoluteConfiguredPath(String(process.env.YTDLP_PATH || "").trim());
+    const configuredBin = absoluteConfiguredPath(String(process.env.FFMPEG_LOCATION || "").trim());
+    const executableName = process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp";
+    const ytdlpCandidates = [...new Set([configuredYtdlp, ...binCandidates.map(dir => resolve(dir, executableName))].filter(Boolean))];
+    const ytdlpPath = ytdlpCandidates.find(candidate => {
+      try { return existsSync(candidate) && statSync(candidate).isFile(); } catch { return false; }
+    });
+    const ffmpegLocation = [configuredBin, ...binCandidates].find(dir => {
+      try { return !!dir && existsSync(resolve(dir, process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg")); } catch { return false; }
+    }) || binCandidates[0];
+    if (!ytdlpPath) {
+      throw Object.assign(new Error(`yt-dlp executable not found. cwd=${process.cwd()}; runtimeDir=${runtimeDir}; checked: ${ytdlpCandidates.join(", ")}`), { code: "ENOENT" });
     }
-    console.log(`[youtube-converter] Using yt-dlp at ${ytdlpPath}; FFmpeg directory ${ffmpegLocation}`);
+    console.log(`[youtube-converter] Using yt-dlp at ${ytdlpPath}; FFmpeg directory ${ffmpegLocation}; cwd=${process.cwd()}`);
     const workDir = await mkdtemp(join(tmpdir(), "nexus-ytdlp-"));
     const outputTemplate = join(workDir, "%(id)s.%(ext)s");
     const args = [
