@@ -29,9 +29,13 @@ if (process.platform !== "win32") {
 }
 
 console.log("[media-tools] Downloading yt-dlp standalone release...");
+// Use yt-dlp's musllinux standalone build on Linux. It avoids relying on
+// the host's glibc/zlib shared-library mapping, which can fail in serverless
+// runtimes such as the one used by this deployment.
 const ytName = process.platform === "win32" ? "yt-dlp.exe"
   : process.platform === "darwin" ? "yt-dlp_macos"
-  : "yt-dlp_linux";
+  : process.arch === "arm64" ? "yt-dlp_musllinux_aarch64"
+  : "yt-dlp_musllinux";
 const ytUrl = `https://github.com/yt-dlp/yt-dlp/releases/latest/download/${ytName}`;
 const response = await fetch(ytUrl, { redirect: "follow" });
 if (!response.ok) throw new Error(`yt-dlp download failed: HTTP ${response.status}`);
