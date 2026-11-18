@@ -7,7 +7,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/use-auth";
-import { Loader2 } from "lucide-react";
+import { Loader2 } from "@/components/ManagedIcons";
 import { Capacitor } from "@capacitor/core";
 import Login from "@/pages/Login";
 import Landing from "@/pages/Landing";
