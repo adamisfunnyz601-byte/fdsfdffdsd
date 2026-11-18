@@ -10,7 +10,15 @@ export default function Proxy() {
   const [url, setUrl] = useState("");
   const [activeUrl, setActiveUrl] = useState<string | null>(null);
   const [proxyUrl, setProxyUrl] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);\n  const [isFullscreen, setIsFullscreen] = useState(false);\n\n  useEffect(() => {\n    if (!isFullscreen) return;\n    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setIsFullscreen(false); };\n    window.addEventListener("keydown", onKeyDown);\n    return () => window.removeEventListener("keydown", onKeyDown);\n  }, [isFullscreen]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setIsFullscreen(false); };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isFullscreen]);
   const { addEntry } = useHistory();
   const { toast } = useToast();
 
@@ -91,6 +99,15 @@ export default function Proxy() {
             {isLoading && activeUrl && (
               <div className="text-[9px] font-mono text-primary/40 animate-pulse">LOADING...</div>
             )}
+            <button
+              type="button"
+              onClick={() => setIsFullscreen(value => !value)}
+              className="shrink-0 rounded border border-primary/20 p-1.5 text-primary/70 transition-colors hover:border-primary hover:text-primary"
+              title={isFullscreen ? "Exit full screen" : "Full screen"}
+              aria-label={isFullscreen ? "Exit full screen" : "Full screen"}
+            >
+              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </button>
           </div>
 
           {/* Content area */}
