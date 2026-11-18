@@ -12,7 +12,7 @@ import {
   UserCheck,
   ShieldBan,
   ShieldOff,
-} from "lucide-react";
+} from "@/components/ManagedIcons";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { ProfileTagEditor } from "@/components/ProfileTagEditor";
