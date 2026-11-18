@@ -1711,27 +1711,22 @@ export async function registerRoutes(
     const target = await storage.getUser(targetId);
     const requestedRole = typeof req.body?.role === "string" ? canonicalRole(req.body.role) : "";
     if (!actor || !target) return res.status(404).json({ message: "User not found" });
-    if (!["owner","admin","trial-admin","moderator","trial-moderator","helper","trial-helper","user"].includes(requestedRole)) {
-      return res.status(400).json({ message: "Invalid role" });
-    }
     const aRole = canonicalRole(actor.role), tRole = canonicalRole(target.role);
-    if (!Object.prototype.hasOwnProperty.call(roleRank, aRole) || (roleRank[aRole] ?? 0) < roleRank["trial-helper"]) {
-      return res.status(403).json({ message: "Staff access is required to assign roles." });
-    }
-    if (targetId === actorId) return res.status(403).json({ message: "You cannot change your own role." });
-    if (tRole === "super-owner" || (tRole === "owner" && aRole !== "super-owner")) return res.status(403).json({ message: "That account is protected by the ownership hierarchy." });
-    if (requestedRole === "owner" && !["owner", "super-owner"].includes(aRole)) {
-      return res.status(403).json({ message: "Only an owner can grant the owner role." });
-    }
-    if (aRole !== "owner" && (roleRank[tRole] ?? 0) >= (roleRank[aRole] ?? 0)) {
-      return res.status(403).json({ message: "You can only change members with a lower role than yours." });
-    }
-    if (aRole !== "owner" && (roleRank[requestedRole] ?? 0) >= (roleRank[aRole] ?? 0)) {
-      return res.status(403).json({ message: "You can only assign roles below your own." });
-    }
-    await db.update(users).set({ role: requestedRole }).where(eq(users.id, targetId));
-    await db.insert(moderationLogs).values({ actorId, targetId, action: "role-change", reason: `Role changed from ${target.role} to ${requestedRole}`, metadata: { from: tRole, to: requestedRole } });
-    res.json({ success: true, userId: targetId, role: requestedRole });
+    const isSuperOwner = aRole === "super-owner";
+    const allowedRoles = ["super-owner","owner","admin","trial-admin","moderator","trial-moderator","helper","trial-helper","user"];
+    if (!allowedRoles.includes(requestedRole)) return res.status(400).json({ message: "Invalid role" });
+    if (!isSuperOwner) {
+      if (!Object.prototype.hasOwnProperty.call(roleRank, aRole) || (roleRank[aRole] ?? 0) < roleRank["trial-helper"]) return res.status(403).json({ message: "Staff access is required to assign roles." });
+      if (targetId === actorId) return res.status(403).json({ message: "You cannot change your own role." });
+      if (tRole === "super-owner" || (tRole === "owner" && aRole !== "super-owner")) return res.status(403).json({ message: "That account is protected by the ownership hierarchy." });
+      if (requestedRole === "super-owner") return res.status(403).json({ message: "Only a Super Owner can grant the Super Owner role." });
+      if (requestedRole === "owner" && aRole !== "owner") return res.status(403).json({ message: "Only an owner can grant the owner role." });
+      if (aRole !== "owner" && (roleRank[tRole] ?? 0) >= (roleRank[aRole] ?? 0)) return res.status(403).json({ message: "You can only change members with a lower role than yours." });
+      if (aRole !== "owner" && (roleRank[requestedRole] ?? 0) >= (roleRank[aRole] ?? 0)) return res.status(403).json({ message: "You can only assign roles below your own." });
+    } else if (targetId === actorId) return res.status(403).json({ message: "You cannot change your own role from this session." });
+    await db.update(users).set({ role: requestedRole.replace(/-/g, "_") }).where(eq(users.id, targetId));
+    await db.insert(moderationLogs).values({ actorId, targetId, action: "role-change", reason: "Role changed from " + target.role + " to " + requestedRole, metadata: { from: tRole, to: requestedRole, superOwnerOverride: isSuperOwner } });
+    return res.json({ success: true, userId: targetId, role: requestedRole });
   });
 
   app.post("/api/chat/command", requireAuth, async (req, res) => {
