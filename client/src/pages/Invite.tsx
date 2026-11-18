@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { ArrowRight, CheckCircle2, Copy, KeyRound, Loader2, ShieldCheck, XCircle, Users } from "lucide-react";
+import { ArrowRight, CheckCircle2, Copy, KeyRound, Loader2, ShieldCheck, XCircle, Users } from "@/components/ManagedIcons";
 import { CyberButton } from "@/components/CyberButton";
 import { useAuth } from "@/hooks/use-auth";
 
