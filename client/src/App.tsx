@@ -66,6 +66,7 @@ function Router(){return <Switch>
  <Route path="/" component={Home}/>
  <Route path="/terms" component={TermsPage}/>
  <Route path="/documentation" component={DocumentationPage}/>
+ <Route path="/documention"><Redirect to="/documentation"/></Route>
  <Route path="/sign-in" component={Login}/>
  <Route path="/sign-up" component={Login}/>
  <Route path="/signup" component={Login}/>
