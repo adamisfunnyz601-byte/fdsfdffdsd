@@ -1502,6 +1502,83 @@ export async function registerRoutes(
     return n * ({ m: 60000, h: 3600000, d: 86400000, w: 604800000, mo: 2592000000, y: 31536000000 } as Record<string, number>)[unit];
   };
 
+
+  // Super-owner-only icon publishing. The GitHub token stays on the server.
+  const managedIconNames = ["net-proxy","messages","history","updates","youtube-tools","block-blast","shop","galaxy-subscription","settings","moderation","admin-console","gs-gifts"];
+  const requireSuperOwnerAccount = async (req: Request, res: any) => {
+    const actor = await storage.getUser(Number(req.session.userId));
+    if (!actor || String(actor.role).toLowerCase() !== "super_owner") {
+      res.status(403).json({ message: "Super Owner access required." });
+      return false;
+    }
+    return true;
+  };
+  const githubIconConfig = () => ({
+    token: process.env.GITHUB_TOKEN || "",
+    repository: process.env.GITHUB_REPOSITORY || "adamisfunnyz601-byte/fdsfdffdsd",
+    branch: process.env.GITHUB_BRANCH || "feat/mobile-notifications-responsive-platforms",
+  });
+  app.get("/api/super-owner/icons", requireAuth, async (req, res) => {
+    if (!await requireSuperOwnerAccount(req, res)) return;
+    const { token, repository, branch } = githubIconConfig();
+    if (!token) return res.status(503).json({ message: "GITHUB_TOKEN is not configured on the server." });
+    try {
+      const response = await fetch(`https://api.github.com/repos/${repository}/contents/client/public/icons?ref=${branch}`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" },
+      });
+      const data: any = response.ok ? await response.json() : [];
+      const files = Array.isArray(data) ? data.filter((item:any) => item.type === "file" && item.name.endsWith(".png")) : [];
+      res.json({ icons: managedIconNames.map(name => ({ name, path: `client/public/icons/${name}.png`, customized: files.some((file:any) => file.name === `${name}.png`) })) });
+    } catch { res.status(502).json({ message: "Could not read the icon directory from GitHub." }); }
+  });
+  app.put("/api/super-owner/icons/:name", requireAuth, async (req, res) => {
+    if (!await requireSuperOwnerAccount(req, res)) return;
+    const name = String(req.params.name || "");
+    if (!managedIconNames.includes(name)) return res.status(400).json({ message: "Unknown icon." });
+    const dataUrl = String(req.body?.dataUrl || "");
+    const match = dataUrl.match(/^data:image\\/png;base64,([A-Za-z0-9+/=]+)$/);
+    if (!match) return res.status(400).json({ message: "Choose a valid PNG image." });
+    const bytes = Buffer.from(match[1], "base64");
+    if (!bytes.length || bytes.length > 2 * 1024 * 1024) return res.status(400).json({ message: "PNG must be between 1 byte and 2 MB." });
+    const { token, repository, branch } = githubIconConfig();
+    if (!token) return res.status(503).json({ message: "GITHUB_TOKEN is not configured on the server." });
+    try {
+      const path = `client/public/icons/${name}.png`;
+      const existing = await fetch(`https://api.github.com/repos/${repository}/contents/${path}?ref=${branch}`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" } });
+      const old: any = existing.ok ? await existing.json() : null;
+      const response = await fetch(`https://api.github.com/repos/${repository}/contents/${path}`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "Content-Type": "application/json", "X-GitHub-Api-Version": "2022-11-28" },
+        body: JSON.stringify({ message: `Update NEXUS icon: ${name}`, content: bytes.toString("base64"), branch, ...(old?.sha ? { sha: old.sha } : {}) }),
+      });
+      const result: any = await response.json();
+      if (!response.ok) return res.status(response.status).json({ message: result.message || "GitHub rejected the icon update." });
+      return res.json({ success: true, commit: result.commit?.html_url || null });
+    } catch { return res.status(502).json({ message: "Could not publish this icon to GitHub." }); }
+  });
+  app.delete("/api/super-owner/icons/:name", requireAuth, async (req, res) => {
+    if (!await requireSuperOwnerAccount(req, res)) return;
+    const name = String(req.params.name || "");
+    if (!managedIconNames.includes(name)) return res.status(400).json({ message: "Unknown icon." });
+    const { token, repository, branch } = githubIconConfig();
+    if (!token) return res.status(503).json({ message: "GITHUB_TOKEN is not configured on the server." });
+    try {
+      const path = `client/public/icons/${name}.png`;
+      const current = await fetch(`https://api.github.com/repos/${repository}/contents/${path}?ref=${branch}`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" } });
+      if (current.status === 404) return res.json({ success: true, reverted: true });
+      const file: any = await current.json();
+      if (!current.ok || !file.sha) return res.status(502).json({ message: "Could not read the current icon revision." });
+      const response = await fetch(`https://api.github.com/repos/${repository}/contents/${path}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "Content-Type": "application/json" },
+        body: JSON.stringify({ message: `Revert NEXUS icon: ${name}`, sha: file.sha, branch }),
+      });
+      const result: any = await response.json();
+      if (!response.ok) return res.status(response.status).json({ message: result.message || "GitHub rejected the revert." });
+      return res.json({ success: true, reverted: true });
+    } catch { return res.status(502).json({ message: "Could not revert this icon." }); }
+  });
+
   app.get("/api/moderation/users", requireAuth, async (req, res) => {
     const actor = await storage.getUser(req.session.userId!);
     const allowed = ["super-owner","owner","admin","trial-admin","moderator","trial-moderator","helper","trial-helper"];
