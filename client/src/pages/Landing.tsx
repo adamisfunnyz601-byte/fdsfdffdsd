@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { motion, useReducedMotion } from "framer-motion";
-import { ArrowRight, ShieldCheck, Globe2, MessageCircle, Video, Layers3, Code2, Server, Smartphone, Sparkles, LockKeyhole, Zap } from "lucide-react";
+import { ArrowRight, ShieldCheck, Globe2, MessageCircle, Video, Layers3, Code2, Server, Smartphone, Sparkles, LockKeyhole, Zap } from "@/components/ManagedIcons";
 import { useAuth } from "@/hooks/use-auth";
 
 const rise = {
