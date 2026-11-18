@@ -132,4 +132,4 @@ function CrashScreenController(){
  </div>;
 }
 
-export default function App(){return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter hook={desktopFileApp ? useHashLocation : undefined}><Router/><CrashScreenController/><PresenceHeartbeat/><GlobalChatHost/></WouterRouter><Toaster/></TooltipProvider></QueryClientProvider>}
+export default function App(){return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter hook={desktopFileApp ? useHashLocation : undefined}><Router/><CrashScreenController/><PresenceHeartbeat/></WouterRouter><Toaster/></TooltipProvider></QueryClientProvider>}
