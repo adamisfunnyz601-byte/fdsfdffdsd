@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiUrl } from "@/lib/api-url";
 import { getRtcConfiguration } from "@/lib/webrtc";
-import { Phone, PhoneOff, Mic, MicOff, Video, VideoOff, MonitorUp, X } from "lucide-react";
+import { Phone, PhoneOff, Mic, MicOff, Video, VideoOff, MonitorUp, X } from "@/components/ManagedIcons";
 
 type IncomingCall = { callId:string; fromId:number; fromName:string; withVideo:boolean };
 type ActiveCall = { callId:string; peerId:number; peerName:string; withVideo:boolean; direction:"incoming"|"outgoing" };
