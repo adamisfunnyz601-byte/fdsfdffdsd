@@ -60,7 +60,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <button className="nexus-brand-mark" onClick={() => setIsMobileMenuOpen(v => !v)} aria-label="Toggle navigation">
           {isMobileMenuOpen ? <AppIcon name="close" fallback={X} size={19}/> : <AppIcon name="menu" fallback={Menu} size={19}/>}
         </button>
-        <div className="flex items-center gap-2"><span className="nexus-brand-orb"><img src="/nexus-icon.png" alt="NEXUS" className="h-5 w-5 object-contain"/></span><span className="font-black tracking-[.18em] text-sm">NEXUS</span></div>
+        <div className="flex items-center gap-2"><span className="nexus-brand-orb"><img src="/nexus-icon.png" alt="NEXUS" className="h-5 w-5 object-contain" onError={e=>{e.currentTarget.src="/nexus-icon.svg"}}/></span><span className="font-black tracking-[.18em] text-sm">NEXUS</span></div>
         <span className="nexus-live-pill"><i/> LIVE</span>
       </header>
 
@@ -71,7 +71,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         className={cn("nexus-sidebar fixed inset-y-0 left-0 z-[60] flex w-[278px] flex-col lg:relative lg:translate-x-0", isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0")}
       >
         <div className="nexus-brand">
-          <div className="nexus-brand-orb"><img src="/nexus-icon.png" alt="NEXUS" className="h-6 w-6 object-contain"/><span/></div>
+          <div className="nexus-brand-orb"><img src="/nexus-icon.png" alt="NEXUS" className="h-6 w-6 object-contain" onError={e=>{e.currentTarget.src="/nexus-icon.svg"}}/><span/></div>
           <div className="min-w-0"><div className="nexus-brand-name">NEXUS<span>OS</span></div><div className="nexus-brand-sub">YOUR DIGITAL UNIVERSE</div></div>
           <div className="ml-auto"><span className="nexus-version">2.6</span></div>
         </div>
