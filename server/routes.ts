@@ -1585,6 +1585,80 @@ export async function registerRoutes(
     } catch { return res.status(502).json({ message: "Could not revert this icon." }); }
   });
 
+
+  const superOwnerModerationFeatures = [{"id":"user_lookup","label":"User account lookup"},{"id":"user_activity","label":"Recent account activity"},{"id":"online_users","label":"Online users"},{"id":"offline_users","label":"Offline users"},{"id":"idle_users","label":"Idle users"},{"id":"dnd_users","label":"Do-not-disturb users"},{"id":"new_accounts","label":"Recently created accounts"},{"id":"expiring_accounts","label":"Accounts expiring soon"},{"id":"staff_roster","label":"Staff roster"},{"id":"role_distribution","label":"Role distribution"},{"id":"friendship_health","label":"Friendship totals"},{"id":"pending_friend_requests","label":"Pending friend requests"},{"id":"blocked_accounts","label":"Block relationship audit"},{"id":"message_volume","label":"Message volume"},{"id":"deleted_messages","label":"Deleted message audit"},{"id":"recent_messages","label":"Recent message audit"},{"id":"moderation_history","label":"Moderation history"},{"id":"recent_warnings","label":"Recent warnings"},{"id":"recent_role_changes","label":"Recent role changes"},{"id":"subscription_audit","label":"Subscription audit"},{"id":"profile_audit","label":"Profile completeness audit"},{"id":"avatar_audit","label":"Avatar audit"},{"id":"banner_audit","label":"Banner audit"},{"id":"privacy_audit","label":"Privacy settings audit"},{"id":"notification_audit","label":"Notification preferences audit"},{"id":"emote_preferences","label":"Emote preferences audit"},{"id":"call_privacy_audit","label":"Call privacy audit"},{"id":"dm_privacy_audit","label":"DM privacy audit"},{"id":"inactive_accounts","label":"Inactive accounts"},{"id":"long_inactive_accounts","label":"Long inactive accounts"},{"id":"high_coin_accounts","label":"High coin balances"},{"id":"high_point_accounts","label":"High hub point balances"},{"id":"custom_tags_audit","label":"Custom profile tags audit"},{"id":"nickname_audit","label":"Nickname audit"},{"id":"bio_audit","label":"Profile bio audit"},{"id":"recent_signups","label":"Signup trend"},{"id":"account_expiry_audit","label":"Account expiry audit"},{"id":"friendless_accounts","label":"Accounts without friends"},{"id":"blocked_by_many","label":"Frequently blocked accounts"},{"id":"message_spam_audit","label":"High message volume accounts"},{"id":"moderator_activity","label":"Moderator activity"},{"id":"reset_presence","label":"Force target offline"},{"id":"reset_privacy","label":"Reset target privacy settings"},{"id":"reset_profile_tags","label":"Clear target profile tags"},{"id":"reset_profile_cosmetics","label":"Reset target profile cosmetics"},{"id":"clear_bio","label":"Clear target bio"},{"id":"clear_nickname","label":"Clear target nickname"},{"id":"remove_custom_avatar","label":"Remove target avatar"},{"id":"remove_custom_banner","label":"Remove target banner"},{"id":"reset_notifications","label":"Reset target notification settings"}];
+  app.get("/api/super-owner/moderation/features", requireAuth, async (req, res) => {
+    const actor = await storage.getUser(Number(req.session.userId));
+    if (!actor || canonicalRole(actor.role) !== "super-owner") return res.status(403).json({ message: "Super Owner access required." });
+    return res.json({ features: superOwnerModerationFeatures });
+  });
+  app.post("/api/super-owner/moderation/features/:action", requireAuth, async (req, res) => {
+    const actorId = Number(req.session.userId);
+    const actor = await storage.getUser(actorId);
+    if (!actor || canonicalRole(actor.role) !== "super-owner") return res.status(403).json({ message: "Super Owner access required." });
+    const action = String(req.params.action);
+    if (!superOwnerModerationFeatures.some(feature => feature.id === action)) return res.status(404).json({ message: "Unknown moderation feature." });
+    const targetId = Number(req.body?.targetId);
+    const target = Number.isSafeInteger(targetId) && targetId > 0 ? await storage.getUser(targetId) : null;
+    const audit = async (result: unknown) => {
+      await db.insert(moderationLogs).values({ actorId, targetId: target?.id ?? null, action: "super-owner:" + action, reason: String(req.body?.reason || "Super Owner moderation console").slice(0, 300), metadata: { result } });
+      return res.json({ success: true, action, result });
+    };
+    if (["reset_presence","reset_privacy","reset_profile_tags","reset_profile_cosmetics","clear_bio","clear_nickname","remove_custom_avatar","remove_custom_banner","reset_notifications"].includes(action) && !target) return res.status(400).json({ message: "Select a valid target account first." });
+    if (action === "reset_presence") { await db.update(users).set({ presenceStatus: "offline", lastSeen: new Date(0) }).where(eq(users.id,target!.id)); return audit({ username:target!.username, presenceStatus:"offline" }); }
+    if (action === "reset_privacy") { await db.update(users).set({ muteEmotes:false, muteNonFriendCalls:false, dmFriendsOnly:false }).where(eq(users.id,target!.id)); return audit({ username:target!.username, reset:"privacy settings" }); }
+    if (action === "reset_profile_tags") { await db.update(users).set({ tagSymbol:null, tagText:null, tagColor:null }).where(eq(users.id,target!.id)); return audit({ username:target!.username, reset:"profile tags" }); }
+    if (action === "reset_profile_cosmetics") { await db.update(users).set({ decorationId:null, nameStyleId:null, profileDecoration:null, profileGradient:null, usernameFont:null }).where(eq(users.id,target!.id)); return audit({ username:target!.username, reset:"profile cosmetics" }); }
+    if (action === "clear_bio") { await db.update(users).set({ bio:null }).where(eq(users.id,target!.id)); return audit({ username:target!.username, bio:"cleared" }); }
+    if (action === "clear_nickname") { await db.update(users).set({ nickname:null, displayName:null }).where(eq(users.id,target!.id)); return audit({ username:target!.username, nickname:"cleared" }); }
+    if (action === "remove_custom_avatar") { await db.update(users).set({ avatarUrl:null }).where(eq(users.id,target!.id)); return audit({ username:target!.username, avatar:"removed" }); }
+    if (action === "remove_custom_banner") { await db.update(users).set({ bannerUrl:null }).where(eq(users.id,target!.id)); return audit({ username:target!.username, banner:"removed" }); }
+    if (action === "reset_notifications") { await db.update(users).set({ muteNotifications:false, ringtoneUrl:null }).where(eq(users.id,target!.id)); return audit({ username:target!.username, reset:"notification settings" }); }
+    const allUsers = await storage.getAllUsers();
+    const userRows = allUsers as any[];
+    const logs = await db.select().from(moderationLogs).orderBy(desc(moderationLogs.createdAt)).limit(500);
+    const recentMessages = await db.select().from(messages).orderBy(desc(messages.createdAt)).limit(500);
+    const friendRows = await db.select().from(friendRequests).where(eq(friendRequests.status,"accepted")).limit(10000);
+    const blockRows = await db.select().from(blocks).limit(10000);
+    let result: any;
+    switch(action) {
+      case "user_lookup": result = target ? safeUser(target) : userRows.slice(0,100).map(safeUser); break;
+      case "user_activity": result = target ? logs.filter((x:any)=>x.targetId===target.id).slice(0,50) : logs.slice(0,50); break;
+      case "online_users": case "offline_users": case "idle_users": case "dnd_users": result=userRows.filter((u:any)=>u.presenceStatus===action.replace("_users","")).map((u:any)=>({id:u.id,username:u.username,lastSeen:u.lastSeen})); break;
+      case "new_accounts": case "recent_signups": result=userRows.filter((u:any)=>Date.now()-new Date(u.createdAt||0).getTime()<7*86400000).map((u:any)=>({id:u.id,username:u.username,createdAt:u.createdAt})); break;
+      case "expiring_accounts": case "account_expiry_audit": result=userRows.filter((u:any)=>u.expiresAt).map((u:any)=>({id:u.id,username:u.username,expiresAt:u.expiresAt})); break;
+      case "staff_roster": result=userRows.filter((u:any)=>canonicalRole(u.role)!=="user").map((u:any)=>({id:u.id,username:u.username,role:u.role})); break;
+      case "role_distribution": result=Object.entries(userRows.reduce((a:any,u:any)=>(a[u.role]=(a[u.role]||0)+1,a),{})); break;
+      case "friendship_health": result={accepted:friendRows.length,pending:(await db.select().from(friendRequests).where(eq(friendRequests.status,"pending"))).length}; break;
+      case "pending_friend_requests": result=await db.select().from(friendRequests).where(eq(friendRequests.status,"pending")).limit(500); break;
+      case "blocked_accounts": result=blockRows.slice(0,500); break;
+      case "message_volume": result={recent500:recentMessages.length}; break;
+      case "deleted_messages": result=recentMessages.filter((m:any)=>m.isDeleted).slice(0,100); break;
+      case "recent_messages": result=recentMessages.slice(0,100).map((m:any)=>({id:m.id,senderId:m.senderId,recipientId:m.recipientId,groupId:m.groupId,createdAt:m.createdAt,isDeleted:m.isDeleted})); break;
+      case "moderation_history": result=logs.slice(0,200); break;
+      case "recent_warnings": result=logs.filter((l:any)=>/warn/i.test(l.action)).slice(0,100); break;
+      case "recent_role_changes": result=logs.filter((l:any)=>/role-change/i.test(l.action)).slice(0,100); break;
+      case "subscription_audit": result=userRows.filter((u:any)=>u.subscriptionTier&&u.subscriptionTier!=="none").map((u:any)=>({id:u.id,username:u.username,tier:u.subscriptionTier,until:u.dihhroUntil})); break;
+      case "profile_audit": result=userRows.map((u:any)=>({id:u.id,username:u.username,hasAvatar:!!u.avatarUrl,hasBanner:!!u.bannerUrl,hasBio:!!u.bio})); break;
+      case "avatar_audit": result=userRows.filter((u:any)=>!!u.avatarUrl).map((u:any)=>({id:u.id,username:u.username})); break;
+      case "banner_audit": result=userRows.filter((u:any)=>!!u.bannerUrl).map((u:any)=>({id:u.id,username:u.username})); break;
+      case "privacy_audit": case "call_privacy_audit": case "dm_privacy_audit": case "emote_preferences": result=userRows.map((u:any)=>({id:u.id,username:u.username,muteEmotes:u.muteEmotes,muteNonFriendCalls:u.muteNonFriendCalls,dmFriendsOnly:u.dmFriendsOnly})); break;
+      case "notification_audit": result=userRows.map((u:any)=>({id:u.id,username:u.username,muteNotifications:u.muteNotifications})); break;
+      case "inactive_accounts": case "long_inactive_accounts": result=userRows.filter((u:any)=>!u.lastSeen||Date.now()-new Date(u.lastSeen).getTime()>(action==="inactive_accounts"?7:30)*86400000).map((u:any)=>({id:u.id,username:u.username,lastSeen:u.lastSeen})); break;
+      case "high_coin_accounts": result=userRows.filter((u:any)=>Number(u.coins)>1000).map((u:any)=>({id:u.id,username:u.username,coins:u.coins})); break;
+      case "high_point_accounts": result=userRows.filter((u:any)=>Number(u.hubPoints)>1000).map((u:any)=>({id:u.id,username:u.username,hubPoints:u.hubPoints})); break;
+      case "custom_tags_audit": result=userRows.filter((u:any)=>u.tagText||u.tagSymbol).map((u:any)=>({id:u.id,username:u.username,tagText:u.tagText,tagSymbol:u.tagSymbol})); break;
+      case "nickname_audit": result=userRows.filter((u:any)=>u.nickname||u.displayName).map((u:any)=>({id:u.id,username:u.username,nickname:u.nickname,displayName:u.displayName})); break;
+      case "bio_audit": result=userRows.filter((u:any)=>u.bio).map((u:any)=>({id:u.id,username:u.username,bio:u.bio})); break;
+      case "friendless_accounts": result=userRows.filter((u:any)=>!friendRows.some((f:any)=>f.requesterId===u.id||f.addresseeId===u.id)).map((u:any)=>({id:u.id,username:u.username})); break;
+      case "blocked_by_many": result=Object.entries(blockRows.reduce((a:any,b:any)=>(a[b.blockedId]=(a[b.blockedId]||0)+1,a),{})).filter(([,n]:any)=>n>=3); break;
+      case "message_spam_audit": result=Object.entries(recentMessages.reduce((a:any,m:any)=>(a[m.senderId]=(a[m.senderId]||0)+1,a),{})).filter(([,n]:any)=>n>=10); break;
+      case "moderator_activity": result=Object.entries(logs.reduce((a:any,l:any)=>(a[l.actorId]=(a[l.actorId]||0)+1,a),{})); break;
+      default: result={message:"Audit complete."};
+    }
+    return audit(result);
+  });
+
   app.get("/api/moderation/users", requireAuth, async (req, res) => {
     const actor = await storage.getUser(req.session.userId!);
     const allowed = ["super-owner","owner","admin","trial-admin","moderator","trial-moderator","helper","trial-helper"];
