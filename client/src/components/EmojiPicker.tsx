@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { Smile, Search } from "lucide-react";
+import { Smile, Search } from "@/components/ManagedIcons";
 
 // ─── Standard emoji categories ───────────────────────────────────
 const STANDARD_EMOJIS: Record<string, string[]> = {
