@@ -2934,18 +2934,58 @@ export async function registerRoutes(
       let parsed: URL;
       try { parsed = new URL(targetUrl); } catch { return res.status(400).send("Invalid URL"); }
 
-      const response = await fetch(targetUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'Accept-Encoding': 'gzip, deflate, br',
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache',
-          'Upgrade-Insecure-Requests': '1',
-        },
-        redirect: 'follow',
-      });
+      const { lookup } = await import("node:dns/promises");
+      const { isIP } = await import("node:net");
+      const isPublicAddress = (address: string) => {
+        const value = address.toLowerCase().split("%")[0];
+        if (value === "::1" || value === "::" || value.startsWith("fc") || value.startsWith("fd") || value.startsWith("fe80:")) return false;
+        if (value.startsWith("::ffff:")) return isPublicAddress(value.slice(7));
+        const parts = value.split(".").map(Number);
+        if (parts.length === 4 && parts.every(n => Number.isInteger(n) && n >= 0 && n <= 255)) {
+          const [a,b] = parts;
+          return !(a === 0 || a === 10 || a === 127 || a >= 224 || (a === 169 && b === 254) ||
+            (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127));
+        }
+        return true;
+      };
+      const validateTarget = async (value: string) => {
+        const candidate = new URL(value);
+        if (!["http:", "https:"].includes(candidate.protocol) || candidate.username || candidate.password) {
+          throw new Error("Only public HTTP or HTTPS URLs are supported.");
+        }
+        const host = candidate.hostname.toLowerCase().replace(/^\\[|\\]$/g, "");
+        if (!host || host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") ||
+            host.endsWith(".internal") || host.endsWith(".test") || host.endsWith(".invalid")) {
+          throw new Error("Private and local network addresses are not available through the proxy.");
+        }
+        const literal = isIP(host);
+        const addresses = literal ? [{ address: host }] : await lookup(host, { all: true, verbatim: true });
+        if (!addresses.length || addresses.some(entry => !isPublicAddress(entry.address))) {
+          throw new Error("Private and local network addresses are not available through the proxy.");
+        }
+        return candidate;
+      };
+      let currentUrl = parsed.toString();
+      let response: Response | undefined;
+      for (let redirect = 0; redirect <= 5; redirect++) {
+        await validateTarget(currentUrl);
+        response = await fetch(currentUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Cache-Control": "no-cache",
+          },
+          redirect: "manual",
+          signal: AbortSignal.timeout(25_000),
+        });
+        if (![301,302,303,307,308].includes(response.status)) break;
+        const location = response.headers.get("location");
+        if (!location || redirect === 5) throw new Error("The destination redirected too many times.");
+        currentUrl = new URL(location, currentUrl).toString();
+      }
+      if (!response) throw new Error("The destination did not return a response.");
+      parsed = new URL(currentUrl);
 
       const contentType = response.headers.get('content-type') || 'text/html; charset=utf-8';
 
