@@ -1504,7 +1504,8 @@ export async function registerRoutes(
 
 
   // Super-owner-only icon publishing. The GitHub token stays on the server.
-  const managedIconNames = ["net-proxy","messages","history","updates","youtube-tools","block-blast","shop","galaxy-subscription","settings","moderation","admin-console","gs-gifts"];
+  const managedIconNames = ["net-proxy","messages","history","updates","youtube-tools","block-blast","shop","galaxy-subscription","settings","moderation","admin-console","gs-gifts","profile","sign-out","gift","workspace","menu","close","nexus-icon","favicon"];
+  const managedIconPath = (name: string) => name === "nexus-icon" ? "client/public/nexus-icon.png" : name === "favicon" ? "client/public/favicon.png" : `client/public/icons/${name}.png`;
   const requireSuperOwnerAccount = async (req: Request, res: any) => {
     const actor = await storage.getUser(Number(req.session.userId));
     if (!actor || String(actor.role).toLowerCase() !== "super_owner") {
@@ -1528,7 +1529,12 @@ export async function registerRoutes(
       });
       const data: any = response.ok ? await response.json() : [];
       const files = Array.isArray(data) ? data.filter((item:any) => item.type === "file" && item.name.endsWith(".png")) : [];
-      res.json({ icons: managedIconNames.map(name => ({ name, path: `client/public/icons/${name}.png`, customized: files.some((file:any) => file.name === `${name}.png`) })) });
+      const brandChecks = await Promise.all(["nexus-icon","favicon"].map(async name => {
+        const check = await fetch(`https://api.github.com/repos/${repository}/contents/${managedIconPath(name)}?ref=${branch}`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" } });
+        return [name, check.ok] as const;
+      }));
+      const brandSet = new Set(brandChecks.filter(([, exists]) => exists).map(([name]) => name));
+      res.json({ icons: managedIconNames.map(name => ({ name, path: managedIconPath(name), url: name === "nexus-icon" ? "/nexus-icon.png" : name === "favicon" ? "/favicon.png" : `/icons/${name}.png`, customized: name === "nexus-icon" || name === "favicon" ? brandSet.has(name) : files.some((file:any) => file.name === `${name}.png`) })) });
     } catch { res.status(502).json({ message: "Could not read the icon directory from GitHub." }); }
   });
   app.put("/api/super-owner/icons/:name", requireAuth, async (req, res) => {
@@ -1543,7 +1549,7 @@ export async function registerRoutes(
     const { token, repository, branch } = githubIconConfig();
     if (!token) return res.status(503).json({ message: "GITHUB_TOKEN is not configured on the server." });
     try {
-      const path = `client/public/icons/${name}.png`;
+      const path = managedIconPath(name);
       const existing = await fetch(`https://api.github.com/repos/${repository}/contents/${path}?ref=${branch}`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" } });
       const old: any = existing.ok ? await existing.json() : null;
       const response = await fetch(`https://api.github.com/repos/${repository}/contents/${path}`, {
