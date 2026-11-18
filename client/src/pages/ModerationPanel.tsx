@@ -47,6 +47,28 @@ export default function ModerationPanel() {
   const [emoteDuration, setEmoteDuration] = useState(0);
   const [emoteBusy, setEmoteBusy] = useState(false);
   const isSuperOwner = Boolean((user as any)?.isSuperOwner);
+  const [superFeatures, setSuperFeatures] = useState<{id:string;label:string}[]>([]);
+  const [featureResults, setFeatureResults] = useState<Record<string, any>>({});
+  const [featureBusy, setFeatureBusy] = useState("");
+  const [featureFilter, setFeatureFilter] = useState("");
+  useEffect(() => {
+    if (!isSuperOwner) return;
+    fetch("/api/super-owner/moderation/features", { credentials: "include" })
+      .then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.message || "Could not load moderation tools."); setSuperFeatures(data.features || []); })
+      .catch(error => toast({ title: "Super Owner tools unavailable", description: error.message, variant: "destructive" }));
+  }, [isSuperOwner]);
+  const runSuperFeature = async (id: string) => {
+    setFeatureBusy(id);
+    try {
+      const response = await fetch(`/api/super-owner/moderation/features/${id}`, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ targetId: targetId ? Number(targetId) : undefined, reason }) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || "Feature failed.");
+      setFeatureResults(current => ({ ...current, [id]: data.result }));
+      toast({ title: "Super Owner tool completed", description: superFeatures.find(item => item.id === id)?.label || id });
+    } catch (error: any) { toast({ title: "Moderation tool failed", description: error.message, variant: "destructive" }); }
+    finally { setFeatureBusy(""); }
+  };
+
   const [managedIcons, setManagedIcons] = useState<{name:string;path:string;url:string;customized:boolean}[]>([]);
   const [iconBusy, setIconBusy] = useState("");
   const [iconLoading, setIconLoading] = useState(false);
@@ -223,6 +245,23 @@ export default function ModerationPanel() {
         <span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase text-primary">{role.replace(/-/g," ")}</span>
       </div>
 
+      {isSuperOwner && <section className="rounded-xl border border-rose-400/30 bg-rose-500/5 p-4 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div><h2 className="text-lg font-black text-rose-200">Super Owner Control Centre · 50 tools</h2><p className="text-xs text-muted-foreground">Audits, account diagnostics and targeted profile/privacy resets. Every execution is permission-checked and written to the moderation log.</p></div>
+          <span className="rounded-full border border-rose-300/30 px-2 py-1 text-xs font-bold text-rose-200">{superFeatures.length}/50 loaded</span>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-[1fr_1fr]">
+          <input value={targetId} onChange={e=>setTargetId(e.target.value)} placeholder="Target user ID (required for reset tools)" className="rounded-lg border border-border bg-background px-3 py-2 text-sm"/>
+          <input value={featureFilter} onChange={e=>setFeatureFilter(e.target.value)} placeholder="Search the 50 tools…" className="rounded-lg border border-border bg-background px-3 py-2 text-sm"/>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {superFeatures.filter(feature=>feature.label.toLowerCase().includes(featureFilter.toLowerCase())||feature.id.includes(featureFilter.toLowerCase())).map(feature=><div key={feature.id} className="min-w-0 rounded-lg border border-border bg-background/70 p-3">
+            <div className="text-sm font-semibold">{feature.label}</div>
+            <button disabled={!!featureBusy} onClick={()=>runSuperFeature(feature.id)} className="mt-2 rounded-md bg-rose-500/15 px-3 py-1.5 text-xs font-bold text-rose-100 hover:bg-rose-500/25 disabled:opacity-50">{featureBusy===feature.id?"Running…":"Run tool"}</button>
+            {featureResults[feature.id] !== undefined && <pre className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap break-words rounded bg-black/20 p-2 text-[10px] text-muted-foreground">{JSON.stringify(featureResults[feature.id],null,2)}</pre>}
+          </div>)}
+        </div>
+      </section>}
       {isSuperOwner && <section className="rounded-xl border border-amber-400/30 bg-amber-400/5 p-4 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div><h2 className="text-lg font-black text-amber-200">Super Owner · Website Icon Studio</h2><p className="text-xs text-muted-foreground">Replace the 12 shared navigation icons. PNGs are resized to fit a 256×256 transparent canvas and committed to GitHub.</p></div>
