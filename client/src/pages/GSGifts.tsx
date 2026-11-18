@@ -11,6 +11,7 @@ type GiftLink = {
   tier: string;
   createdAt: string;
   claimedAt?: string | null;
+  revokedAt?: string | null;
   createdByName?: string | null;
   claimedByName?: string | null;
 };
@@ -46,6 +47,19 @@ export default function GSGifts() {
       toast({ title: "LINK COPIED", description: "The GS gift link is ready to share." });
     } catch {
       toast({ title: "COPY FAILED", description: value, variant: "destructive" });
+    }
+  };
+
+  const revokeGift = async (code: string) => {
+    if (!window.confirm("Revoke this gift link? Anyone who has not claimed it will no longer be able to redeem it.")) return;
+    try {
+      const response = await fetch(`/api/super-owner/gs/gifts/${encodeURIComponent(code)}/revoke`, { method: "POST", credentials: "include" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || "Could not revoke gift link.");
+      await queryClient.invalidateQueries({ queryKey: ["/api/gs/gifts"] });
+      toast({ title: "GIFT LINK REVOKED", description: "The link can no longer be redeemed." });
+    } catch (error: any) {
+      toast({ title: "REVOCATION FAILED", description: error.message || "Try again.", variant: "destructive" });
     }
   };
 
@@ -107,11 +121,12 @@ export default function GSGifts() {
             const claimed = Boolean(gift.claimedAt);
             return <article key={gift.code} className="flex flex-col gap-3 rounded-xl border border-white/10 bg-black/20 p-4 sm:flex-row sm:items-center">
               <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2"><span className="font-bold text-white">{String(gift.tier || "bronze").toUpperCase()}</span><span className="text-xs text-white/45">{gift.months} month(s)</span><span className={claimed ? "rounded-full bg-emerald-400/10 px-2 py-1 text-[10px] text-emerald-200" : "rounded-full bg-amber-400/10 px-2 py-1 text-[10px] text-amber-200"}>{claimed ? "CLAIMED" : "AVAILABLE"}</span></div>
+                <div className="flex flex-wrap items-center gap-2"><span className="font-bold text-white">{String(gift.tier || "bronze").toUpperCase()}</span><span className="text-xs text-white/45">{gift.months} month(s)</span><span className={gift.revokedAt ? "rounded-full bg-rose-400/10 px-2 py-1 text-[10px] text-rose-200" : claimed ? "rounded-full bg-emerald-400/10 px-2 py-1 text-[10px] text-emerald-200" : "rounded-full bg-amber-400/10 px-2 py-1 text-[10px] text-amber-200"}>{gift.revokedAt ? "REVOKED" : claimed ? "CLAIMED" : "AVAILABLE"}</span></div>
                 <p className="mt-1 truncate text-xs text-white/45">{url}</p>
                 <p className="mt-1 text-[10px] text-white/35">Created {new Date(gift.createdAt).toLocaleString()} · {claimed ? `Claimed by ${gift.claimedByName || "a member"}` : `Created by ${gift.createdByName || "staff"}`}</p>
               </div>
-              <button type="button" onClick={()=>void copy(url)} disabled={claimed} className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-xs font-bold text-white/80 disabled:opacity-30"><Copy size={14}/> Copy link</button>
+              <button type="button" onClick={()=>void copy(url)} disabled={claimed || Boolean(gift.revokedAt)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-xs font-bold text-white/80 disabled:opacity-30"><Copy size={14}/> Copy link</button>
+              {isSuperOwner && !gift.revokedAt && <button type="button" onClick={()=>void revokeGift(gift.code)} className="inline-flex items-center justify-center rounded-lg border border-rose-400/30 px-3 py-2 text-xs font-bold text-rose-200 hover:bg-rose-400/10">Revoke link</button>}
             </article>;
           })}</div>
         }
