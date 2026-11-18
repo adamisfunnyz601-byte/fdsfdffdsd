@@ -124,11 +124,11 @@ app.use((req, res, next) => {
     await setupVite(httpServer, app);
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
+  // ALWAYS prefer the hosting platform PORT. Other ports may be firewalled.
+  // Default to 3000 for Enzonic deployments.
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
-  const port = parseInt(process.env.SERVER_PORT || process.env.PORT || "5000", 10);
+  const port = parseInt(process.env.PORT || process.env.SERVER_PORT || "3000", 10);
   // Windows does not support Node's reusePort option on all socket providers.
   // A normal bind is sufficient for this single-instance self-hosted server.
   let isShuttingDown = false;
