@@ -38,8 +38,8 @@ console.log("[media-tools] Downloading yt-dlp standalone release...");
 // runtimes such as the one used by this deployment.
 const ytName = process.platform === "win32" ? "yt-dlp.exe"
   : process.platform === "darwin" ? "yt-dlp_macos"
-  : process.platform === "linux" && process.arch === "arm64" ? "yt-dlp_musllinux_aarch64"
-  : process.platform === "linux" && process.arch === "x64" ? "yt-dlp_musllinux"
+  : process.platform === "linux" && process.arch === "arm64" ? "yt-dlp_linux_aarch64"
+  : process.platform === "linux" && process.arch === "x64" ? "yt-dlp_linux"
   : null;
 if (!ytName) throw new Error(`No supported yt-dlp binary for ${process.platform}/${process.arch}.`);
 const ytUrl = `https://github.com/yt-dlp/yt-dlp/releases/latest/download/${ytName}`;
