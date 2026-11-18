@@ -8,23 +8,20 @@ type AppIconProps = {
   className?: string;
 };
 
-/**
- * Loads a replaceable SVG from /icons/<name>.svg.
- * If an icon file is missing or invalid, the original Lucide icon is shown.
- */
+/** PNG overrides are managed by the super-owner icon studio; SVG remains a compatibility fallback. */
 export function AppIcon({ name, fallback: Fallback, size = 18, className }: AppIconProps) {
-  const [failed, setFailed] = useState(false);
-  if (failed) return <Fallback size={size} className={className} aria-hidden="true" />;
+  const [source, setSource] = useState<"png" | "svg" | "fallback">("png");
+  if (source === "fallback") return <Fallback size={size} className={className} aria-hidden="true" />;
   return (
     <img
-      src={`/icons/${name}.svg`}
+      src={source === "png" ? `/icons/${name}.png` : `/icons/${name}.svg`}
       width={size}
       height={size}
       alt=""
       aria-hidden="true"
       className={className}
       style={{ width: size, height: size, objectFit: "contain" }}
-      onError={() => setFailed(true)}
+      onError={() => setSource(current => current === "png" ? "svg" : "fallback")}
     />
   );
 }
