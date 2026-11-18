@@ -9,9 +9,6 @@
     "start": "node dist/index.cjs",
     "check": "tsc",
     "db:push": "drizzle-kit push --config=drizzle.config.ts",
-    "desktop": "electron .",
-    "desktop:dist": "node ./node_modules/electron-builder/cli.js --win nsis",
-    "desktop:dir": "node ./node_modules/electron-builder/cli.js --win dir",
     "start:enzonic": "npm run build && node dist/index.cjs",
     "db:push:enzonic": "drizzle-kit push --config=drizzle.enzonic.config.ts"
   },
@@ -110,8 +107,6 @@
     "tsx": "^4.20.5",
     "typescript": "5.6.3",
     "vite": "^7.3.0",
-    "electron": "^40.0.0",
-    "electron-builder": "^26.0.12",
     "@capacitor/cli": "^8.0.0",
     "@capacitor/core": "^8.0.0",
     "@capacitor/android": "^8.0.0",
@@ -126,38 +121,6 @@
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.8"
-  },
-  "main": "electron/main.cjs",
-  "build": {
-    "appId": "com.nexusos.app",
-    "productName": "NEXUS",
-    "directories": {
-      "output": "dist-electron"
-    },
-    "files": [
-      "electron/**/*",
-      "dist/public/**/*",
-      "package.json"
-    ],
-    "asar": true,
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "icon": "build/icon.ico"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "NEXUS"
-    }
   },
   "engines": {
     "node": ">=22 <23"
