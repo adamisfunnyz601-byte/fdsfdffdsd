@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
 import { useToast } from "@/hooks/use-toast";
-import { Crown, Gift, Sparkles, Clock, CheckCircle2, ShoppingCart } from "lucide-react";
+import { Crown, Gift, Sparkles, Clock, CheckCircle2, ShoppingCart } from "@/components/ManagedIcons";
 
 const plans = [
   { id: "bronze", name: "Planet Bronze", price: 250, summary: "10 profile-gradient features", features: ["10 Bronze features"] },
