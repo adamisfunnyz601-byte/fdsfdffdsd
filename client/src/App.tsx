@@ -1,5 +1,5 @@
 import { Switch, Route, Router as WouterRouter, useLocation, Redirect } from "wouter";
-import { useEffect, Component } from "react";
+import { useEffect, useState, Component } from "react";
 import { apiUrl } from "@/lib/api-url";
 import { useHashLocation } from "wouter/use-hash-location";
 import { queryClient } from "./lib/queryClient";
@@ -70,7 +70,7 @@ function Router(){return <Switch>
  <Route path="/invite/:code">{params=><Invite code={params.code}/>}</Route>
  <Route path="/main-page"><ProtectedRoute component={Proxy}/></Route>
  <Route path="/proxy"><ProtectedRoute component={Proxy}/></Route>
- <Route path="/chat" component={()=>null}/>
+ <Route path="/chat"><ProtectedRoute component={Chat}/></Route>
  <Route path="/updates"><ProtectedRoute component={UpdatesPage}/></Route>
  <Route path="/youtube-tools"><ProtectedRoute component={YouTubeTools}/></Route>
  <Route path="/history"><ProtectedRoute component={History}/></Route>
@@ -98,5 +98,34 @@ class ChatErrorBoundary extends Component<{children: React.ReactNode},{error: Er
   return this.props.children;
  }
 }
-function GlobalChatHost(){const {user,isLoading}=useAuth();const [location]=useLocation();if(isLoading||!user||location!=="/chat")return null;return <div style={{position:"fixed",inset:0,zIndex:30}}><ChatErrorBoundary><Chat/></ChatErrorBoundary></div>}
-export default function App(){return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter hook={desktopFileApp ? useHashLocation : undefined}><Router/><PresenceHeartbeat/><GlobalChatHost/></WouterRouter><Toaster/></TooltipProvider></QueryClientProvider>}
+
+function CrashScreenController(){
+ const {user}=useAuth();
+ const [state,setState]=useState<{active:boolean;errorCode?:string;details?:string;isSuperOwner?:boolean}>({active:false});
+ useEffect(()=>{
+  if(!user)return;
+  let alive=true;
+  const load=()=>fetch(apiUrl("/api/system/crash-state"),{credentials:"include",cache:"no-store"}).then(r=>r.ok?r.json():null).then(v=>{if(alive&&v)setState(v)}).catch(()=>{});
+  void load(); const timer=window.setInterval(load,4000);
+  return()=>{alive=false;window.clearInterval(timer)};
+ },[user?.id]);
+ if(!user||!state.active||state.isSuperOwner)return null;
+ const docUrl=window.location.origin+"/documentation?code="+encodeURIComponent(state.errorCode||"NEXUS-0x0001");
+ const qrUrl="https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=0&data="+encodeURIComponent(docUrl);
+ return <div role="alert" aria-live="assertive" className="fixed inset-0 z-[100000] overflow-auto bg-black text-white" style={{fontFamily:"Arial,Helvetica,sans-serif"}}>
+  <div className="mx-auto flex min-h-full w-full max-w-[1620px] flex-col justify-center px-[7.8vw] py-12">
+   <div className="mb-8 text-[clamp(100px,16vw,190px)] font-light leading-[.8] tracking-[-.1em]">:(</div>
+   <p className="max-w-[1320px] text-[clamp(25px,2.5vw,42px)] font-light leading-[1.9]">Uh oh! Seems that Nexus hub has crashed or either triggered by an external system event. Please scan the QR code or read documentation for more details.</p>
+   <div className="mt-8 flex flex-wrap items-center gap-4 sm:gap-5">
+    <a href={docUrl} aria-label="Open NEXUS error documentation" className="block h-[180px] w-[180px] shrink-0 bg-white p-2"><img src={qrUrl} alt="QR code linking to NEXUS documentation" className="h-full w-full" /></a>
+    <div className="min-w-0">
+     <a href={docUrl} className="text-[clamp(22px,2.3vw,40px)] font-light hover:underline">Scan this for more information.</a>
+     <div className="break-words text-[clamp(20px,2.2vw,38px)] font-light">STOP_CODE: {state.errorCode||"NEXUS-0x0001"}</div>
+     <div className="mt-1 text-[clamp(15px,1.5vw,25px)]">{state.details||"Thank you for using nexus, we will try troubleshooting as soon as possible."}</div>
+    </div>
+   </div>
+   <div className="mt-8 text-sm text-white/40">NEXUS SYSTEM RECOVERY · <a className="underline" href={docUrl}>Open documentation</a></div>
+  </div>
+ </div>;
+}
+\nexport default function App(){return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter hook={desktopFileApp ? useHashLocation : undefined}><Router/><CrashScreenController/><PresenceHeartbeat/><GlobalChatHost/></WouterRouter><Toaster/></TooltipProvider></QueryClientProvider>}
