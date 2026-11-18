@@ -413,9 +413,9 @@ const ChatPollCard = ({ poll, onVote }: { poll: any; onVote: (pollId: number, op
 };
 
 const TerminalMessage = ({
-  msg, isMe, currentUserId, users = [], onReply, onForward, onPurge, onMediaPreview, onProfileClick, emoteItem, shouldAutoplayEmote, reactions = [], poll, onToggleReaction, onVote
+  msg, isMe, currentUserId, muteEmotes = false, users = [], onReply, onForward, onPurge, onMediaPreview, onProfileClick, emoteItem, shouldAutoplayEmote, reactions = [], poll, onToggleReaction, onVote
 }: {
-  msg: any; isMe: boolean; currentUserId: number; users?: any[]; emoteItem?: any; shouldAutoplayEmote?: boolean; reactions?: any[]; poll?: any; onToggleReaction: (id: number, emoji: string) => void; onVote: (pollId: number, optionId: number) => void;
+  msg: any; isMe: boolean; currentUserId: number; muteEmotes?: boolean; users?: any[]; emoteItem?: any; shouldAutoplayEmote?: boolean; reactions?: any[]; poll?: any; onToggleReaction: (id: number, emoji: string) => void; onVote: (pollId: number, optionId: number) => void;
   onReply: (m: any) => void;
   onForward: (m: any) => void;
   onPurge: (id: number) => void;
@@ -590,7 +590,7 @@ const TerminalMessage = ({
             </div>
           </div>
         )}
-        {chatEmoteMatch && !currentUser?.muteEmotes ? <div className="mt-1 flex max-w-[240px] flex-col items-center gap-2 rounded-xl border border-violet-400/25 bg-violet-500/10 p-3">{emoteItem?.imageUrl ? <img src={emoteItem.imageUrl} alt={emoteItem.name || "Chat emote"} className="max-h-36 max-w-full object-contain"/> : <span className="text-xs text-violet-200/60">Loading emote…</span>}<span className="text-[10px] font-bold text-violet-100">{emoteItem?.name || "Emote"}</span></div> : displayContent && <div className="whitespace-pre-wrap leading-relaxed select-text break-words"><MessageContent content={displayContent} users={users} muteEmotes={Boolean(currentUser?.muteEmotes)} /></div>}
+        {chatEmoteMatch && !muteEmotes ? <div className="mt-1 flex max-w-[240px] flex-col items-center gap-2 rounded-xl border border-violet-400/25 bg-violet-500/10 p-3">{emoteItem?.imageUrl ? <img src={emoteItem.imageUrl} alt={emoteItem.name || "Chat emote"} className="max-h-36 max-w-full object-contain"/> : <span className="text-xs text-violet-200/60">Loading emote…</span>}<span className="text-[10px] font-bold text-violet-100">{emoteItem?.name || "Emote"}</span></div> : displayContent && <div className="whitespace-pre-wrap leading-relaxed select-text break-words"><MessageContent content={displayContent} users={users} muteEmotes={muteEmotes} /></div>}
         {gsGiftMatch && <div className="mt-3 block max-w-sm rounded-xl border border-fuchsia-400/30 bg-gradient-to-r from-fuchsia-500/15 to-violet-500/10 p-3"><div className="flex items-center gap-2 text-[10px] font-black tracking-[.18em] text-fuchsia-200"><Gift className="h-4 w-4"/> GS · GALAXY SUBSCRIPTION GIFT</div><div className="mt-1 text-sm font-bold text-white">You've received a GS gift!</div><div className="mt-1 text-[10px] text-fuchsia-100/60">One-time use · Claim directly from this chat</div><button type="button" onClick={()=>void claimGsGift()} disabled={gsGiftClaimState==="claiming"||gsGiftClaimState==="claimed"} className="mt-3 w-full rounded-lg bg-fuchsia-500 px-4 py-2.5 text-xs font-black text-white transition hover:bg-fuchsia-400 disabled:opacity-60">{gsGiftClaimState==="claiming"?"CLAIMING…":gsGiftClaimState==="claimed"?"CLAIMED ✓":gsGiftClaimState==="error"?"TRY CLAIM AGAIN":"CLAIM GS GIFT"}</button>{gsGiftClaimMessage && <p className={cn("mt-2 text-[10px]",gsGiftClaimState==="error"?"text-rose-200":"text-emerald-200")}>{gsGiftClaimMessage}</p>}</div>}
         {getMediaSection()}
         {msg.mediaType === "poll" && poll && <ChatPollCard poll={poll} onVote={onVote}/>}
@@ -2819,6 +2819,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
                 msg={msg as any}
                 isMe={msg.senderId === currentUser?.id}
                 currentUserId={currentUser?.id ?? -1}
+              muteEmotes={Boolean(currentUser?.muteEmotes)}
                 users={users || []}
                 onReply={setReplyTarget}
                 onForward={m => setForwardState({ message: m, isOpen: true })}
