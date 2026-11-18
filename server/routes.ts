@@ -1189,7 +1189,7 @@ export async function registerRoutes(
       await regenerateSession(req);
       req.session.userId = user.id;
       req.session.role = user.role;
-      const loginPresence = String(user.presenceStatus || "online") === "offline" ? "offline" : "online";
+      const loginPresence = "online";
       await db.update(users).set({
         presenceStatus: loginPresence,
         lastSeen: new Date(),
@@ -1236,7 +1236,7 @@ export async function registerRoutes(
 
   app.post("/api/presence/heartbeat", requireAuth, async (req, res) => {
     const now = new Date();
-    await db.update(users).set({ lastSeen: now }).where(eq(users.id, Number(req.session.userId!)));
+    await db.update(users).set({ presenceStatus: "online", lastSeen: now }).where(eq(users.id, Number(req.session.userId!)));
     res.setHeader("Cache-Control", "no-store");
     return res.json({ success: true, lastSeen: now });
   });
@@ -1244,7 +1244,7 @@ export async function registerRoutes(
   app.get(api.auth.me.path, requireAuth, async (req, res) => {
     const user = await storage.getUser(req.session.userId!);
     if (user) {
-      await db.update(users).set({ lastSeen: new Date() }).where(eq(users.id, user.id));
+      await db.update(users).set({ presenceStatus: "online", lastSeen: new Date() }).where(eq(users.id, user.id));
     }
     res.json(safeUser(user));
   });
