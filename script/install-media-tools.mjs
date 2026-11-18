@@ -33,8 +33,8 @@ for (const file of [resolve(binDir, ffmpegName), resolve(binDir, ffprobeName)]) 
 }
 
 console.log("[media-tools] Downloading yt-dlp standalone release...");
-// Use the official standalone Linux release binaries so the build does not
-// depend on a system Python installation in the serverless runtime.
+// Linux uses the Python package to avoid shared-library mapping failures in
+// restricted containers; Windows and macOS use their official standalone builds.
 const ytPath = resolve(binDir, process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp");
 if (process.platform === "linux") {
   // The PyInstaller Linux release can fail to map libz.so.1 in restricted
