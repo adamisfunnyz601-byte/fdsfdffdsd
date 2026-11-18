@@ -14,7 +14,7 @@ import {
   Download, Cpu, Ghost, Forward, Trash2, Reply, Music,
   Camera, MonitorUp, PhoneOff, Binary, UserPlus, Command,
   Box, TerminalSquare, Bug, Upload, Play, ImageIcon, Film, ShieldCheck, Loader2, Link2, Pencil, Copy, Gift, Sparkles
-} from "lucide-react";
+} from "@/components/ManagedIcons";
 import { cn } from "@/lib/utils";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
