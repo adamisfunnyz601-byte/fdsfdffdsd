@@ -60,7 +60,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <button className="nexus-brand-mark" onClick={() => setIsMobileMenuOpen(v => !v)} aria-label="Toggle navigation">
           {isMobileMenuOpen ? <AppIcon name="close" fallback={X} size={19}/> : <AppIcon name="menu" fallback={Menu} size={19}/>}
         </button>
-        <div className="flex items-center gap-2"><span className="nexus-brand-orb"><img src="/nexus-icon.svg" alt="NEXUS" className="h-5 w-5 object-contain"/></span><span className="font-black tracking-[.18em] text-sm">NEXUS</span></div>
+        <div className="flex items-center gap-2"><span className="nexus-brand-orb"><img src="/nexus-icon.png" alt="NEXUS" className="h-5 w-5 object-contain"/></span><span className="font-black tracking-[.18em] text-sm">NEXUS</span></div>
         <span className="nexus-live-pill"><i/> LIVE</span>
       </header>
 
@@ -71,7 +71,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         className={cn("nexus-sidebar fixed inset-y-0 left-0 z-[60] flex w-[278px] flex-col lg:relative lg:translate-x-0", isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0")}
       >
         <div className="nexus-brand">
-          <div className="nexus-brand-orb"><img src="/nexus-icon.svg" alt="NEXUS" className="h-6 w-6 object-contain"/><span/></div>
+          <div className="nexus-brand-orb"><img src="/nexus-icon.png" alt="NEXUS" className="h-6 w-6 object-contain"/><span/></div>
           <div className="min-w-0"><div className="nexus-brand-name">NEXUS<span>OS</span></div><div className="nexus-brand-sub">YOUR DIGITAL UNIVERSE</div></div>
           <div className="ml-auto"><span className="nexus-version">2.6</span></div>
         </div>
@@ -123,7 +123,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {canGiftGS && <button type="button" onClick={() => void giftGS()} title="Gift subscription" aria-label="Gift GS" className="fixed bottom-5 right-5 z-[90] flex h-14 w-14 items-center justify-center rounded-full border border-fuchsia-300/40 bg-gradient-to-br from-fuchsia-500 to-violet-600 text-white shadow-[0_8px_32px_rgba(168,85,247,.45)] transition hover:scale-105"><AppIcon name="gift" fallback={Gift} size={23}/></button>}\n      <main className="nexus-main flex min-w-0 flex-1 flex-col">
         <header className="nexus-topbar hidden h-[58px] shrink-0 items-center justify-between px-7 lg:flex">
           <div className="flex items-center gap-3"><span className="nexus-breadcrumb-dot"/><span className="text-[11px] font-semibold uppercase tracking-[.16em] text-white/45">Nexus Network</span><span className="text-white/15">/</span><span className="text-[11px] font-semibold text-white/85">{navItems.find(item => item.href === location)?.label || (location === "/profile" ? "My Profile" : "Workspace")}</span></div>
-          <div className="flex items-center gap-4"><span className="nexus-encryption"><span/> AES-256 SESSION</span><span className="h-4 w-px bg-white/10"/><span className="inline-flex items-center gap-2 text-[10px] tracking-widest text-white/30"><img src="/nexus-icon.svg" alt="NEXUS" className="h-4 w-4 object-contain"/> NEXUS / 02.06</span></div>
+          <div className="flex items-center gap-4"><span className="nexus-encryption"><span/> AES-256 SESSION</span><span className="h-4 w-px bg-white/10"/><span className="inline-flex items-center gap-2 text-[10px] tracking-widest text-white/30"><img src="/nexus-icon.png" alt="NEXUS" className="h-4 w-4 object-contain"/> NEXUS / 02.06</span></div>
         </header>
         <motion.div key={location} className="nexus-content flex-1 overflow-y-auto p-4 md:p-7" initial={{opacity:0,y:13,filter:"blur(5px)"}} animate={{opacity:1,y:0,filter:"blur(0px)"}} transition={{duration:.24,ease:[.2,.8,.2,1]}}>
           {children}
