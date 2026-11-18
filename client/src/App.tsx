@@ -87,5 +87,5 @@ function Router(){return <Switch>
  <Route path="/block-blast"><ProtectedRoute component={BlockBlast}/></Route>
  <Route component={NotFound}/>
  </Switch>}
-function GlobalChatHost(){const {user,isLoading}=useAuth();const [location]=useLocation();if(isLoading||!user)return null;const active=location==="/chat";return <div aria-hidden={!active} style={{position:"fixed",inset:0,zIndex:30,visibility:active?"visible":"hidden",pointerEvents:active?"auto":"none"}}><Chat/></div>}
+function GlobalChatHost(){const {user,isLoading}=useAuth();const [location]=useLocation();if(isLoading||!user||location!=="/chat")return null;return <div style={{position:"fixed",inset:0,zIndex:30}}><Chat/></div>}
 export default function App(){return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter hook={desktopFileApp ? useHashLocation : undefined}><Router/><PresenceHeartbeat/><GlobalChatHost/></WouterRouter><Toaster/></TooltipProvider></QueryClientProvider>}
