@@ -112,13 +112,18 @@ export default function YouTubeTools() {
                 src={result.url}
                 controls
                 playsInline
-                preload="metadata"
+                webkit-playsinline="true"
+                preload="auto"
+                controlsList="nodownload"
                 className="block aspect-video max-h-[65vh] w-full bg-black object-contain"
                 aria-label="Converted video preview"
               >
-                Your browser does not support video playback.
+                Your browser does not support video playback. Use the Open preview link below.
               </video>
-              <p className="px-3 py-2 text-[11px] text-white/45">Preview works inline on iPhone, iPad and Android. Tap play to watch.</p>
+              <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-3">
+                <p className="text-[11px] text-white/55">Play your video here before saving it. Compatible with iPhone, iPad and Android browsers.</p>
+                <a href={result.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-xs font-bold text-emerald-300 underline underline-offset-4">Open preview</a>
+              </div>
             </div>
           ) : (
             <audio key={result.url} src={result.url} controls preload="metadata" className="mt-4 w-full" aria-label="Converted audio preview" />
