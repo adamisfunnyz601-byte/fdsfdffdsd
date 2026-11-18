@@ -72,7 +72,7 @@ function Router(){return <Switch>
  <Route path="/invite/:code">{params=><Invite code={params.code}/>}</Route>
  <Route path="/main-page"><ProtectedRoute component={Proxy}/></Route>
  <Route path="/proxy"><ProtectedRoute component={Proxy}/></Route>
- <Route path="/chat"><ProtectedRoute component={Chat}/></Route>
+ <Route path="/chat"><ProtectedRoute component={()=> <ChatErrorBoundary><Chat/></ChatErrorBoundary>}/></Route>
  <Route path="/updates"><ProtectedRoute component={UpdatesPage}/></Route>
  <Route path="/youtube-tools"><ProtectedRoute component={YouTubeTools}/></Route>
  <Route path="/history"><ProtectedRoute component={History}/></Route>
