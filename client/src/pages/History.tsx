@@ -2,7 +2,7 @@ import { Layout } from "@/components/Layout";
 import { CyberButton } from "@/components/CyberButton";
 import { useHistory } from "@/hooks/use-history";
 import { format } from "date-fns";
-import { Trash2, ExternalLink, Clock } from "lucide-react";
+import { Trash2, ExternalLink, Clock } from "@/components/ManagedIcons";
 
 export default function History() {
   const { history, isLoading, clearHistory } = useHistory();
