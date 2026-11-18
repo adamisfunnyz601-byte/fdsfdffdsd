@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Search, ScrollText, ExternalLink, GitCommit, CalendarDays, Sparkles } from "lucide-react";
+import { Search, ScrollText, ExternalLink, GitCommit, CalendarDays, Sparkles } from "@/components/ManagedIcons";
 import { Layout } from "@/components/Layout";
 
 type UpdateEntry = { sha: string; message: string; date: string | null; url: string };
