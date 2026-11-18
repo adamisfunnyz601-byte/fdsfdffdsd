@@ -348,6 +348,8 @@ async function ensureCommunityServerTables() {
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     )`,
     `ALTER TABLE dihtro_gifts ADD COLUMN IF NOT EXISTS tier TEXT NOT NULL DEFAULT 'bronze'`,
+    `ALTER TABLE dihtro_gifts ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMP`,
+    `ALTER TABLE dihtro_gifts ADD COLUMN IF NOT EXISTS revoked_by INTEGER REFERENCES users(id) ON DELETE SET NULL`,
     `CREATE TABLE IF NOT EXISTS dihhro_awards (
       id SERIAL PRIMARY KEY,
       user_id INTEGER NOT NULL,
@@ -814,7 +816,7 @@ export async function registerRoutes(
   app.get(["/api/gs/gifts", "/api/dihtro/gifts"], requireAdmin, async (_req, res) => {
     const result = await pool.query(
       `SELECT g.code, g.months, g.tier, g.created_at AS "createdAt", g.claimed_at AS "claimedAt",
-              g.claimed_by AS "claimedBy", creator.username AS "createdByName", claimant.username AS "claimedByName"
+              g.claimed_by AS "claimedBy", g.revoked_at AS "revokedAt", creator.username AS "createdByName", claimant.username AS "claimedByName"
        FROM dihtro_gifts g
        LEFT JOIN users creator ON creator.id = g.created_by
        LEFT JOIN users claimant ON claimant.id = g.claimed_by
@@ -823,12 +825,27 @@ export async function registerRoutes(
     return res.json(result.rows);
   });
 
+  app.post("/api/super-owner/gs/gifts/:code/revoke", requireAuth, async (req, res) => {
+    const actor = await storage.getUser(Number(req.session.userId!));
+    if (!actor || canonicalRole(actor.role) !== "super-owner") return res.status(403).json({ message: "Super Owner access required." });
+    const code = String(req.params.code || "").trim();
+    if (!code || code.length > 128) return res.status(400).json({ message: "Invalid gift code." });
+    const revoked = await pool.query("UPDATE dihtro_gifts SET revoked_at = NOW(), revoked_by = $1 WHERE code = $2 AND revoked_at IS NULL RETURNING code, claimed_at", [actor.id, code]);
+    if (!revoked.rows.length) {
+      const existing = await pool.query("SELECT revoked_at FROM dihtro_gifts WHERE code = $1 LIMIT 1", [code]);
+      if (!existing.rows.length) return res.status(404).json({ message: "Gift link not found." });
+      return res.status(409).json({ message: "This gift link has already been revoked." });
+    }
+    await db.insert(moderationLogs).values({ actorId: actor.id, action: "super-owner:revoke-gift-link", reason: "Revoked GS gift link", metadata: { code, claimed: Boolean(revoked.rows[0].claimed_at) } });
+    return res.json({ success: true, code, revoked: true });
+  });
+
   app.get(["/api/gs/gifts/:code", "/api/dihtro/gifts/:code"], async (req, res) => {
     const result = await pool.query(
-      "SELECT code, months, tier, claimed_at, created_at FROM dihtro_gifts WHERE code = $1 LIMIT 1",
+      "SELECT code, months, tier, claimed_at, created_at, revoked_at FROM dihtro_gifts WHERE code = $1 LIMIT 1",
       [String(req.params.code)],
     );
-    if (!result.rows.length) return res.status(404).json({ message: "This GS gift link is invalid." });
+    if (!result.rows.length || result.rows[0].revoked_at) return res.status(404).json({ message: "This GS gift link is invalid or has been revoked." });
     const gift = result.rows[0];
     return res.json({ months: gift.months, tier: gift.tier || "bronze", claimed: Boolean(gift.claimed_at), createdAt: gift.created_at });
   });
@@ -840,13 +857,13 @@ export async function registerRoutes(
     try {
       await client.query("BEGIN");
       const claimed = await client.query(
-        "UPDATE dihtro_gifts SET claimed_by = $1, claimed_at = NOW() WHERE code = $2 AND claimed_at IS NULL RETURNING months, tier",
+        "UPDATE dihtro_gifts SET claimed_by = $1, claimed_at = NOW() WHERE code = $2 AND claimed_at IS NULL AND revoked_at IS NULL RETURNING months, tier",
         [userId, code],
       );
       if (!claimed.rows.length) {
-        const exists = await client.query("SELECT code FROM dihtro_gifts WHERE code = $1 LIMIT 1", [code]);
+        const exists = await client.query("SELECT code, revoked_at FROM dihtro_gifts WHERE code = $1 LIMIT 1", [code]);
         await client.query("ROLLBACK");
-        if (!exists.rows.length) return res.status(404).json({ message: "This GS gift link is invalid." });
+        if (!exists.rows.length || exists.rows[0].revoked_at) return res.status(410).json({ message: "This GS gift link has been revoked or is invalid." });
         return res.status(409).json({ message: "This one-time GS gift has already been claimed." });
       }
       const gift = claimed.rows[0];
@@ -1381,7 +1398,8 @@ export async function registerRoutes(
     }).from(users).orderBy(users.id);
     return res.json(rows.map(account => ({
       ...account,
-      role: String(account.role).toLowerCase() === "super_owner" ? "owner" : account.role,
+      role: canonicalRole(account.role),
+      canEditRole: actorRole === "super_owner" && account.id !== actor.id,
       canDelete: account.id !== actor.id && (
         actorRole === "super_owner" ||
         (actorRole === "owner" && !["super_owner", "owner", "admin", "trial-admin"].includes(String(account.role).toLowerCase()))
