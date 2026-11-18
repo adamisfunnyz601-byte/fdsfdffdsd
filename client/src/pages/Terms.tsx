@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { ArrowLeft, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ShieldCheck } from "@/components/ManagedIcons";
 
 const sections = [
   { title: "1. Who can use NEXUS", body: "You must be at least 13 years old, or the minimum age required to use online services in your country if that age is higher. If you are under 18, you must have permission from a parent or legal guardian. Do not create an account if you are not eligible." },
