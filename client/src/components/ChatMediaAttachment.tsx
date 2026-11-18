@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { X, Expand, Image as ImageIcon, Film, Loader2 } from "lucide-react";
+import { X, Expand, Image as ImageIcon, Film, Loader2 } from "@/components/ManagedIcons";
 import { apiUrl } from "@/lib/api-url";
 import { NexusAudioPlayer } from "@/components/NexusAudioPlayer";
 
