@@ -33,9 +33,8 @@ for (const file of [resolve(binDir, ffmpegName), resolve(binDir, ffprobeName)]) 
 }
 
 console.log("[media-tools] Downloading yt-dlp standalone release...");
-// Use yt-dlp's musllinux standalone build on Linux. It avoids relying on
-// the host's glibc/zlib shared-library mapping, which can fail in serverless
-// runtimes such as the one used by this deployment.
+// Use the official standalone Linux release binaries so the build does not
+// depend on a system Python installation in the serverless runtime.
 const ytName = process.platform === "win32" ? "yt-dlp.exe"
   : process.platform === "darwin" ? "yt-dlp_macos"
   : process.platform === "linux" && process.arch === "arm64" ? "yt-dlp_linux_aarch64"
@@ -53,6 +52,10 @@ if (process.platform !== "win32") await chmod(ytPath, 0o755);
 const ytInfo = await stat(ytPath);
 if (!ytInfo.isFile() || ytInfo.size < 1_000_000) throw new Error("Downloaded yt-dlp executable failed validation.");
 await access(ytPath, process.platform === "win32" ? undefined : (await import("node:fs")).constants.X_OK);
+const ytCheck = spawnSync(ytPath, ["--version"], { encoding: "utf8", timeout: 15_000 });
+if (ytCheck.status !== 0 || !/^\\d{4}\\.\\d{2}\\.\\d{2}/.test(String(ytCheck.stdout || "").trim())) {
+  throw new Error(`yt-dlp executable failed its version check: ${ytCheck.stderr || ytCheck.error || "unknown error"}`);
+}
 
 console.log("[media-tools] Installed binaries:");
 console.log("YTDLP_PATH=" + ytPath);
