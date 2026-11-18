@@ -654,7 +654,7 @@ export default function Chat() {
   // --- CHANNEL STATE ---
   const [selectedRecipientId, setSelectedRecipientId] = useState<number | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
-  const { messages, users, sendMessage, isLoadingMessages } = useChat({
+  const { messages, users, sendMessage, isLoadingMessages, isMessagesError, messagesError, refetchMessages } = useChat({
     recipientId: selectedRecipientId,
     groupId: selectedGroupId,
   });
@@ -2792,10 +2792,25 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
 
           {/* Messages */}
           <div className="chat-message-list min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-5 space-y-1 scroll-smooth [scrollbar-gutter:stable]" style={{ WebkitOverflowScrolling: "touch" }}>
-            {unifiedMessages.length === 0 && (
-              <div className="flex flex-col items-center justify-center h-full opacity-10">
-                <Bug className="w-12 h-12 mb-4" />
-                <p className="font-mono text-[11px] tracking-[1em] uppercase">No_Transmissions</p>
+            {isLoadingMessages && unifiedMessages.length === 0 && (
+              <div className="flex h-full flex-col items-center justify-center gap-3 text-violet-200/60">
+                <Loader2 className="h-7 w-7 animate-spin text-violet-300"/>
+                <p className="font-mono text-[10px] tracking-[.2em] uppercase">Connecting to NEXUS chat…</p>
+              </div>
+            )}
+            {isMessagesError && (
+              <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center">
+                <Bug className="h-9 w-9 text-rose-300"/>
+                <p className="font-mono text-xs font-bold text-rose-200">CHAT_MESSAGES_UNAVAILABLE · NEXUS-0x0003</p>
+                <p className="max-w-md text-xs text-white/45">{messagesError instanceof Error ? messagesError.message : "NEXUS could not load this conversation."}</p>
+                <button type="button" onClick={()=>void refetchMessages()} className="rounded-lg border border-violet-300/25 px-4 py-2 text-xs font-bold text-violet-100 hover:bg-violet-400/10">Retry loading messages</button>
+              </div>
+            )}
+            {!isLoadingMessages && !isMessagesError && unifiedMessages.length === 0 && (
+              <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+                <Bug className="h-10 w-10 text-violet-300/50"/>
+                <p className="font-mono text-[11px] tracking-[.25em] uppercase text-violet-100/45">No transmissions yet</p>
+                <p className="text-xs text-white/30">Messages will appear here when someone sends one.</p>
               </div>
             )}
             {unifiedMessages.map((msg: any) => (
