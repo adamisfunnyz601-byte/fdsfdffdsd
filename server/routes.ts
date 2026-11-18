@@ -1536,7 +1536,7 @@ export async function registerRoutes(
     const name = String(req.params.name || "");
     if (!managedIconNames.includes(name)) return res.status(400).json({ message: "Unknown icon." });
     const dataUrl = String(req.body?.dataUrl || "");
-    const match = dataUrl.match(/^data:image\\/png;base64,([A-Za-z0-9+/=]+)$/);
+    const match = dataUrl.match(/^data:image\/png;base64,([A-Za-z0-9+/=]+)$/);
     if (!match) return res.status(400).json({ message: "Choose a valid PNG image." });
     const bytes = Buffer.from(match[1], "base64");
     if (!bytes.length || bytes.length > 2 * 1024 * 1024) return res.status(400).json({ message: "PNG must be between 1 byte and 2 MB." });
