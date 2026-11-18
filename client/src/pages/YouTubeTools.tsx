@@ -112,7 +112,6 @@ export default function YouTubeTools() {
                 src={result.url}
                 controls
                 playsInline
-                webkit-playsinline="true"
                 preload="auto"
                 controlsList="nodownload"
                 className="block aspect-video max-h-[65vh] w-full bg-black object-contain"
