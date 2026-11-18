@@ -1610,7 +1610,12 @@ export async function registerRoutes(
         body: JSON.stringify({ message: `Update NEXUS icon: ${name}`, content: bytes.toString("base64"), branch, ...(old?.sha ? { sha: old.sha } : {}) }),
       });
       const result: any = await response.json();
-      if (!response.ok) return res.status(response.status).json({ message: result.message || "GitHub rejected the icon update." });
+      if (!response.ok) {
+        if (response.status === 403 && /resource not accessible|permission|write access/i.test(String(result.message || ""))) {
+          return res.status(403).json({ message: "GitHub denied the upload. Update the Enzonic GITHUB_TOKEN: grant access to this repository and set Contents to Read and write, then save the secret and redeploy." });
+        }
+        return res.status(response.status).json({ message: result.message || "GitHub rejected the icon update." });
+      }
       return res.json({ success: true, commit: result.commit?.html_url || null });
     } catch { return res.status(502).json({ message: "Could not publish this icon to GitHub." }); }
   });
