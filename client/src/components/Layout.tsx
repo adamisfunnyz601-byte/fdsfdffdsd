@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { Globe, MessageSquare, History, ShieldAlert, LogOut, Menu, X, Settings, Blocks, UserRound, ShoppingBag, ScrollText, Sparkles, Command, Youtube } from "lucide-react";
+import { Globe, MessageSquare, History, ShieldAlert, LogOut, Menu, X, Settings, Blocks, UserRound, ShoppingBag, ScrollText, Sparkles, Command, Youtube, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Gift } from "lucide-react";
 import { applyNexusAppearance, readNexusAppearance } from "@/lib/appearance";
@@ -110,7 +110,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <div className="nexus-user-card">
             <div className="relative"><Avatar url={user?.avatarUrl} name={user?.username || "?"} size={38} font={user?.usernameFont}/><span className="nexus-avatar-status"/></div>
             <div className="min-w-0 flex-1">
-              <div className="flex min-w-0 items-center gap-1"><span className="truncate text-[12px] font-bold text-white">{user?.username || "Loading…"}</span><UserProfileTag tagSymbol={user?.tagSymbol} tagText={user?.tagText} tagColor={user?.tagColor} size="compact"/></div>
+              <div className="flex min-w-0 items-center gap-1"><span className="truncate text-[12px] font-bold text-white">{user?.username || "Loading…"}</span>{(user as any)?.isSuperOwner && <span title="Super Owner" className="inline-flex items-center gap-1 rounded-full border border-amber-300/40 bg-amber-400/10 px-1.5 py-0.5 text-[8px] font-black tracking-wider text-amber-200"><ShieldCheck size={10}/> SUPER OWNER</span>}<UserProfileTag tagSymbol={user?.tagSymbol} tagText={user?.tagText} tagColor={user?.tagColor} size="compact"/></div>
               <div className="mt-0.5 truncate text-[10px] text-emerald-300/80">{String(user?.role || "user").replace(/-/g," ")} · {user?.presenceStatus || "offline"}</div>
             </div>
             <button className="nexus-icon-button" onClick={() => logout()} title="Sign out" aria-label="Sign out"><AppIcon name="sign-out" fallback={LogOut} size={15}/></button>
