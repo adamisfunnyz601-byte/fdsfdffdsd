@@ -1,8 +1,8 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { Globe, MessageSquare, History, ShieldAlert, LogOut, Menu, X, Settings, Blocks, UserRound, ShoppingBag, ScrollText, Sparkles, Command, Youtube, ShieldCheck } from "lucide-react";
+import { Globe, MessageSquare, History, ShieldAlert, LogOut, Menu, X, Settings, Blocks, UserRound, ShoppingBag, ScrollText, Sparkles, Command, Youtube, ShieldCheck } from "@/components/ManagedIcons";
 import { useEffect, useState } from "react";
-import { Gift } from "lucide-react";
+import { Gift } from "@/components/ManagedIcons";
 import { applyNexusAppearance, readNexusAppearance } from "@/lib/appearance";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
