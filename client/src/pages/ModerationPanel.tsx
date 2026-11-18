@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { Shield, Search, Ban, VolumeX, Volume2, UserX, AlertTriangle, RefreshCw, Clock3, Upload, Sparkles, Play } from "lucide-react";
+import { Shield, Search, Ban, VolumeX, Volume2, UserX, AlertTriangle, RefreshCw, Clock3, Upload, Sparkles, Play } from "@/components/ManagedIcons";
 
 const allModerationCommands = [
   "ban","unban","kick","mute","unmute","timeout","untimeout","warn","warnings","clearwarnings",
