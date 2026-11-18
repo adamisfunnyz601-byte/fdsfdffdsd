@@ -4,7 +4,7 @@ import { Layout } from "@/components/Layout";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Plus, Server, Hash, Volume2, Users, Copy, LogIn, Settings2, Trash2, ChevronDown } from "lucide-react";
+import { Plus, Server, Hash, Volume2, Users, Copy, LogIn, Settings2, Trash2, ChevronDown } from "@/components/ManagedIcons";
 
 const apiFetch: typeof fetch = (input, init) => {
   const target = typeof input === "string" && input.startsWith("/") ? apiUrl(input) : input;
