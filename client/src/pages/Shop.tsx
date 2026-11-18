@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
 import { CyberCard } from "@/components/CyberCard";
 import { CyberButton } from "@/components/CyberButton";
-import { ShoppingBag, Check, Coins, Upload, Play, Sparkles } from "lucide-react";
+import { ShoppingBag, Check, Coins, Upload, Play, Sparkles } from "@/components/ManagedIcons";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
