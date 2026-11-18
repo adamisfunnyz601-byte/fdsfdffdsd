@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import {
   ShieldAlert, Plus, Trash2, Key, Star, Upload,
   CheckCircle2, XCircle, Clock, Smile, Copy, Users
-} from "lucide-react";
+} from "@/components/ManagedIcons";
 import { format } from "date-fns";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
