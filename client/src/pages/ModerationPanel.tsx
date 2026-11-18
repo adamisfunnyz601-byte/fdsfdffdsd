@@ -277,7 +277,7 @@ export default function ModerationPanel() {
       </section>}
       {isSuperOwner && <section className="rounded-xl border border-amber-400/30 bg-amber-400/5 p-4 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div><h2 className="text-lg font-black text-amber-200">Super Owner · Website Icon Studio</h2><p className="text-xs text-muted-foreground">Replace the 12 shared navigation icons. PNGs are resized to fit a 256×256 transparent canvas and committed to GitHub.</p></div>
+          <div><h2 className="text-lg font-black text-amber-200">Super Owner · Website Icon Studio</h2><p className="text-xs text-muted-foreground">Customize every icon used across NEXUS: navigation, extras, YouTube converter, chat, voice/video calls, buttons, settings, moderation and more. Upload a PNG for any icon; it is resized to fit a 256×256 transparent canvas and committed to GitHub.</p></div>
           <button onClick={loadManagedIcons} disabled={iconLoading} className="rounded-lg border border-amber-300/30 px-3 py-2 text-xs font-bold text-amber-100 disabled:opacity-50">{iconLoading ? "Loading…" : "Refresh icons"}</button>
         </div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
