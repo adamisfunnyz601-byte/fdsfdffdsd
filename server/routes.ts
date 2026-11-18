@@ -537,11 +537,19 @@ export async function registerRoutes(
     if (format === "mp3") {
       args.push("-f", "bestaudio/best", "-x", "--audio-format", "mp3", "--audio-quality", `${quality}K`);
     } else {
-      const formatSelector = quality === "best" ? "bestvideo+bestaudio/best"
-        : `bestvideo[height<=${quality}]+bestaudio/best[height<=${quality}]`;
+      // Prefer H.264 + AAC for MP4 so the resulting file plays in iOS Safari,
+      // Android browsers and the built-in Photos/Gallery players. Avoid AV1/VP9
+      // streams that can be packaged in an MP4 container but aren't universally supported.
+      const formatSelector = format === "mp4"
+        ? (quality === "best"
+          ? "bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/best[ext=mp4][vcodec^=avc1]/best[ext=mp4]"
+          : `bestvideo[height<=${quality}][vcodec^=avc1]+bestaudio[acodec^=mp4a]/best[height<=${quality}][ext=mp4][vcodec^=avc1]/best[ext=mp4]`)
+        : (quality === "best" ? "bestvideo+bestaudio/best"
+          : `bestvideo[height<=${quality}]+bestaudio/best[height<=${quality}]`);
       args.push("-f", formatSelector);
-      if (format === "mp4") args.push("--merge-output-format", "mp4");
-      else args.push("--remux-video", "mov");
+      if (format === "mp4") {
+        args.push("--merge-output-format", "mp4", "--postprocessor-args", "Merger+ffmpeg_o:-movflags +faststart");
+      } else args.push("--remux-video", "mov");
     }
     args.push("--", parsed.toString());
 
