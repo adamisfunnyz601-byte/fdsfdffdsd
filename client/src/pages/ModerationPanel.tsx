@@ -79,6 +79,7 @@ export default function ModerationPanel() {
   const [managedIcons, setManagedIcons] = useState<{name:string;path:string;url:string;customized:boolean}[]>([]);
   const [iconBusy, setIconBusy] = useState("");
   const [iconLoading, setIconLoading] = useState(false);
+  const [iconSearch, setIconSearch] = useState("");
   const loadManagedIcons = async () => {
     setIconLoading(true);
     try {
@@ -280,8 +281,10 @@ export default function ModerationPanel() {
           <div><h2 className="text-lg font-black text-amber-200">Super Owner · Website Icon Studio</h2><p className="text-xs text-muted-foreground">Customize every icon used across NEXUS: navigation, extras, YouTube converter, chat, voice/video calls, buttons, settings, moderation and more. Upload a PNG for any icon; it is resized to fit a 256×256 transparent canvas and committed to GitHub.</p></div>
           <button onClick={loadManagedIcons} disabled={iconLoading} className="rounded-lg border border-amber-300/30 px-3 py-2 text-xs font-bold text-amber-100 disabled:opacity-50">{iconLoading ? "Loading…" : "Refresh icons"}</button>
         </div>
+        <input value={iconSearch} onChange={e=>setIconSearch(e.target.value)} placeholder="Search all icons (chat, video, YouTube, buttons…)" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-amber-300/50" />
+        <p className="text-[11px] text-muted-foreground">Showing {managedIcons.filter(icon=>icon.name.toLowerCase().includes(iconSearch.trim().toLowerCase())).length} of {managedIcons.length} editable icons.</p>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {managedIcons.map(icon => <div key={icon.name} className="flex items-center gap-3 rounded-lg border border-border bg-background/70 p-3">
+          {managedIcons.filter(icon=>icon.name.toLowerCase().includes(iconSearch.trim().toLowerCase())).map(icon => <div key={icon.name} className="flex items-center gap-3 rounded-lg border border-border bg-background/70 p-3">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-secondary"><img src={`${icon.url}?v=${icon.customized ? "custom" : "default"}`} onError={e=>{(e.currentTarget as HTMLImageElement).style.display="none"}} alt="" className="h-8 w-8 object-contain"/></div>
             <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{icon.name}</p><p className="text-[10px] text-muted-foreground">{icon.customized ? "Custom PNG published" : "Using built-in icon"}</p>
               <div className="mt-2 flex gap-2">
