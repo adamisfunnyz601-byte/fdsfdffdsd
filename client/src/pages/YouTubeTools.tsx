@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { useToast } from "@/hooks/use-toast";
-import { Youtube, Download, Music2, Film, Loader2, ShieldCheck, AlertCircle, Clapperboard } from "lucide-react";
+import { Youtube, Download, Music2, Film, Loader2, ShieldCheck, AlertCircle, Clapperboard } from "@/components/ManagedIcons";
 
 type Format = "mp4" | "mp3" | "mov";
 type Result = { url: string; filename: string };
