@@ -51,6 +51,13 @@ export default function ModerationPanel() {
   const [featureResults, setFeatureResults] = useState<Record<string, any>>({});
   const [featureBusy, setFeatureBusy] = useState("");
   const [featureFilter, setFeatureFilter] = useState("");
+  const [crashActive,setCrashActive] = useState(false);
+  const [crashBusy,setCrashBusy] = useState(false);
+  const [crashCode,setCrashCode] = useState("NEXUS-0x0001");
+  const [crashDetails,setCrashDetails] = useState("Thank you for using nexus, we will try troubleshooting as soon as possible.");
+  useEffect(()=>{if(!isSuperOwner)return;fetch("/api/system/crash-state",{credentials:"include",cache:"no-store"}).then(r=>r.ok?r.json():null).then(v=>{if(v){setCrashActive(!!v.active);setCrashCode(v.errorCode||"NEXUS-0x0001");setCrashDetails(v.details||"")}}).catch(()=>{});},[isSuperOwner]);
+  const setCrashMode=async(active:boolean)=>{setCrashBusy(true);try{const response=await fetch(active?"/api/super-owner/crash-screen/trigger":"/api/super-owner/crash-screen/clear",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({errorCode:crashCode,details:crashDetails})});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.message||"Could not update crash screen.");setCrashActive(active);toast({title:active?"Crash screen activated":"Crash screen cleared",description:active?"All non-super-owner accounts will see the screen.":"NEXUS is visible to everyone again."});}catch(error:any){toast({title:"Crash screen update failed",description:error.message,variant:"destructive"});}finally{setCrashBusy(false);}};
+
   useEffect(() => {
     if (!isSuperOwner) return;
     fetch("/api/super-owner/moderation/features", { credentials: "include" })
@@ -245,6 +252,12 @@ export default function ModerationPanel() {
         <span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase text-primary">{role.replace(/-/g," ")}</span>
       </div>
 
+
+      {isSuperOwner && <section className="rounded-xl border border-red-400/30 bg-red-500/5 p-4 space-y-3">
+        <div><h2 className="text-lg font-black text-red-200">NEXUS Crash Screen / BSOD Control</h2><p className="text-xs text-muted-foreground">Trigger a global crash-style screen for everyone except Super Owners. It persists until you clear it.</p></div>
+        <div className="grid gap-2 sm:grid-cols-2"><input value={crashCode} onChange={e=>setCrashCode(e.target.value)} maxLength={40} placeholder="NEXUS-0x0001" className="rounded-lg border border-border bg-background px-3 py-2 text-sm"/><input value={crashDetails} onChange={e=>setCrashDetails(e.target.value)} maxLength={240} placeholder="Message shown on the screen" className="rounded-lg border border-border bg-background px-3 py-2 text-sm"/></div>
+        <div className="flex flex-wrap items-center gap-3"><span className={crashActive?"text-xs font-bold text-red-300":"text-xs font-bold text-emerald-300"}>{crashActive?"ACTIVE · hidden from Super Owners":"INACTIVE"}</span><button disabled={crashBusy||crashActive} onClick={()=>void setCrashMode(true)} className="rounded-lg bg-red-500 px-4 py-2 text-xs font-black text-white disabled:opacity-50">{crashBusy?"Updating…":"Trigger crash screen"}</button><button disabled={crashBusy||!crashActive} onClick={()=>void setCrashMode(false)} className="rounded-lg border border-emerald-400/30 px-4 py-2 text-xs font-bold text-emerald-200 disabled:opacity-50">Clear / restore NEXUS</button><a href="/documentation" className="text-xs text-violet-300 underline">Error documentation</a></div>
+      </section>}
       {isSuperOwner && <section className="rounded-xl border border-rose-400/30 bg-rose-500/5 p-4 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div><h2 className="text-lg font-black text-rose-200">Super Owner Control Centre · 50 tools</h2><p className="text-xs text-muted-foreground">Audits, account diagnostics and targeted profile/privacy resets. Every execution is permission-checked and written to the moderation log.</p></div>
