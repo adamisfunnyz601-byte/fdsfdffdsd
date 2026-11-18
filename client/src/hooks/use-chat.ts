@@ -23,12 +23,13 @@ export function useChat({ recipientId = null, groupId = null }: ChatChannel = {}
     : api.chat.list.path;
   const messagesKey = [api.chat.list.path, user?.id ?? null, recipientId ?? null, groupId ?? null] as const;
 
-  const { data: messages, isLoading: isLoadingMessages } = useQuery({
+  const { data: messages, isLoading: isLoadingMessages, isError: isMessagesError, error: messagesError, refetch: refetchMessages } = useQuery({
     queryKey: messagesKey,
     queryFn: async () => {
       const res = await fetch(apiUrl(messagesUrl), { credentials: "include", cache: "no-store" });
       if (!res.ok) throw new Error("Failed to fetch messages");
       const incoming = await res.json();
+      if (!Array.isArray(incoming)) throw new Error("The chat server returned an invalid message list.");
       const cachedMessages = queryClient.getQueryData<any[]>(messagesKey);
       if (!Array.isArray(incoming) || !cachedMessages?.length) return incoming;
       const cachedById = new Map(cachedMessages.map((message) => [message.id, message]));
@@ -164,5 +165,5 @@ export function useChat({ recipientId = null, groupId = null }: ChatChannel = {}
     }
   });
 
-  return { messages, users, isLoadingMessages, isLoadingUsers, sendMessage, deleteMessage };
+  return { messages: Array.isArray(messages) ? messages : [], users: Array.isArray(users) ? users : [], isLoadingMessages, isLoadingUsers, isMessagesError, messagesError, refetchMessages, sendMessage, deleteMessage };
 }
