@@ -25,6 +25,9 @@ export default function SettingsPage() {
   const { toast } = useToast();
   const [status, setStatus] = useState(user?.presenceStatus || "online");
   const [muteNotifications, setMuteNotifications] = useState(Boolean(user?.muteNotifications));
+  const [muteEmotes, setMuteEmotes] = useState(Boolean((user as any)?.muteEmotes));
+  const [muteNonFriendCalls, setMuteNonFriendCalls] = useState(Boolean((user as any)?.muteNonFriendCalls));
+  const [dmFriendsOnly, setDmFriendsOnly] = useState(Boolean((user as any)?.dmFriendsOnly));
   const [ringtoneUrl, setRingtoneUrl] = useState(user?.ringtoneUrl || "");
   const [saving, setSaving] = useState(false);
   const [passkeyBusy, setPasskeyBusy] = useState(false);
@@ -111,6 +114,9 @@ export default function SettingsPage() {
     if (!user) return;
     setStatus(user.presenceStatus || "online");
     setMuteNotifications(Boolean(user.muteNotifications));
+    setMuteEmotes(Boolean((user as any).muteEmotes));
+    setMuteNonFriendCalls(Boolean((user as any).muteNonFriendCalls));
+    setDmFriendsOnly(Boolean((user as any).dmFriendsOnly));
     setRingtoneUrl(user.ringtoneUrl || "");
   }, [user]);
 
@@ -193,6 +199,22 @@ export default function SettingsPage() {
               <span className={cn("block w-4 h-4 rounded-full bg-white transition-transform", muteNotifications && "translate-x-5")} />
             </span>
           </button>
+          <div className="space-y-2">
+            {[
+              { key: "muteEmotes", label: "Mute emotes", description: "Hide incoming animated and sound emotes.", value: muteEmotes, set: setMuteEmotes },
+              { key: "muteNonFriendCalls", label: "Mute calls from non-friends", description: "Only accepted friends can ring your account.", value: muteNonFriendCalls, set: setMuteNonFriendCalls },
+              { key: "dmFriendsOnly", label: "Lock DMs to friends", description: "Only accepted friends can send you direct messages.", value: dmFriendsOnly, set: setDmFriendsOnly },
+            ].map(option => (
+              <button key={option.key} type="button" disabled={saving} onClick={() => {
+                const next = !option.value;
+                option.set(next);
+                void save({ [option.key]: next });
+              }} className="w-full flex items-center gap-3 rounded-lg border border-border bg-secondary/30 p-3 text-left transition hover:bg-secondary/60 disabled:opacity-60">
+                <span className="min-w-0 flex-1"><span className="block text-sm font-medium text-foreground">{option.label}</span><span className="block text-xs text-muted-foreground">{option.description}</span></span>
+                <span className={cn("h-5 w-10 shrink-0 rounded-full p-0.5 transition-colors", option.value ? "bg-primary" : "bg-muted")}><span className={cn("block h-4 w-4 rounded-full bg-white transition-transform", option.value && "translate-x-5")} /></span>
+              </button>
+            ))}
+          </div>
           <div className="rounded-xl border border-border p-3 space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0"><div className="text-sm font-medium text-foreground">Device notifications</div><div className="text-xs text-muted-foreground">{notificationState.description}</div></div>
