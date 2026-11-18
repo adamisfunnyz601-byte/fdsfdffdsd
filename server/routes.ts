@@ -470,6 +470,40 @@ export async function registerRoutes(
     next();
   };
 
+  // Global NEXUS crash-screen switch. The state is persistent across restarts.
+  await pool.query(`CREATE TABLE IF NOT EXISTS nexus_crash_state (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    active BOOLEAN NOT NULL DEFAULT FALSE,
+    error_code TEXT NOT NULL DEFAULT 'NEXUS-0x0001',
+    details TEXT NOT NULL DEFAULT 'A Super Owner has temporarily activated maintenance mode.',
+    triggered_by INTEGER,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  await pool.query(`INSERT INTO nexus_crash_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING`);
+  app.get("/api/system/crash-state", requireAuth, async (req, res) => {
+    const actor = await storage.getUser(Number(req.session.userId));
+    const isSuperOwner = !!actor && canonicalRole(actor.role) === "super-owner";
+    const result = await pool.query("SELECT active, error_code AS \"errorCode\", details, updated_at AS \"updatedAt\" FROM nexus_crash_state WHERE id = 1");
+    return res.json({ ...(result.rows[0] || { active: false, errorCode: "NEXUS-0x0001", details: "" }), isSuperOwner });
+  });
+  app.post("/api/super-owner/crash-screen/trigger", requireAuth, async (req, res) => {
+    const actor = await storage.getUser(Number(req.session.userId));
+    if (!actor || canonicalRole(actor.role) !== "super-owner") return res.status(403).json({ message: "Super Owner access required." });
+    const code = String(req.body?.errorCode || "NEXUS-0x0001").trim().slice(0, 40);
+    const details = String(req.body?.details || "A Super Owner has temporarily activated maintenance mode.").trim().slice(0, 240);
+    await pool.query("UPDATE nexus_crash_state SET active = TRUE, error_code = $1, details = $2, triggered_by = $3, updated_at = NOW() WHERE id = 1", [code, details, actor.id]);
+    await db.insert(moderationLogs).values({ actorId: actor.id, action: "super-owner:trigger-crash-screen", reason: details, metadata: { errorCode: code } });
+    return res.json({ success: true, active: true, errorCode: code });
+  });
+  app.post("/api/super-owner/crash-screen/clear", requireAuth, async (req, res) => {
+    const actor = await storage.getUser(Number(req.session.userId));
+    if (!actor || canonicalRole(actor.role) !== "super-owner") return res.status(403).json({ message: "Super Owner access required." });
+    await pool.query("UPDATE nexus_crash_state SET active = FALSE, updated_at = NOW() WHERE id = 1", []);
+    await db.insert(moderationLogs).values({ actorId: actor.id, action: "super-owner:clear-crash-screen", reason: "Crash screen disabled" });
+    return res.json({ success: true, active: false });
+  });
+
+
   // Local yt-dlp conversion. Output is written to an OS temporary directory and streamed to the client;
   // no media bytes, conversion jobs, source URLs, or download history are written to either database.
   const { spawn } = await import("node:child_process");
