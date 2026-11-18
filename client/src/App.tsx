@@ -1,5 +1,5 @@
 import { Switch, Route, Router as WouterRouter, useLocation, Redirect } from "wouter";
-import { useEffect } from "react";
+import { useEffect, Component } from "react";
 import { apiUrl } from "@/lib/api-url";
 import { useHashLocation } from "wouter/use-hash-location";
 import { queryClient } from "./lib/queryClient";
@@ -87,5 +87,16 @@ function Router(){return <Switch>
  <Route path="/block-blast"><ProtectedRoute component={BlockBlast}/></Route>
  <Route component={NotFound}/>
  </Switch>}
-function GlobalChatHost(){const {user,isLoading}=useAuth();const [location]=useLocation();if(isLoading||!user||location!=="/chat")return null;return <div style={{position:"fixed",inset:0,zIndex:30}}><Chat/></div>}
+class ChatErrorBoundary extends Component<{children: React.ReactNode},{error: Error | null}> {
+ state = { error: null as Error | null };
+ static getDerivedStateFromError(error: Error) { return { error }; }
+ componentDidCatch(error: Error, info: React.ErrorInfo) {
+  console.error("[NEXUS CHAT CRASH]", error, info.componentStack);
+ }
+ render() {
+  if (this.state.error) return <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-auto bg-[#090611] p-5 text-white"><div className="w-full max-w-xl rounded-2xl border border-red-400/30 bg-[#160d20] p-6 shadow-2xl"><div className="mb-2 text-xs font-black tracking-[.2em] text-red-300">CHAT RECOVERY MODE</div><h1 className="text-xl font-bold">Chat hit an error</h1><p className="mt-2 text-sm text-white/60">The rest of NEXUS is still running. This error was caught so it cannot blank the whole app.</p><pre className="mt-4 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-black/40 p-3 text-xs text-red-200">{this.state.error.message}</pre><button className="mt-4 rounded-lg bg-violet-500 px-4 py-2 text-sm font-bold" onClick={() => this.setState({error:null})}>Try chat again</button></div></div>;
+  return this.props.children;
+ }
+}
+function GlobalChatHost(){const {user,isLoading}=useAuth();const [location]=useLocation();if(isLoading||!user||location!=="/chat")return null;return <div style={{position:"fixed",inset:0,zIndex:30}}><ChatErrorBoundary><Chat/></ChatErrorBoundary></div>}
 export default function App(){return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter hook={desktopFileApp ? useHashLocation : undefined}><Router/><PresenceHeartbeat/><GlobalChatHost/></WouterRouter><Toaster/></TooltipProvider></QueryClientProvider>}
