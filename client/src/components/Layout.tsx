@@ -116,7 +116,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <button className="nexus-icon-button" onClick={() => logout()} title="Sign out" aria-label="Sign out"><AppIcon name="sign-out" fallback={LogOut} size={15}/></button>
           </div>
           <Link href="/profile" onClick={closeMenu} className={cn("nexus-profile-link", location === "/profile" && "is-active")}><AppIcon name="profile" fallback={UserRound} size={15}/> Open my profile <span>↗</span></Link>
-          <div className="nexus-footer-meta"><span>● ALL SYSTEMS NOMINAL</span><span>SECURE SESSION</span></div><div className="mt-2 space-y-1 px-1 text-[10px] text-white/35"><Link href="/terms" onClick={closeMenu} className="transition hover:text-violet-300">Terms and Conditions</Link><div>© 2026 AdamisFunnyz · NEXUS™</div></div>
+          <div className="nexus-footer-meta"><span>● ALL SYSTEMS NOMINAL</span><span>SECURE SESSION</span></div><div className="mt-2 space-y-1 px-1 text-[10px] text-white/35"><div className="flex flex-wrap gap-x-3 gap-y-1"><Link href="/terms" onClick={closeMenu} className="transition hover:text-violet-300">Terms and Conditions</Link><Link href="/documentation" onClick={closeMenu} className="transition hover:text-violet-300">Error documentation</Link></div><div>© 2026 AdamisFunnyz · NEXUS™</div></div>
         </div>
       </aside>
 
