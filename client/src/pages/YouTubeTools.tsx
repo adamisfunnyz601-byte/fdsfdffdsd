@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { useToast } from "@/hooks/use-toast";
 import { Youtube, Download, Music2, Film, Loader2, ShieldCheck, AlertCircle, Clapperboard } from "lucide-react";
@@ -16,6 +16,12 @@ export default function YouTubeTools() {
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState("");
   const { toast } = useToast();
+
+  useEffect(() => {
+    return () => {
+      if (result?.url) URL.revokeObjectURL(result.url);
+    };
+  }, [result?.url]);
 
   const convert = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -99,7 +105,25 @@ export default function YouTubeTools() {
         {result && <div className="rounded-2xl border border-emerald-400/25 bg-emerald-400/5 p-5">
           <div className="flex items-center gap-2 text-sm font-bold text-emerald-200"><ShieldCheck size={18}/> Conversion ready</div>
           <p className="mt-2 truncate text-xs text-white/55">{result.filename}</p>
-          <a href={result.url} download={result.filename} onClick={() => window.setTimeout(() => URL.revokeObjectURL(result.url), 60_000)} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-emerald-400 px-5 py-3 text-sm font-extrabold text-[#07130d] transition hover:bg-emerald-300"><Download size={17}/> Download {format.toUpperCase()}</a>
+          {format === "mp4" || format === "mov" ? (
+            <div className="mt-4 overflow-hidden rounded-xl border border-white/10 bg-black">
+              <video
+                key={result.url}
+                src={result.url}
+                controls
+                playsInline
+                preload="metadata"
+                className="block aspect-video max-h-[65vh] w-full bg-black object-contain"
+                aria-label="Converted video preview"
+              >
+                Your browser does not support video playback.
+              </video>
+              <p className="px-3 py-2 text-[11px] text-white/45">Preview works inline on iPhone, iPad and Android. Tap play to watch.</p>
+            </div>
+          ) : (
+            <audio key={result.url} src={result.url} controls preload="metadata" className="mt-4 w-full" aria-label="Converted audio preview" />
+          )}
+          <a href={result.url} download={result.filename} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-emerald-400 px-5 py-3 text-sm font-extrabold text-[#07130d] transition hover:bg-emerald-300"><Download size={17}/> Download {format.toUpperCase()}</a>
         </div>}
 
         <div className="grid gap-3 sm:grid-cols-2">
