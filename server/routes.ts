@@ -3011,7 +3011,7 @@ export async function registerRoutes(
           if (html.match(/<head[^>]*>/i)) {
             html = html.replace(/(<head[^>]*>)/i, `$1<base href="${currentUrl}">`);
           } else {
-            html = `<base href="${targetUrl}">` + html;
+            html = `<base href="${currentUrl}">` + html;
           }
         }
 
