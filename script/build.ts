@@ -71,7 +71,23 @@ async function buildAll() {
   await access("vendor/bin/yt-dlp");
   await access("vendor/bin/ffmpeg");
   await access("vendor/bin/ffprobe");
-  await cp("vendor/bin", "dist/vendor/bin", { recursive: true, force: true });
+  // Dereference symlinks while copying. Some serverless packagers omit or
+  // rewrite symlinks, which can leave bundled interpreters pointing at files
+  // that are no longer present in the deployed artifact.
+  await cp("vendor/bin", "dist/vendor/bin", { recursive: true, force: true, dereference: true });
+
+  // Validate the exact interpreter path that the deployed yt-dlp launcher uses.
+  if (process.platform === "linux") {
+    const pythonPath = "dist/vendor/bin/python-runtime/bin/python3";
+    await access(pythonPath);
+    const pythonCheck = await import("node:child_process").then(({ spawnSync }) =>
+      spawnSync(pythonPath, ["--version"], { encoding: "utf8", timeout: 15_000 }),
+    );
+    if (pythonCheck.status !== 0) {
+      throw new Error(`Bundled runtime Python is not executable from dist/: ${pythonCheck.stderr || pythonCheck.error || "unknown error"}`);
+    }
+    console.log("[media-tools] Bundled runtime Python: " + String(pythonCheck.stdout || pythonCheck.stderr).trim());
+  }
   console.log("Media tools copied to dist/vendor/bin");
 }
 
