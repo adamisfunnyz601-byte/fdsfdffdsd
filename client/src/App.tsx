@@ -27,6 +27,7 @@ import Dihtro from "@/pages/Dihtro";
 import GSGifts from "@/pages/GSGifts";
 import TermsPage from "@/pages/Terms";
 import YouTubeTools from "@/pages/YouTubeTools";
+import DocumentationPage from "@/pages/Documentation";
 
 const desktopFileApp = window.location.protocol === "file:";
 const nativeApp = Capacitor.isNativePlatform() || desktopFileApp;
@@ -64,6 +65,7 @@ function Home(){const {user,isLoading}=useAuth();if(nativeApp && !desktopFileApp
 function Router(){return <Switch>
  <Route path="/" component={Home}/>
  <Route path="/terms" component={TermsPage}/>
+ <Route path="/documentation" component={DocumentationPage}/>
  <Route path="/sign-in" component={Login}/>
  <Route path="/sign-up" component={Login}/>
  <Route path="/signup" component={Login}/>
