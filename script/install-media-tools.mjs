@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdir, copyFile, chmod, access, stat } from "node:fs/promises";
+import { mkdir, copyFile, chmod, access, stat, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const root = process.cwd();
@@ -35,24 +35,32 @@ for (const file of [resolve(binDir, ffmpegName), resolve(binDir, ffprobeName)]) 
 console.log("[media-tools] Downloading yt-dlp standalone release...");
 // Use the official standalone Linux release binaries so the build does not
 // depend on a system Python installation in the serverless runtime.
-const ytName = process.platform === "win32" ? "yt-dlp.exe"
-  : process.platform === "darwin" ? "yt-dlp_macos"
-  : process.platform === "linux" && process.arch === "arm64" ? "yt-dlp_linux_aarch64"
-  : process.platform === "linux" && process.arch === "x64" ? "yt-dlp_linux"
-  : null;
-if (!ytName) throw new Error(`No supported yt-dlp binary for ${process.platform}/${process.arch}.`);
-const ytUrl = `https://github.com/yt-dlp/yt-dlp/releases/latest/download/${ytName}`;
-const response = await fetch(ytUrl, { redirect: "follow", signal: AbortSignal.timeout(120_000) });
-if (!response.ok) throw new Error(`yt-dlp download failed: HTTP ${response.status}`);
 const ytPath = resolve(binDir, process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp");
-const bytes = Buffer.from(await response.arrayBuffer());
-if (bytes.length < 1_000_000) throw new Error("Downloaded yt-dlp file is unexpectedly small.");
-await (await import("node:fs/promises")).writeFile(ytPath, bytes);
-if (process.platform !== "win32") await chmod(ytPath, 0o755);
-const ytInfo = await stat(ytPath);
-if (!ytInfo.isFile() || ytInfo.size < 1_000_000) throw new Error("Downloaded yt-dlp executable failed validation.");
-await access(ytPath, process.platform === "win32" ? undefined : (await import("node:fs")).constants.X_OK);
-const ytCheck = spawnSync(ytPath, ["--version"], { encoding: "utf8", timeout: 15_000 });
+if (process.platform === "linux") {
+  // The PyInstaller Linux release can fail to map libz.so.1 in restricted
+  // container runtimes. Install the pure-Python package instead; it has no
+  // third-party Python dependencies and uses the host Python interpreter.
+  const python = spawnSync("python3", ["--version"], { encoding: "utf8", timeout: 10_000 });
+  if (python.status !== 0) throw new Error(`Python 3 is required to install yt-dlp on Linux: ${python.stderr || python.error || "python3 unavailable"}`);
+  const pythonPackageDir = resolve(binDir, "yt-dlp-python");
+  const pip = spawnSync("python3", ["-m", "pip", "install", "--disable-pip-version-check", "--no-compile", "--target", pythonPackageDir, "yt-dlp"], { cwd: root, encoding: "utf8", timeout: 120_000 });
+  if (pip.status !== 0) throw new Error(`Could not install the Python yt-dlp package: ${pip.stderr || pip.stdout || pip.error || "pip failed"}`);
+  await writeFile(ytPath, `#!/bin/sh\nSCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"\nPYTHONPATH="$SCRIPT_DIR/yt-dlp-python${"${PYTHONPATH:+:$PYTHONPATH}"}" exec python3 -m yt_dlp "$@"\n`, { mode: 0o755 });
+  await chmod(ytPath, 0o755);
+} else {
+  const ytName = process.platform === "win32" ? "yt-dlp.exe" : process.platform === "darwin" ? "yt-dlp_macos" : null;
+  if (!ytName) throw new Error(`No supported yt-dlp binary for ${process.platform}/${process.arch}.`);
+  const ytUrl = `https://github.com/yt-dlp/yt-dlp/releases/latest/download/${ytName}`;
+  const response = await fetch(ytUrl, { redirect: "follow", signal: AbortSignal.timeout(120_000) });
+  if (!response.ok) throw new Error(`yt-dlp download failed: HTTP ${response.status}`);
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (bytes.length < 1_000_000) throw new Error("Downloaded yt-dlp file is unexpectedly small.");
+  await writeFile(ytPath, bytes);
+  if (process.platform !== "win32") await chmod(ytPath, 0o755);
+  const ytInfo = await stat(ytPath);
+  if (!ytInfo.isFile() || ytInfo.size < 1_000_000) throw new Error("Downloaded yt-dlp file failed validation.");
+}
+const ytCheck = spawnSync(ytPath, ["--version"], { encoding: "utf8", timeout: 30_000 });
 if (ytCheck.status !== 0 || !/^\d{4}\.\d{2}\.\d{2}/.test(String(ytCheck.stdout || "").trim())) {
   throw new Error(`yt-dlp executable failed its version check: ${ytCheck.stderr || ytCheck.error || "unknown error"}`);
 }
