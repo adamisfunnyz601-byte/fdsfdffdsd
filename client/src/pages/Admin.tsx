@@ -19,7 +19,9 @@ export default function Admin() {
   const { user } = useAuth();
   const { toast } = useToast();
   const { keys, generateKey, deleteKey } = useAdminKeys();
-  const isOwner = String(user?.role || "").toLowerCase() === "owner";
+  const { data: gsMe } = useQuery<any>({ queryKey: ["/api/gs/me"] });
+  const isSuperOwner = Boolean(gsMe?.isSuperOwner);
+  const isOwner = String(user?.role || "").toLowerCase() === "owner" || isSuperOwner;
   const { data: accounts = [] } = useQuery<any[]>({
     queryKey: ["/api/admin/users"],
     queryFn: async () => {
@@ -44,6 +46,19 @@ export default function Admin() {
       toast({ title: "Account deleted", description: "The account and its associated data have been removed." });
     },
     onError: (error: Error) => toast({ title: "Deletion failed", description: error.message, variant: "destructive" }),
+  });
+  const changeRole = useMutation({
+    mutationFn: async ({ id, role }: { id: number; role: string }) => {
+      const response = await fetch(`/api/admin/users/${id}/role`, { method: "PATCH", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role }) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || "Could not change role.");
+      return data;
+    },
+    onSuccess: data => {
+      queryClient.setQueryData<any[]>(["/api/admin/users"], current => (current || []).map(account => account.id === data.userId ? { ...account, role: data.role } : account));
+      toast({ title: "Role updated", description: "The account's role has been changed." });
+    },
+    onError: (error: Error) => toast({ title: "Role update failed", description: error.message, variant: "destructive" }),
   });
   const [duration, setDuration] = useState("60");
   const [type, setType] = useState<"limited" | "permanent">("limited");
@@ -169,7 +184,7 @@ export default function Admin() {
             <div className="discord-card overflow-hidden">
               <div className="border-b border-border p-4">
                 <h3 className="font-semibold text-foreground text-sm">Account management</h3>
-                <p className="mt-1 text-xs text-muted-foreground">Permanently delete accounts. This action cannot be undone.</p>
+                <p className="mt-1 text-xs text-muted-foreground">Change account roles or permanently delete accounts. Super Owners can edit every account role, including Owners and other Super Owners.</p>
               </div>
               {accounts.length === 0 ? (
                 <div className="p-8 text-center text-sm text-muted-foreground">No accounts found.</div>
@@ -183,6 +198,7 @@ export default function Admin() {
                           ID #{account.id} · {String(account.role || "user").replace(/-/g, " ")} · Joined {account.createdAt && !Number.isNaN(new Date(account.createdAt).getTime()) ? format(new Date(account.createdAt), "MMM d, yyyy") : "unknown"}
                         </div>
                       </div>
+                      {isSuperOwner && account.canEditRole && <select aria-label={`Change role for ${account.username}`} value={String(account.role || "user").toLowerCase().replace(/_/g,"-")} disabled={changeRole.isPending} onChange={e=>{const nextRole=e.target.value;if(window.confirm(`Change @${account.username}'s role to ${nextRole.replace(/-/g," ")}?`))changeRole.mutate({id:Number(account.id),role:nextRole});}} className="rounded-lg border border-border bg-background px-2 py-2 text-xs text-foreground"><option value="user">User</option><option value="trial-helper">Trial Helper</option><option value="helper">Helper</option><option value="trial-moderator">Trial Moderator</option><option value="moderator">Moderator</option><option value="trial-admin">Trial Admin</option><option value="admin">Admin</option><option value="owner">Owner</option><option value="super-owner">Super Owner</option></select>}
                       {account.canDelete && (
                         <CyberButton
                           type="button"
