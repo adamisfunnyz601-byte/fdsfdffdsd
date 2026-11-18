@@ -1,6 +1,6 @@
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import { Layout } from "@/components/Layout";
-import { AlertTriangle, BookOpen, CheckCircle2, Copy, ExternalLink, ShieldAlert } from "lucide-react";
+import { AlertTriangle, BookOpen, CheckCircle2, Copy } from "lucide-react";
 
 const errors = [
   { code:"NEXUS-0x0001", title:"Global crash screen / maintenance mode", severity:"SYSTEM", cause:"A Super Owner has activated the global crash screen. Super Owner accounts are exempt.", fix:"Wait for a Super Owner to clear the screen. If you are a Super Owner, open Moderation → NEXUS Crash Screen / BSOD Control and select Clear / restore NEXUS." },
@@ -14,7 +14,6 @@ const errors = [
 ];
 
 export default function DocumentationPage(){
- const [location]=useLocation();
  const code=new URLSearchParams(window.location.search).get("code")||"";
  const selected=errors.find(item=>item.code===code);
  const copy=(value:string)=>{void navigator.clipboard?.writeText(value)};
