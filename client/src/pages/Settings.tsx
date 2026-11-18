@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { enableBrowserNotifications, showTestNotification, getNotificationSupport } from "@/lib/platform-notifications";
 import { enableNativeNotifications, isNativeApp, nativePlatform, showNativeTestNotification } from "@/lib/native-notifications";
-import { Bell, BellOff, Check, Circle, KeyRound, Moon, Settings as SettingsIcon, Trash2, Volume2 } from "lucide-react";
+import { Bell, BellOff, Check, Circle, KeyRound, Moon, Settings as SettingsIcon, Trash2, Volume2 } from "@/components/ManagedIcons";
 import { Layout } from "@/components/Layout";
 import { CyberButton } from "@/components/CyberButton";
 import { CyberInput } from "@/components/CyberInput";
