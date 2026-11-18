@@ -53,7 +53,7 @@ const ytInfo = await stat(ytPath);
 if (!ytInfo.isFile() || ytInfo.size < 1_000_000) throw new Error("Downloaded yt-dlp executable failed validation.");
 await access(ytPath, process.platform === "win32" ? undefined : (await import("node:fs")).constants.X_OK);
 const ytCheck = spawnSync(ytPath, ["--version"], { encoding: "utf8", timeout: 15_000 });
-if (ytCheck.status !== 0 || !/^\\d{4}\\.\\d{2}\\.\\d{2}/.test(String(ytCheck.stdout || "").trim())) {
+if (ytCheck.status !== 0 || !/^\d{4}\.\d{2}\.\d{2}/.test(String(ytCheck.stdout || "").trim())) {
   throw new Error(`yt-dlp executable failed its version check: ${ytCheck.stderr || ytCheck.error || "unknown error"}`);
 }
 
