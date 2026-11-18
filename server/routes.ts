@@ -3009,7 +3009,7 @@ export async function registerRoutes(
         // Inject base tag so relative URLs resolve correctly
         if (!html.match(/<base\s/i)) {
           if (html.match(/<head[^>]*>/i)) {
-            html = html.replace(/(<head[^>]*>)/i, `$1<base href="${targetUrl}">`);
+            html = html.replace(/(<head[^>]*>)/i, `$1<base href="${currentUrl}">`);
           } else {
             html = `<base href="${targetUrl}">` + html;
           }
