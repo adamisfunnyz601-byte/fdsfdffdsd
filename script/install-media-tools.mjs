@@ -32,20 +32,50 @@ for (const file of [resolve(binDir, ffmpegName), resolve(binDir, ffprobeName)]) 
   if (!info.isFile() || info.size === 0) throw new Error(`Invalid media binary: ${file}`);
 }
 
-console.log("[media-tools] Downloading yt-dlp standalone release...");
-// Linux uses the Python package to avoid shared-library mapping failures in
-// restricted containers; Windows and macOS use their official standalone builds.
+console.log("[media-tools] Installing yt-dlp with a bundled Python runtime...");
 const ytPath = resolve(binDir, process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp");
 if (process.platform === "linux") {
-  // The PyInstaller Linux release can fail to map libz.so.1 in restricted
-  // container runtimes. Install the pure-Python package instead; it has no
-  // third-party Python dependencies and uses the host Python interpreter.
-  const python = spawnSync("python3", ["--version"], { encoding: "utf8", timeout: 10_000 });
-  if (python.status !== 0) throw new Error(`Python 3 is required to install yt-dlp on Linux: ${python.stderr || python.error || "python3 unavailable"}`);
-  const pythonPackageDir = resolve(binDir, "yt-dlp-python");
-  const pip = spawnSync("python3", ["-m", "pip", "install", "--disable-pip-version-check", "--no-compile", "--target", pythonPackageDir, "yt-dlp"], { cwd: root, encoding: "utf8", timeout: 120_000 });
-  if (pip.status !== 0) throw new Error(`Could not install the Python yt-dlp package: ${pip.stderr || pip.stdout || pip.error || "pip failed"}`);
-  await writeFile(ytPath, `#!/bin/sh\nSCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"\nPYTHONPATH="$SCRIPT_DIR/yt-dlp-python${"${PYTHONPATH:+:$PYTHONPATH}"}" exec python3 -m yt_dlp "$@"\n`, { mode: 0o755 });
+  // Enzonic's Node runtime does not include Python. Bundle a relocatable CPython
+  // distribution so conversions do not depend on tools installed in the host image.
+  const platformByArch = {
+    x64: { target: "x86_64-unknown-linux-gnu", sha256: "3288c54cea3db350052019b3f8b558dd8a3da8afa6fda573f5fd2bcb37635b4a" },
+    arm64: { target: "aarch64-unknown-linux-gnu", sha256: "7e71f26a003949b57757e287f4f4b6689da07e7a229f5bbee7919c19ed77155d" },
+  };
+  const platform = platformByArch[process.arch];
+  if (!platform) throw new Error(`Bundled Python is not available for Linux architecture ${process.arch}.`);
+
+  const pythonVersion = "3.11.18+20261110";
+  const archiveName = `cpython-${pythonVersion}-${platform.target}-install_only_stripped.tar.gz`;
+  const archiveUrl = `https://github.com/astral-sh/python-build-standalone/releases/download/20261110/${archiveName.replace("+", "%2B")}`;
+  const archiveResponse = await fetch(archiveUrl, { redirect: "follow", signal: AbortSignal.timeout(180_000) });
+  if (!archiveResponse.ok) throw new Error(`Bundled Python download failed: HTTP ${archiveResponse.status}`);
+  const archiveBytes = Buffer.from(await archiveResponse.arrayBuffer());
+  const actualHash = (await import("node:crypto")).createHash("sha256").update(archiveBytes).digest("hex");
+  if (actualHash !== platform.sha256) throw new Error("Bundled Python archive failed SHA-256 verification.");
+
+  const archivePath = resolve(binDir, "python-runtime.tar.gz");
+  const pythonRuntimeDir = resolve(binDir, "python-runtime");
+  await writeFile(archivePath, archiveBytes);
+  await mkdir(pythonRuntimeDir, { recursive: true });
+  const extract = spawnSync("tar", ["-xzf", archivePath, "-C", pythonRuntimeDir, "--strip-components=1"], {
+    cwd: root, encoding: "utf8", timeout: 120_000,
+  });
+  const { unlink } = await import("node:fs/promises");
+  await unlink(archivePath).catch(() => undefined);
+  if (extract.status !== 0) throw new Error(`Could not extract bundled Python: ${extract.stderr || extract.error || "tar failed"}`);
+
+  const pythonPath = resolve(pythonRuntimeDir, "bin", "python3");
+  const pythonCheck = spawnSync(pythonPath, ["--version"], { encoding: "utf8", timeout: 15_000 });
+  if (pythonCheck.status !== 0) throw new Error(`Bundled Python failed its version check: ${pythonCheck.stderr || pythonCheck.error || "unknown error"}`);
+  const pip = spawnSync(pythonPath, ["-m", "pip", "install", "--disable-pip-version-check", "--no-compile", "--target", resolve(binDir, "yt-dlp-python"), "yt-dlp"], {
+    cwd: root, encoding: "utf8", timeout: 180_000,
+  });
+  if (pip.status !== 0) throw new Error(`Could not install yt-dlp into bundled Python: ${pip.stderr || pip.stdout || pip.error || "pip failed"}`);
+
+  await writeFile(ytPath, `#!/bin/sh
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+PYTHONPATH="$SCRIPT_DIR/yt-dlp-python${"${PYTHONPATH:+:$PYTHONPATH}"}" exec "$SCRIPT_DIR/python-runtime/bin/python3" -m yt_dlp "$@"
+`, { mode: 0o755 });
   await chmod(ytPath, 0o755);
 } else {
   const ytName = process.platform === "win32" ? "yt-dlp.exe" : process.platform === "darwin" ? "yt-dlp_macos" : null;
