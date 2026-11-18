@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { CyberInput } from "@/components/CyberInput";
 import { CyberButton } from "@/components/CyberButton";
-import { Search, Globe, Shield, AlertTriangle, RefreshCw, ArrowLeft, ArrowRight } from "lucide-react";
+import { Search, Globe, Shield, AlertTriangle, RefreshCw, ArrowLeft, ArrowRight, Maximize2, Minimize2 } from "lucide-react";
 import { useHistory } from "@/hooks/use-history";
 import { useToast } from "@/hooks/use-toast";
 
@@ -10,7 +10,7 @@ export default function Proxy() {
   const [url, setUrl] = useState("");
   const [activeUrl, setActiveUrl] = useState<string | null>(null);
   const [proxyUrl, setProxyUrl] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);\n  const [isFullscreen, setIsFullscreen] = useState(false);\n\n  useEffect(() => {\n    if (!isFullscreen) return;\n    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setIsFullscreen(false); };\n    window.addEventListener("keydown", onKeyDown);\n    return () => window.removeEventListener("keydown", onKeyDown);\n  }, [isFullscreen]);
   const { addEntry } = useHistory();
   const { toast } = useToast();
 
@@ -41,7 +41,7 @@ export default function Proxy() {
 
   return (
     <Layout>
-      <div className="nexus-page nexus-page-proxy flex min-h-0 w-full flex-col gap-3 space-y-0">
+      <div className={`${isFullscreen ? "fixed inset-0 z-[100] h-[100dvh] w-screen bg-background p-2 sm:p-3" : ""} nexus-page nexus-page-proxy flex min-h-0 w-full flex-col gap-3 space-y-0`}>
         {/* Browser Chrome */}
         <div className="cyber-box min-w-0 p-3 sm:p-4">
           <form onSubmit={handleSearch} className="flex min-w-0 flex-wrap items-center gap-2 sm:flex-nowrap sm:gap-3">
@@ -72,7 +72,7 @@ export default function Proxy() {
         </div>
 
         {/* Browser Window */}
-        <div className="flex min-h-[min(62vh,620px)] min-w-0 flex-1 flex-col overflow-hidden relative cyber-box p-0">
+        <div className={`flex ${isFullscreen ? "min-h-0" : "min-h-[min(62vh,620px)]"} min-w-0 flex-1 flex-col overflow-hidden relative cyber-box p-0`}>
           {/* Tab bar */}
           <div className="flex h-10 min-w-0 shrink-0 items-center gap-2 border-b border-primary/20 bg-black/60 px-3 sm:gap-3 sm:px-4">
             <div className="flex gap-1.5">
