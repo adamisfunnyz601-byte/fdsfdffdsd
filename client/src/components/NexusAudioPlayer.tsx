@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, Pause, Play, Volume2 } from "lucide-react";
+import { Download, Pause, Play, Volume2 } from "@/components/ManagedIcons";
 
 type Props = { src: string; title?: string; nexusFormat?: boolean };
 
