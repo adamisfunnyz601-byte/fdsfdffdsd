@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { CyberInput } from "@/components/CyberInput";
 import { CyberButton } from "@/components/CyberButton";
-import { Search, Globe, Shield, AlertTriangle, RefreshCw, ArrowLeft, ArrowRight, Maximize2, Minimize2 } from "lucide-react";
+import { Search, Globe, Shield, AlertTriangle, RefreshCw, ArrowLeft, ArrowRight, Maximize2, Minimize2 } from "@/components/ManagedIcons";
 import { useHistory } from "@/hooks/use-history";
 import { useToast } from "@/hooks/use-toast";
 
