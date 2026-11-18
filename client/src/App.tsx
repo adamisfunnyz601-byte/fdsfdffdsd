@@ -1,4 +1,6 @@
 import { Switch, Route, Router as WouterRouter, useLocation, Redirect } from "wouter";
+import { useEffect } from "react";
+import { apiUrl } from "@/lib/api-url";
 import { useHashLocation } from "wouter/use-hash-location";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -28,6 +30,29 @@ import YouTubeTools from "@/pages/YouTubeTools";
 
 const desktopFileApp = window.location.protocol === "file:";
 const nativeApp = Capacitor.isNativePlatform() || desktopFileApp;
+
+function PresenceHeartbeat() {
+ const { user } = useAuth();
+ useEffect(() => {
+  if (!user) return;
+  const heartbeat = () => {
+   if (document.visibilityState !== "visible") return;
+   fetch(apiUrl("/api/presence/heartbeat"), { method: "POST", credentials: "include", keepalive: true }).catch(() => {});
+  };
+  heartbeat();
+  const timer = window.setInterval(heartbeat, 25_000);
+  document.addEventListener("visibilitychange", heartbeat);
+  window.addEventListener("pagehide", () => {
+   // The server's 90-second expiry is the reliable fallback if this best-effort request is lost.
+   if (document.visibilityState === "visible") heartbeat();
+  });
+  return () => {
+   window.clearInterval(timer);
+   document.removeEventListener("visibilitychange", heartbeat);
+  };
+ }, [user?.id]);
+ return null;
+}
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
  const {user,isLoading}=useAuth();
@@ -63,4 +88,4 @@ function Router(){return <Switch>
  <Route component={NotFound}/>
  </Switch>}
 function GlobalChatHost(){const {user,isLoading}=useAuth();const [location]=useLocation();if(isLoading||!user)return null;const active=location==="/chat";return <div aria-hidden={!active} style={{position:"fixed",inset:0,zIndex:30,visibility:active?"visible":"hidden",pointerEvents:active?"auto":"none"}}><Chat/></div>}
-export default function App(){return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter hook={desktopFileApp ? useHashLocation : undefined}><Router/><GlobalChatHost/></WouterRouter><Toaster/></TooltipProvider></QueryClientProvider>}
+export default function App(){return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter hook={desktopFileApp ? useHashLocation : undefined}><Router/><PresenceHeartbeat/><GlobalChatHost/></WouterRouter><Toaster/></TooltipProvider></QueryClientProvider>}
