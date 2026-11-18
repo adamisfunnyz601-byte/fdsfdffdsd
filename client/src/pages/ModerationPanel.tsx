@@ -47,7 +47,7 @@ export default function ModerationPanel() {
   const [emoteDuration, setEmoteDuration] = useState(0);
   const [emoteBusy, setEmoteBusy] = useState(false);
   const isSuperOwner = Boolean((user as any)?.isSuperOwner);
-  const [managedIcons, setManagedIcons] = useState<{name:string;path:string;customized:boolean}[]>([]);
+  const [managedIcons, setManagedIcons] = useState<{name:string;path:string;url:string;customized:boolean}[]>([]);
   const [iconBusy, setIconBusy] = useState("");
   const [iconLoading, setIconLoading] = useState(false);
   const loadManagedIcons = async () => {
@@ -230,7 +230,7 @@ export default function ModerationPanel() {
         </div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {managedIcons.map(icon => <div key={icon.name} className="flex items-center gap-3 rounded-lg border border-border bg-background/70 p-3">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-secondary"><img src={`/icons/${icon.name}.png?v=${icon.customized ? "custom" : "default"}`} onError={e=>{(e.currentTarget as HTMLImageElement).style.display="none"}} alt="" className="h-8 w-8 object-contain"/></div>
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-secondary"><img src={`${icon.url}?v=${icon.customized ? "custom" : "default"}`} onError={e=>{(e.currentTarget as HTMLImageElement).style.display="none"}} alt="" className="h-8 w-8 object-contain"/></div>
             <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{icon.name}</p><p className="text-[10px] text-muted-foreground">{icon.customized ? "Custom PNG published" : "Using built-in icon"}</p>
               <div className="mt-2 flex gap-2">
                 <label className="cursor-pointer rounded-md bg-primary px-2 py-1.5 text-[10px] font-bold text-primary-foreground">{iconBusy===icon.name ? "Publishing…" : "Replace PNG"}<input type="file" accept="image/png" className="hidden" disabled={!!iconBusy} onChange={async e=>{
@@ -246,13 +246,13 @@ export default function ModerationPanel() {
                     const dataUrl=canvas.toDataURL("image/png");
                     const response=await fetch(`/api/super-owner/icons/${icon.name}`,{method:"PUT",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({dataUrl})});
                     const result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.message||"GitHub publish failed.");
-                    toast({title:"Icon published to GitHub",description:icon.name});await loadManagedIcons();
+                    toast({title:"Icon published to GitHub",description:icon.name});window.location.reload();
                   }catch(error:any){toast({title:"Icon upload failed",description:error.message,variant:"destructive"})}
                   finally{setIconBusy("")}
                 }}/></label>
                 <button disabled={!!iconBusy || !icon.customized} onClick={async()=>{
                   setIconBusy(icon.name);
-                  try{const response=await fetch(`/api/super-owner/icons/${icon.name}`,{method:"DELETE",credentials:"same-origin"});const result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.message||"Revert failed.");toast({title:"Icon reverted",description:icon.name});await loadManagedIcons()}
+                  try{const response=await fetch(`/api/super-owner/icons/${icon.name}`,{method:"DELETE",credentials:"same-origin"});const result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.message||"Revert failed.");toast({title:"Icon reverted",description:icon.name});window.location.reload()}
                   catch(error:any){toast({title:"Revert failed",description:error.message,variant:"destructive"})}
                   finally{setIconBusy("")}
                 }} className="rounded-md border border-border px-2 py-1.5 text-[10px] font-bold disabled:opacity-40">Revert</button>
