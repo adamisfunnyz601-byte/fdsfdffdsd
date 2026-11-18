@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
 import { useAuth } from "@/hooks/use-auth";
-import { Trophy, Volume2, VolumeX, RotateCcw, Sparkles, MessageCircle, Mic, MicOff, Users, Send, Zap, Medal } from "lucide-react";
+import { Trophy, Volume2, VolumeX, RotateCcw, Sparkles, MessageCircle, Mic, MicOff, Users, Send, Zap, Medal } from "@/components/ManagedIcons";
 
 type Cell = [number, number];
 type Piece = { cells: Cell[]; color: string; id: string };
