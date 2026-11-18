@@ -231,6 +231,8 @@ async function ensureChatUserProjection() {
   await syncChatBlockProjection();
   await syncChatUserProjection();
   const timer = setInterval(() => {
+    void db.execute(sql.raw("UPDATE users SET presence_status='offline' WHERE presence_status <> 'offline' AND (last_seen IS NULL OR last_seen < NOW() - INTERVAL '90 seconds')"))
+      .catch(error => console.error("[presence-expiry] Failed:", error));
     void syncChatUserProjection().catch(error => console.error("[chat-user-sync] Failed:", error));
     void syncChatBlockProjection().catch(error => console.error("[chat-block-sync] Failed:", error));
   }, 30_000);
@@ -392,6 +394,7 @@ export async function registerRoutes(
 ): Promise<Server> {
   // Safe additive Enzonic migration: keep existing accounts and subscriptions intact.
   await enzonicPool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_tier TEXT NOT NULL DEFAULT 'none'`);
+  await enzonicPool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS mute_emotes BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN IF NOT EXISTS mute_non_friend_calls BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN IF NOT EXISTS dm_friends_only BOOLEAN NOT NULL DEFAULT FALSE`);
   await ensureChatUserProjection();
   await ensureCommunityServerTables();
   // Promote the existing, reserved AdamisFunnyz account to the internal super-owner role.
@@ -625,6 +628,7 @@ export async function registerRoutes(
       ...safe,
       // Keep the super-owner's public role label/badge as "owner".
       role: String(safe.role).toLowerCase() === "super_owner" ? "owner" : safe.role,
+      isSuperOwner: String(safe.role).toLowerCase() === "super_owner",
       avatarUrl: profileImageUrl(safe.id, "avatar", safe.avatarUrl),
       bannerUrl: profileImageUrl(safe.id, "banner", safe.bannerUrl),
     };
@@ -1185,14 +1189,15 @@ export async function registerRoutes(
       await regenerateSession(req);
       req.session.userId = user.id;
       req.session.role = user.role;
+      const loginPresence = String(user.presenceStatus || "online") === "offline" ? "offline" : "online";
       await db.update(users).set({
-        presenceStatus: "online",
+        presenceStatus: loginPresence,
         lastSeen: new Date(),
       }).where(eq(users.id, user.id));
       await saveSession(req);
 
       res.setHeader("Cache-Control", "no-store");
-      res.json(safeUser({ ...user, presenceStatus: "online", lastSeen: new Date() }));
+      res.json(safeUser({ ...user, presenceStatus: loginPresence, lastSeen: new Date() }));
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(400).json({ message: err.issues[0]?.message || "Invalid login details" });
@@ -1227,6 +1232,13 @@ export async function registerRoutes(
       console.error("Invite validation failed:", error);
       return res.status(500).json({ valid: false, message: "Could not verify this invitation right now." });
     }
+  });
+
+  app.post("/api/presence/heartbeat", requireAuth, async (req, res) => {
+    const now = new Date();
+    await db.update(users).set({ lastSeen: now }).where(eq(users.id, Number(req.session.userId!)));
+    res.setHeader("Cache-Control", "no-store");
+    return res.json({ success: true, lastSeen: now });
   });
 
   app.get(api.auth.me.path, requireAuth, async (req, res) => {
@@ -1788,6 +1800,10 @@ export async function registerRoutes(
       if (await blockedEitherWay(req.session.userId!, input.recipientId)) {
         return res.status(403).json({ message: "Messaging is unavailable for this user" });
       }
+      const recipientAccount = await storage.getUser(input.recipientId);
+      if (recipientAccount?.dmFriendsOnly && !(await areAcceptedFriends(Number(req.session.userId!), input.recipientId))) {
+        return res.status(403).json({ message: "This user only accepts direct messages from friends." });
+      }
     }
     if (input.groupId) {
       const [membership] = await db.select({ id: groupChatMembers.id })
@@ -2136,13 +2152,16 @@ export async function registerRoutes(
 
   app.patch("/api/user/settings", requireAuth, async (req, res) => {
     const update: any = {};
-    const { ringtoneUrl, muteNotifications, presenceStatus } = req.body;
+    const { ringtoneUrl, muteNotifications, presenceStatus, muteEmotes, muteNonFriendCalls, dmFriendsOnly } = req.body;
     if (ringtoneUrl !== undefined) {
       update.ringtoneUrl = ringtoneUrl ? String(ringtoneUrl).slice(0, 500) : null;
     }
     if (muteNotifications !== undefined) {
       update.muteNotifications = Boolean(muteNotifications);
     }
+    if (muteEmotes !== undefined) update.muteEmotes = Boolean(muteEmotes);
+    if (muteNonFriendCalls !== undefined) update.muteNonFriendCalls = Boolean(muteNonFriendCalls);
+    if (dmFriendsOnly !== undefined) update.dmFriendsOnly = Boolean(dmFriendsOnly);
     if (presenceStatus !== undefined && PRESENCE_STATUSES.includes(presenceStatus)) {
       update.presenceStatus = presenceStatus;
     }
@@ -2345,7 +2364,7 @@ export async function registerRoutes(
       and(eq(friendRequests.requesterId, req.session.userId!), eq(friendRequests.status, "accepted")),
       and(eq(friendRequests.addresseeId, req.session.userId!), eq(friendRequests.status, "accepted")),
     )).orderBy(desc(friendRequests.createdAt));
-    const friendIds = rows.map(row => row.requesterId === req.session.userId ? row.addresseeId : row.requesterId);
+    const friendIds = Array.from(new Set(rows.map(row => row.requesterId === req.session.userId ? row.addresseeId : row.requesterId)));
     const friendUsers = friendIds.length
       ? await db.select({
           id: users.id, username: users.username, displayName: users.displayName,
@@ -2369,7 +2388,17 @@ export async function registerRoutes(
       and(eq(friendRequests.requesterId, targetId), eq(friendRequests.addresseeId, req.session.userId!)),
     )).orderBy(desc(friendRequests.id)).limit(1);
     if (existing?.status === "accepted") return res.json(existing);
-    if (existing?.status === "pending") return res.json(existing);
+    if (existing?.status === "pending") {
+      if (existing.requesterId === targetId && existing.addresseeId === req.session.userId!) {
+        const [accepted] = await db.update(friendRequests).set({ status: "accepted" }).where(eq(friendRequests.id, existing.id)).returning();
+        return res.json(accepted);
+      }
+      return res.json(existing);
+    }
+    await db.delete(friendRequests).where(or(
+      and(eq(friendRequests.requesterId, req.session.userId!), eq(friendRequests.addresseeId, targetId)),
+      and(eq(friendRequests.requesterId, targetId), eq(friendRequests.addresseeId, req.session.userId!)),
+    ));
     const [request] = await db.insert(friendRequests).values({
       requesterId: req.session.userId!, addresseeId: targetId, status: "pending",
     }).returning();
@@ -2672,6 +2701,9 @@ export async function registerRoutes(
     const callee = await storage.getUser(calleeId);
     if (!callee) return res.status(404).json({ message: 'User not found' });
     if (await blockedEitherWay(callerId, calleeId)) return res.status(403).json({ message: 'This user is unavailable' });
+    if (callee.muteNonFriendCalls && !(await areAcceptedFriends(callerId, calleeId))) {
+      return res.status(403).json({ message: "This user only accepts calls from friends." });
+    }
 
     const callId = `call-${Date.now()}-${randomBytes(8).toString('hex')}`;
     await pool.query(
