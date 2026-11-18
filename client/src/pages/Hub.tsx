@@ -7,7 +7,7 @@ import {
   Dices, Coins, Brain, MousePointer2, Swords, Sparkles, ArrowRight,
   RotateCcw, Play, Pause, Plus, Trash2, Star, Shield, Users, ShoppingBag,
   MessageSquare, Blocks, Timer, Lightbulb, Shuffle, Hash, Type, Palette
-} from "lucide-react";
+} from "@/components/ManagedIcons";
 
 type Task = { id: number; text: string; done: boolean };
 type Note = { id: number; text: string };
