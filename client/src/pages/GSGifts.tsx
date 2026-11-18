@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { Gift, Copy, Plus, Crown } from "lucide-react";
+import { Gift, Copy, Plus, Crown } from "@/components/ManagedIcons";
 
 type GiftLink = {
   code: string;
