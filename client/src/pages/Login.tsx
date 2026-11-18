@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { CyberInput } from "@/components/CyberInput";
 import { CyberButton } from "@/components/CyberButton";
-import { Lock, UserRoundPlus, Eye, EyeOff } from "lucide-react";
+import { Lock, UserRoundPlus, Eye, EyeOff } from "@/components/ManagedIcons";
 import { useLocation } from "wouter";
 import { queryClient } from "@/lib/queryClient";
 import { startAuthentication } from "@simplewebauthn/browser";
