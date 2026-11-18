@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
 import { useAuth } from "@/hooks/use-auth";
@@ -46,6 +46,21 @@ export default function ModerationPanel() {
   const [emoteAudio, setEmoteAudio] = useState("");
   const [emoteDuration, setEmoteDuration] = useState(0);
   const [emoteBusy, setEmoteBusy] = useState(false);
+  const isSuperOwner = Boolean((user as any)?.isSuperOwner);
+  const [managedIcons, setManagedIcons] = useState<{name:string;path:string;customized:boolean}[]>([]);
+  const [iconBusy, setIconBusy] = useState("");
+  const [iconLoading, setIconLoading] = useState(false);
+  const loadManagedIcons = async () => {
+    setIconLoading(true);
+    try {
+      const response = await fetch("/api/super-owner/icons", { credentials: "same-origin" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || "Could not load icons.");
+      setManagedIcons(data.icons || []);
+    } catch (error:any) { toast({ title: "Icon manager unavailable", description: error.message, variant: "destructive" }); }
+    finally { setIconLoading(false); }
+  };
+  useEffect(() => { if (isSuperOwner) void loadManagedIcons(); }, [isSuperOwner]);
   const emoteGifInput = useRef<HTMLInputElement>(null);
   const emoteAudioInput = useRef<HTMLInputElement>(null);
   const readEmoteFile = (file: File) => new Promise<string>((resolve, reject) => {
@@ -208,6 +223,44 @@ export default function ModerationPanel() {
         <span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase text-primary">{role.replace(/-/g," ")}</span>
       </div>
 
+      {isSuperOwner && <section className="rounded-xl border border-amber-400/30 bg-amber-400/5 p-4 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div><h2 className="text-lg font-black text-amber-200">Super Owner · Website Icon Studio</h2><p className="text-xs text-muted-foreground">Replace the 12 shared navigation icons. PNGs are resized to fit a 256×256 transparent canvas and committed to GitHub.</p></div>
+          <button onClick={loadManagedIcons} disabled={iconLoading} className="rounded-lg border border-amber-300/30 px-3 py-2 text-xs font-bold text-amber-100 disabled:opacity-50">{iconLoading ? "Loading…" : "Refresh icons"}</button>
+        </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {managedIcons.map(icon => <div key={icon.name} className="flex items-center gap-3 rounded-lg border border-border bg-background/70 p-3">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-secondary"><img src={`/icons/${icon.name}.png?v=${icon.customized ? "custom" : "default"}`} onError={e=>{(e.currentTarget as HTMLImageElement).style.display="none"}} alt="" className="h-8 w-8 object-contain"/></div>
+            <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{icon.name}</p><p className="text-[10px] text-muted-foreground">{icon.customized ? "Custom PNG published" : "Using built-in icon"}</p>
+              <div className="mt-2 flex gap-2">
+                <label className="cursor-pointer rounded-md bg-primary px-2 py-1.5 text-[10px] font-bold text-primary-foreground">{iconBusy===icon.name ? "Publishing…" : "Replace PNG"}<input type="file" accept="image/png" className="hidden" disabled={!!iconBusy} onChange={async e=>{
+                  const file=e.target.files?.[0]; e.currentTarget.value=""; if(!file)return;
+                  if(file.type!=="image/png" || file.size>8*1024*1024){toast({title:"PNG required",description:"Choose a PNG no larger than 8 MB.",variant:"destructive"});return;}
+                  setIconBusy(icon.name);
+                  try {
+                    const source=await new Promise<HTMLImageElement>((resolve,reject)=>{const url=URL.createObjectURL(file);const image=new Image();image.onload=()=>{URL.revokeObjectURL(url);resolve(image)};image.onerror=()=>{URL.revokeObjectURL(url);reject(new Error("Could not read this PNG."))};image.src=url});
+                    const canvas=document.createElement("canvas");canvas.width=256;canvas.height=256;
+                    const ctx=canvas.getContext("2d");if(!ctx)throw new Error("Image processing is unavailable.");
+                    const scale=Math.min(224/source.width,224/source.height);const w=Math.round(source.width*scale),h=Math.round(source.height*scale);
+                    ctx.drawImage(source,(256-w)/2,(256-h)/2,w,h);
+                    const dataUrl=canvas.toDataURL("image/png");
+                    const response=await fetch(`/api/super-owner/icons/${icon.name}`,{method:"PUT",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({dataUrl})});
+                    const result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.message||"GitHub publish failed.");
+                    toast({title:"Icon published to GitHub",description:icon.name});await loadManagedIcons();
+                  }catch(error:any){toast({title:"Icon upload failed",description:error.message,variant:"destructive"})}
+                  finally{setIconBusy("")}
+                }}/></label>
+                <button disabled={!!iconBusy || !icon.customized} onClick={async()=>{
+                  setIconBusy(icon.name);
+                  try{const response=await fetch(`/api/super-owner/icons/${icon.name}`,{method:"DELETE",credentials:"same-origin"});const result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.message||"Revert failed.");toast({title:"Icon reverted",description:icon.name});await loadManagedIcons()}
+                  catch(error:any){toast({title:"Revert failed",description:error.message,variant:"destructive"})}
+                  finally{setIconBusy("")}
+                }} className="rounded-md border border-border px-2 py-1.5 text-[10px] font-bold disabled:opacity-40">Revert</button>
+              </div>
+            </div>
+          </div>)}
+        </div>
+      </section>}
       <section className="rounded-xl border border-violet-400/30 bg-gradient-to-br from-violet-500/10 to-cyan-500/5 p-4">
         <div className="mb-2 flex items-center gap-2"><Sparkles className="h-5 w-5 text-violet-300"/><h2 className="text-lg font-bold">Moderator Emote Creator</h2></div>
         <p className="mb-4 text-xs text-muted-foreground">Create community GIF + MP3 emotes. GIFs are limited to 3 MB and MP3 audio to 20 seconds / 1.4 MB.</p>
