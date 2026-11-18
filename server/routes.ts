@@ -2383,6 +2383,8 @@ export async function registerRoutes(
     if (await blockedEitherWay(req.session.userId!, targetId)) {
       return res.status(403).json({ message: "Unblock this user before sending a request" });
     }
+    const targetAccount = await storage.getUser(targetId);
+    if (!targetAccount) return res.status(404).json({ message: "User not found." });
     const [existing] = await db.select().from(friendRequests).where(or(
       and(eq(friendRequests.requesterId, req.session.userId!), eq(friendRequests.addresseeId, targetId)),
       and(eq(friendRequests.requesterId, targetId), eq(friendRequests.addresseeId, req.session.userId!)),
@@ -2664,7 +2666,15 @@ export async function registerRoutes(
     if(!styles.audioUrl||!item.imageUrl) return res.status(400).json({message:"This emote is incomplete."});
     const sender=await storage.getUser(userId);
     const payload={type:"emote",emote:{name:item.name,gifUrl:item.imageUrl,audioUrl:styles.audioUrl,duration:Math.min(20,Number(styles.duration)||3),fromName:sender?.username||"Player"}};
-    for(const peer of blockBlastMembers.keys()){if(peer===userId)continue;const queue=blockBlastSignals.get(peer)||[];queue.push({from:userId,signal:payload,createdAt:Date.now()});if(queue.length>100)queue.splice(0,queue.length-100);blockBlastSignals.set(peer,queue);}
+    for(const peer of blockBlastMembers.keys()){
+      if(peer===userId)continue;
+      const peerAccount=await storage.getUser(peer);
+      if(peerAccount?.muteEmotes)continue;
+      const queue=blockBlastSignals.get(peer)||[];
+      queue.push({from:userId,signal:payload,createdAt:Date.now()});
+      if(queue.length>100)queue.splice(0,queue.length-100);
+      blockBlastSignals.set(peer,queue);
+    }
     res.json({success:true});
   });
 
