@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { useAuth } from "@/hooks/use-auth";
-import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, DoorOpen, Users, Send, Plus, RefreshCw, MessageCircle, Gamepad2, Sparkles } from "lucide-react";
+import { ArrowUp, ArrowDown, ArrowLeft, ArrowRight, DoorOpen, Users, Send, Plus, RefreshCw, MessageCircle, Gamepad2, Sparkles } from "@/components/ManagedIcons";
 
 type Player = { id:number; username:string; x:number; y:number; color:string; direction:string };
 type Room = { id:string; name:string; theme:string; players:Player[]; messages:{id:string;username:string;text:string;createdAt:number}[] };
