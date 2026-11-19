@@ -220,10 +220,45 @@ export const messages = pgTable("messages", {
   mediaUrl: text("media_url"),
   mediaType: text("media_type"), // 'image', 'video', 'audio'
   replyToId: integer("reply_to_id"), // ID of message being replied to
+  editedAt: timestamp("edited_at"),
+  scheduledAt: timestamp("scheduled_at"),
+  isPinned: boolean("is_pinned").notNull().default(false),
   // Legacy soft-delete flag retained so existing message history is not dropped.
   isDeleted: boolean("is_deleted").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+
+
+// Immutable snapshots of prior message content, retained when a message is edited.
+export const chatMessageEditHistory = pgTable("chat_message_edit_history", {
+  id: serial("id").primaryKey(),
+  messageId: integer("message_id").notNull().references(() => messages.id, { onDelete: "cascade" }),
+  editorId: integer("editor_id").notNull(),
+  content: text("content").notNull(),
+  editedAt: timestamp("edited_at").defaultNow(),
+});
+
+// Temporary moments expire automatically and can carry text or media.
+export const nexusMoments = pgTable("nexus_moments", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  content: text("content").notNull().default(""),
+  mediaUrl: text("media_url"),
+  mediaType: text("media_type"),
+  background: text("background").notNull().default("violet"),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export const nexusMomentReactions = pgTable("nexus_moment_reactions", {
+  id: serial("id").primaryKey(),
+  momentId: integer("moment_id").notNull().references(() => nexusMoments.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull(),
+  emoji: text("emoji").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  momentReactionUnique: uniqueIndex("nexus_moment_reaction_unique").on(table.momentId, table.userId),
+}));
 
 // Persistent per-message reactions and single-choice chat polls.
 export const chatMessageReactions = pgTable("chat_message_reactions", {
