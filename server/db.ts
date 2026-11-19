@@ -27,7 +27,10 @@ if (!process.env.ENZONIC_DATABASE_URL) {
 // Preserve the database provider's requested TLS mode. Rewriting
 // sslmode=require to verify-full can reject managed-provider certificates
 // that are valid for the provider but not trusted by this container.
-const enzonicConnectionString = process.env.ENZONIC_DATABASE_URL;
+// Apply the same Enzonic endpoint routing to the accounts database as the
+// chat database. Without the endpoint option, Enzonic may route the connection
+// to an internal address that is not reachable from the application runtime.
+const enzonicConnectionString = withEnzonicEndpoint(process.env.ENZONIC_DATABASE_URL);
 
 const poolMax = Number.parseInt(process.env.DATABASE_POOL_MAX || "10", 10);
 const commonPoolOptions = {
