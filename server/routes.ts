@@ -3592,7 +3592,10 @@ export async function registerRoutes(
       ...member,
       allowed:await areAcceptedFriends(userId,member.userId)&&!(await blockedEitherWay(userId,member.userId)),
     })));
-    const unique=new Map(friendsOnly.filter(member=>member.allowed).map(({allowed:_allowed,...member})=>[member.userId,member]));
+    const unique=new Map<number,{userId:number;username:string;avatarUrl:string|null}>();
+    for(const member of friendsOnly){
+      if(member.allowed) unique.set(member.userId,{userId:member.userId,username:member.username,avatarUrl:member.avatarUrl});
+    }
     res.set("Cache-Control","no-store").json(Array.from(unique.values()));
   });
   app.post("/api/chat/group-voice/invite",requireAuth,async(req,res)=>{
