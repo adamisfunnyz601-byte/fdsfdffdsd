@@ -796,7 +796,10 @@ export default function Chat() {
       groupLocalStreamRef.current=stream;
     }
     const peer=new RTCPeerConnection(await getRtcConfiguration());
-    stream.getTracks().forEach(track=>peer.addTrack(track.kind==="video"&&groupScreenStreamRef.current?.getVideoTracks()[0]?groupScreenStreamRef.current.getVideoTracks()[0]:track,stream!));
+    stream.getTracks().filter(track=>track.kind==="audio").forEach(track=>peer.addTrack(track,stream!));
+    const outgoingVideo=groupScreenStreamRef.current?.getVideoTracks()[0]||stream.getVideoTracks()[0];
+    if(outgoingVideo)peer.addTrack(outgoingVideo,groupScreenStreamRef.current&&outgoingVideo===groupScreenStreamRef.current.getVideoTracks()[0]?groupScreenStreamRef.current:stream);
+    else peer.addTransceiver("video",{direction:"sendrecv"});
     peer.onicecandidate=event=>{if(event.candidate)sendGroupPeerSignal(peerId,{type:"ice",candidate:event.candidate.toJSON()});};
     peer.ontrack=event=>{
       setGroupCallParticipants(current=>current.map(person=>person.userId===peerId?{...person,stream:(person as any).stream||new MediaStream()}:person));
@@ -854,7 +857,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     if(!groupCallIdRef.current||!groupLocalStreamRef.current)return;
     if(groupScreenStreamRef.current){
       const cameraTrack=groupLocalStreamRef.current.getVideoTracks()[0]||null;
-      groupPeersRef.current.forEach(peer=>peer.getSenders().filter(sender=>sender.track?.kind==="video").forEach(sender=>{void sender.replaceTrack(cameraTrack);}));
+      groupPeersRef.current.forEach(peer=>{const sender=peer.getTransceivers().find(item=>item.receiver.track.kind==="video")?.sender;if(sender)void sender.replaceTrack(cameraTrack);});
       groupScreenStreamRef.current.getTracks().forEach(track=>track.stop());
       groupScreenStreamRef.current=null;setGroupScreenSharing(false);
       return;
@@ -866,13 +869,12 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
       if(!screenTrack)throw new Error("No screen video track was provided.");
       groupScreenStreamRef.current=screen;setGroupScreenSharing(true);
       groupPeersRef.current.forEach(peer=>{
-        const sender=peer.getSenders().find(item=>item.track?.kind==="video");
+        const sender=peer.getTransceivers().find(item=>item.receiver.track.kind==="video")?.sender;
         if(sender)void sender.replaceTrack(screenTrack);
-        else peer.addTrack(screenTrack,screen);
       });
       screenTrack.onended=()=>{
         const cameraTrack=groupLocalStreamRef.current?.getVideoTracks()[0]||null;
-        groupPeersRef.current.forEach(peer=>peer.getSenders().filter(sender=>sender.track?.kind==="video").forEach(sender=>{void sender.replaceTrack(cameraTrack);}));
+        groupPeersRef.current.forEach(peer=>{const sender=peer.getTransceivers().find(item=>item.receiver.track.kind==="video")?.sender;if(sender)void sender.replaceTrack(cameraTrack);});
         groupScreenStreamRef.current?.getTracks().forEach(track=>track.stop());
         groupScreenStreamRef.current=null;setGroupScreenSharing(false);
       };
@@ -2411,7 +2413,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
               <div className="grid min-h-0 flex-1 auto-rows-fr grid-cols-1 gap-3 overflow-y-auto sm:grid-cols-2 xl:grid-cols-3">
                 {groupCallParticipants.map(person=>{
                   const isSelf=person.userId===Number(currentUserId);
-                  const stream=isSelf?groupLocalStreamRef.current:groupRemoteStreamsRef.current.get(person.userId);
+                  const stream=isSelf?(groupScreenStreamRef.current||groupLocalStreamRef.current):groupRemoteStreamsRef.current.get(person.userId);
                   const hasVideo=Boolean(stream?.getVideoTracks().some(track=>track.readyState==="live"&&track.enabled));
                   return <div key={person.userId} className="relative flex min-h-[210px] items-center justify-center overflow-hidden rounded-2xl border border-violet-400/20 bg-[#120b20] shadow-[0_12px_35px_rgba(0,0,0,.22)]">
                     <video autoPlay playsInline muted={isSelf} ref={node=>{if(!node||!stream)return;if(node.srcObject!==stream)node.srcObject=stream;if(!isSelf)void node.play().catch(()=>{});}} className="absolute inset-0 h-full w-full object-cover"/>
