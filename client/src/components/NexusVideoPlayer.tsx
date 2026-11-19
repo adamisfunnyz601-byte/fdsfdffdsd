@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Download, Pause, Play, Volume2, Maximize } from "@/components/ManagedIcons";
+import { Download, Pause, Play, Volume2, Maximize2 } from "@/components/ManagedIcons";
 
 type Props = { src: string; title?: string };
 
@@ -55,7 +55,7 @@ export function NexusVideoPlayer({ src, title = "NEXUS video" }: Props) {
         <button type="button" onClick={()=>void toggle()} aria-label={playing?"Pause video":"Play video"} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-violet-500/20 text-violet-100 hover:bg-violet-500/35">{playing?<Pause size={17}/>:<Play size={17}/>}</button>
         <span className="min-w-[82px] text-[11px] tabular-nums text-white/55">{timeLabel(current)} / {timeLabel(duration)}</span>
         <div className="flex min-w-0 flex-1 items-center gap-2"><button type="button" onClick={()=>{const next=!muted;setMuted(next);if(videoRef.current)videoRef.current.muted=next;}} aria-label={muted?"Unmute":"Mute"} className="text-white/60"><Volume2 size={16}/></button><input aria-label="Video volume" type="range" min="0" max="1" step="0.01" value={muted?0:volume} onChange={event=>{const next=Number(event.target.value);setVolume(next);setMuted(false);if(videoRef.current){videoRef.current.volume=next;videoRef.current.muted=false;}}} className="h-1 w-20 accent-violet-400"/></div>
-        <button type="button" onClick={()=>{const video=videoRef.current as any;if(video?.requestFullscreen)void video.requestFullscreen();else if(video?.webkitEnterFullscreen)video.webkitEnterFullscreen();}} aria-label="Fullscreen" className="rounded-lg p-2 text-white/65 hover:bg-white/10"><Maximize size={16}/></button>
+        <button type="button" onClick={()=>{const video=videoRef.current as any;if(video?.requestFullscreen)void video.requestFullscreen();else if(video?.webkitEnterFullscreen)video.webkitEnterFullscreen();}} aria-label="Fullscreen" className="rounded-lg p-2 text-white/65 hover:bg-white/10"><Maximize2 size={16}/></button>
         <a href={src} download="nexus-video" className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 text-[10px] text-white/70 hover:bg-white/10"><Download size={13}/> Save</a>
       </div>
       {error&&<p role="status" className="text-xs text-rose-300">{error}</p>}
