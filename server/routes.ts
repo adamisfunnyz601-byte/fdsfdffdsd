@@ -1,6 +1,6 @@
 
 import { db, pool, chatDb, chatPool, enzonicPool } from "./db";
-import { users, accessKeys, searchHistory, messages, groupChats, groupChatMembers, customEmojis, friendRequests, blocks, moderationLogs, blockBlastScores, dihhroAwards, communityServers, communityServerMembers, communityServerCategories, communityServerChannels, communityServerMessages, chatMessageReactions, chatPolls, chatPollOptions, chatPollVotes, passkeyCredentials } from "@shared/schema";
+import { users, accessKeys, searchHistory, messages, groupChats, groupChatMembers, customEmojis, friendRequests, blocks, moderationLogs, blockBlastScores, dihhroAwards, communityServers, communityServerMembers, communityServerCategories, communityServerChannels, communityServerMessages, chatMessageReactions, chatMessageEditHistory, nexusMoments, nexusMomentReactions, chatPolls, chatPollOptions, chatPollVotes, passkeyCredentials } from "@shared/schema";
 import { eq, desc, and, or, gt, sql, inArray } from "drizzle-orm";
 import type { Express, Request } from "express";
 import type { Server } from "http";
@@ -2366,6 +2366,91 @@ export async function registerRoutes(
       };
     }
     res.json({ reactions, polls });
+  });
+
+  // Edit, pin and inspect messages in the currently visible conversation only.
+  app.patch("/api/chat/messages/:id", requireAuth, async (req, res) => {
+    const messageId=Number(req.params.id),userId=Number(req.session.userId!);
+    const content=typeof req.body?.content==="string"?req.body.content.trim().slice(0,4000):"";
+    if(!Number.isInteger(messageId)||messageId<=0||!content)return res.status(400).json({message:"Enter a message before saving."});
+    const [message]=await chatDb.select().from(messages).where(eq(messages.id,messageId)).limit(1);
+    if(!message)return res.status(404).json({message:"Message not found."});
+    if(message.senderId!==userId)return res.status(403).json({message:"You can only edit your own messages."});
+    const otherUserId=message.recipientId?(message.senderId===userId?message.recipientId:message.senderId):undefined;
+    const visible=await storage.getMessages(userId,otherUserId,message.groupId??undefined);
+    if(!visible.some((item:any)=>Number(item.id)===messageId))return res.status(403).json({message:"You cannot edit this message."});
+    if(message.content!==content)await chatDb.insert(chatMessageEditHistory).values({messageId,editorId:userId,content:message.content});
+    const [updated]=await chatDb.update(messages).set({content,editedAt:new Date()}).where(eq(messages.id,messageId)).returning();
+    return res.json(updated);
+  });
+  app.get("/api/chat/messages/:id/history", requireAuth, async (req,res)=>{
+    const messageId=Number(req.params.id),userId=Number(req.session.userId!);
+    const [message]=await chatDb.select().from(messages).where(eq(messages.id,messageId)).limit(1);
+    if(!message)return res.status(404).json({message:"Message not found."});
+    const otherUserId=message.recipientId?(message.senderId===userId?message.recipientId:message.senderId):undefined;
+    const visible=await storage.getMessages(userId,otherUserId,message.groupId??undefined);
+    if(!visible.some((item:any)=>Number(item.id)===messageId))return res.status(403).json({message:"You cannot view this message history."});
+    const history=await chatDb.select().from(chatMessageEditHistory).where(eq(chatMessageEditHistory.messageId,messageId)).orderBy(desc(chatMessageEditHistory.editedAt));
+    return res.json(history);
+  });
+  app.post("/api/chat/messages/:id/pin", requireAuth, async(req,res)=>{
+    const messageId=Number(req.params.id),userId=Number(req.session.userId!);
+    const [message]=await chatDb.select().from(messages).where(eq(messages.id,messageId)).limit(1);
+    if(!message)return res.status(404).json({message:"Message not found."});
+    const otherUserId=message.recipientId?(message.senderId===userId?message.recipientId:message.senderId):undefined;
+    const visible=await storage.getMessages(userId,otherUserId,message.groupId??undefined);
+    if(!visible.some((item:any)=>Number(item.id)===messageId))return res.status(403).json({message:"You cannot pin this message."});
+    const [updated]=await chatDb.update(messages).set({isPinned:!message.isPinned}).where(eq(messages.id,messageId)).returning();
+    return res.json({success:true,isPinned:updated.isPinned});
+  });
+  app.post("/api/chat/schedule", requireAuth, async(req,res)=>{
+    const userId=Number(req.session.userId!),content=typeof req.body?.content==="string"?req.body.content.trim().slice(0,4000):"";
+    const recipientId=req.body?.recipientId==null?null:Number(req.body.recipientId);
+    const groupId=req.body?.groupId==null?null:Number(req.body.groupId);
+    const scheduledAt=new Date(req.body?.scheduledAt);
+    if(!content||Number.isNaN(scheduledAt.getTime())||scheduledAt.getTime()<Date.now()+60000||scheduledAt.getTime()>Date.now()+30*24*60*60*1000)return res.status(400).json({message:"Choose a delivery time between 1 minute and 30 days from now."});
+    if(recipientId!==null&&(!Number.isInteger(recipientId)||recipientId<=0||recipientId===userId)||groupId!==null&&(!Number.isInteger(groupId)||groupId<=0)||recipientId&&groupId)return res.status(400).json({message:"Choose a valid DM or group channel."});
+    if(recipientId&&await blockedEitherWay(userId,recipientId))return res.status(403).json({message:"Messaging is unavailable for this user."});
+    if(groupId){const [membership]=await chatDb.select({id:groupChatMembers.id}).from(groupChatMembers).where(and(eq(groupChatMembers.groupId,groupId),eq(groupChatMembers.userId,userId))).limit(1);if(!membership)return res.status(403).json({message:"You are not a member of this group."});}
+    const [message]=await chatDb.insert(messages).values({senderId:userId,recipientId,groupId,content,scheduledAt}).returning();
+    return res.status(201).json(message);
+  });
+
+  // NEXUS Moments: authenticated members can post 24-hour text or media updates.
+  app.get("/api/moments", requireAuth, async(_req,res)=>{
+    const rows=await chatDb.select({id:nexusMoments.id,userId:nexusMoments.userId,content:nexusMoments.content,mediaUrl:nexusMoments.mediaUrl,mediaType:nexusMoments.mediaType,background:nexusMoments.background,createdAt:nexusMoments.createdAt,expiresAt:nexusMoments.expiresAt,username:users.username,displayName:users.displayName,avatarUrl:users.avatarUrl})
+      .from(nexusMoments).innerJoin(users,eq(nexusMoments.userId,users.id))
+      .where(sql`${nexusMoments.expiresAt} > NOW()`).orderBy(desc(nexusMoments.createdAt)).limit(100);
+    res.setHeader("Cache-Control","no-store");
+    return res.json(rows);
+  });
+  app.post("/api/moments", requireAuth, async(req,res)=>{
+    const userId=Number(req.session.userId!),content=typeof req.body?.content==="string"?req.body.content.trim().slice(0,500):"";
+    const mediaUrl=typeof req.body?.mediaUrl==="string"?req.body.mediaUrl:null;
+    const mediaType=typeof req.body?.mediaType==="string"?req.body.mediaType:null;
+    const background=["violet","pink","blue","orange","green"].includes(req.body?.background)?req.body.background:"violet";
+    if(!content&&!mediaUrl)return res.status(400).json({message:"Add text or media to your Moment."});
+    if(mediaUrl&&(mediaUrl.length>8*1024*1024*1.4||!/^data:(image|video)\/[a-z0-9.+-]+;base64,/i.test(mediaUrl)))return res.status(400).json({message:"Moment media must be an uploaded image or video under 8 MB."});
+    const [moment]=await chatDb.insert(nexusMoments).values({userId,content,mediaUrl,mediaType,background,expiresAt:new Date(Date.now()+24*60*60*1000)}).returning();
+    return res.status(201).json(moment);
+  });
+  app.delete("/api/moments/:id", requireAuth, async(req,res)=>{
+    const id=Number(req.params.id),userId=Number(req.session.userId!);
+    const [moment]=await chatDb.select().from(nexusMoments).where(eq(nexusMoments.id,id)).limit(1);
+    if(!moment)return res.status(404).json({message:"Moment not found."});
+    if(moment.userId!==userId)return res.status(403).json({message:"You can only delete your own Moments."});
+    await chatDb.delete(nexusMoments).where(eq(nexusMoments.id,id));
+    return res.json({success:true});
+  });
+  app.post("/api/moments/:id/reactions", requireAuth, async(req,res)=>{
+    const id=Number(req.params.id),userId=Number(req.session.userId!),emoji=String(req.body?.emoji||"");
+    if(!["👍","❤️","😂","🔥","👏","😍","🎉"].includes(emoji))return res.status(400).json({message:"Choose a supported reaction."});
+    const [moment]=await chatDb.select().from(nexusMoments).where(and(eq(nexusMoments.id,id),sql`${nexusMoments.expiresAt}>NOW()`)).limit(1);
+    if(!moment)return res.status(404).json({message:"Moment has expired."});
+    const [existing]=await chatDb.select().from(nexusMomentReactions).where(and(eq(nexusMomentReactions.momentId,id),eq(nexusMomentReactions.userId,userId))).limit(1);
+    if(existing)await chatDb.delete(nexusMomentReactions).where(eq(nexusMomentReactions.id,existing.id));
+    await chatDb.insert(nexusMomentReactions).values({momentId:id,userId,emoji}).onConflictDoUpdate({target:[nexusMomentReactions.momentId,nexusMomentReactions.userId],set:{emoji}});
+    return res.json({success:true,emoji});
   });
 
   app.post("/api/chat/messages/:id/reactions", requireAuth, async (req, res) => {
