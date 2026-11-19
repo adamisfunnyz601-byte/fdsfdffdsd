@@ -78,9 +78,58 @@ app.use((req, res, next) => {
   next();
 });
 
+// Bind the HTTP port before database initialization so a slow or
+// temporarily unavailable Postgres service does not cause connection-refused
+// health checks during cold starts.
+let startupState: "starting" | "ready" | "failed" = "starting";
+let startupFailure = "";
+app.get(["/health", "/healthz"], (_req, res) =>
+  res.status(200).json({ status: "ok", service: "nexus-api", startup: startupState }),
+);
+app.get("/readyz", async (_req, res) => {
+  if (startupState !== "ready") {
+    return res.status(503).json({ status: startupState, service: "nexus-api" });
+  }
+  try {
+    await Promise.all([chatPool.query("SELECT 1"), enzonicPool.query("SELECT 1")]);
+    return res.status(200).json({ status: "ready", service: "nexus-api", databases: { prisma: "ok", enzonic: "ok" } });
+  } catch (error) {
+    console.error("[health] Readiness check failed:", error);
+    return res.status(503).json({ status: "not_ready", service: "nexus-api" });
+  }
+});
+// Enzonic currently probes "/". Serve a liveness response until the real
+// frontend static handler is installed after successful initialization.
+app.get("/", (_req, res, next) => {
+  if (startupState === "ready") return next();
+  if (startupState === "failed") return res.status(503).send("NEXUS startup failed. Check database connectivity and server logs.");
+  return res.status(200).send("NEXUS is starting. Database initialization is in progress.");
+});
+const port = parseInt(process.env.PORT || process.env.SERVER_PORT || "3000", 10);
+let isShuttingDown = false;
+const shutdown = (signal: string) => {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  log(`Received ${signal}; shutting down gracefully.`);
+  httpServer.close(async () => {
+    await Promise.all([chatPool.end(), enzonicPool.end()]);
+    process.exit(0);
+  });
+  const forceExit = setTimeout(() => process.exit(1), 15_000);
+  forceExit.unref();
+};
+process.once("SIGTERM", () => shutdown("SIGTERM"));
+process.once("SIGINT", () => shutdown("SIGINT"));
+httpServer.listen({ port, host: "0.0.0.0" }, () => {
+  log(`serving on port ${port} (database initialization pending)`);
+});
+
 (async () => {
+  try {
   await registerRoutes(httpServer, app);
   startStorageCleanup();
+  startupState = "ready";
+  log("Database initialization and route registration completed.");
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
@@ -95,25 +144,6 @@ app.use((req, res, next) => {
     return res.status(status).json({ message });
   });
 
-  // Liveness: confirms the Node process is running without depending on the database.
-  app.get(["/health", "/healthz"], (_req, res) => {
-    res.status(200).json({ status: "ok", service: "nexus-api" });
-  });
-
-  // Readiness: only route traffic here when the primary database can answer.
-  app.get("/readyz", async (_req, res) => {
-    try {
-      await Promise.all([
-        chatPool.query("SELECT 1"),
-        enzonicPool.query("SELECT 1"),
-      ]);
-      res.status(200).json({ status: "ready", service: "nexus-api", databases: { prisma: "ok", enzonic: "ok" } });
-    } catch (error) {
-      console.error("[health] Readiness check failed:", error);
-      res.status(503).json({ status: "not_ready", service: "nexus-api" });
-    }
-  });
-
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
@@ -124,36 +154,14 @@ app.use((req, res, next) => {
     await setupVite(httpServer, app);
   }
 
-  // ALWAYS prefer the hosting platform PORT. Other ports may be firewalled.
-  // Default to 3000 for Enzonic deployments.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || process.env.SERVER_PORT || "3000", 10);
-  // Windows does not support Node's reusePort option on all socket providers.
-  // A normal bind is sufficient for this single-instance self-hosted server.
-  let isShuttingDown = false;
-  const shutdown = (signal: string) => {
-    if (isShuttingDown) return;
-    isShuttingDown = true;
-    log(`Received ${signal}; shutting down gracefully.`);
-    httpServer.close(async () => {
-      await Promise.all([chatPool.end(), enzonicPool.end()]);
-      process.exit(0);
-    });
-    // Do not leave a stuck process running forever during platform shutdown.
-    const forceExit = setTimeout(() => process.exit(1), 15_000);
-    forceExit.unref();
-  };
-  process.once("SIGTERM", () => shutdown("SIGTERM"));
-  process.once("SIGINT", () => shutdown("SIGINT"));
-
-  httpServer.listen(
-    {
-      port,
-      host: "0.0.0.0",
-    },
-    () => {
-      log(`serving on port ${port}`);
-    },
-  );
-})();
+  if (process.env.NODE_ENV === "production") {
+    serveStatic(app);
+  } else {
+    const { setupVite } = await import("./vite");
+    await setupVite(httpServer, app);
+  }
+})().catch((error) => {
+  startupState = "failed";
+  startupFailure = error instanceof Error ? error.message : "Database initialization failed";
+  console.error("[startup] Database initialization failed:", error);
+});
