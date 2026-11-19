@@ -2422,11 +2422,18 @@ export async function registerRoutes(
     const userId=Number(req.session.userId!);
     const friendships=await db.select({requesterId:friendRequests.requesterId,addresseeId:friendRequests.addresseeId}).from(friendRequests).where(and(eq(friendRequests.status,"accepted"),or(eq(friendRequests.requesterId,userId),eq(friendRequests.addresseeId,userId))));
     const audienceIds=Array.from(new Set([userId,...friendships.map(item=>Number(item.requesterId)===userId?Number(item.addresseeId):Number(item.requesterId))]));
-    const rows=await chatDb.select({id:nexusMoments.id,userId:nexusMoments.userId,content:nexusMoments.content,mediaUrl:nexusMoments.mediaUrl,mediaType:nexusMoments.mediaType,background:nexusMoments.background,createdAt:nexusMoments.createdAt,expiresAt:nexusMoments.expiresAt,username:users.username,displayName:users.displayName,avatarUrl:users.avatarUrl})
+    const rows=await chatDb.select({id:nexusMoments.id,userId:nexusMoments.userId,content:nexusMoments.content,mediaUrl:sql<string|null>`NULL`,hasMedia:sql<boolean>`(${nexusMoments.mediaUrl} IS NOT NULL)`,mediaType:nexusMoments.mediaType,background:nexusMoments.background,createdAt:nexusMoments.createdAt,expiresAt:nexusMoments.expiresAt,username:users.username,displayName:users.displayName,avatarUrl:users.avatarUrl})
       .from(nexusMoments).innerJoin(users,eq(nexusMoments.userId,users.id))
       .where(and(sql`${nexusMoments.expiresAt} > NOW()`,inArray(nexusMoments.userId,audienceIds),sql`NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id=${userId} AND b.blocked_id=${nexusMoments.userId}) OR (b.blocker_id=${nexusMoments.userId} AND b.blocked_id=${userId}))`)).orderBy(desc(nexusMoments.createdAt)).limit(100);
     res.setHeader("Cache-Control","no-store");
     return res.json(rows);
+  });
+  app.get("/api/moments/:id/media", requireAuth, async(req,res)=>{
+    const id=Number(req.params.id),userId=Number(req.session.userId!);
+    const [moment]=await chatDb.select().from(nexusMoments).where(and(eq(nexusMoments.id,id),sql`${nexusMoments.expiresAt}>NOW()`)).limit(1);
+    if(!moment)return res.status(404).json({message:"Moment has expired."});
+    if(moment.userId!==userId&&(!(await areAcceptedFriends(userId,moment.userId))||await blockedEitherWay(userId,moment.userId)))return res.status(403).json({message:"This Moment is only available to friends."});
+    return res.json({mediaUrl:moment.mediaUrl,mediaType:moment.mediaType});
   });
   app.post("/api/moments", requireAuth, async(req,res)=>{
     const userId=Number(req.session.userId!),content=typeof req.body?.content==="string"?req.body.content.trim().slice(0,500):"";
