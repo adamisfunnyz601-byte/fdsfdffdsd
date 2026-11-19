@@ -230,12 +230,22 @@ async function ensureChatUserProjection() {
   `);
   await syncChatBlockProjection();
   await syncChatUserProjection();
-  const timer = setInterval(() => {
-    void db.execute(sql.raw("UPDATE users SET presence_status='offline' WHERE presence_status <> 'offline' AND (last_seen IS NULL OR last_seen < NOW() - INTERVAL '90 seconds')"))
-      .catch(error => console.error("[presence-expiry] Failed:", error));
-    void syncChatUserProjection().catch(error => console.error("[chat-user-sync] Failed:", error));
-    void syncChatBlockProjection().catch(error => console.error("[chat-block-sync] Failed:", error));
-  }, 30_000);
+  // These projection jobs copy account data into the separate chat database.
+  // Running full-table copies every 30 seconds caused avoidable pool pressure.
+  let projectionSyncRunning = false;
+  const timer = setInterval(async () => {
+    if (projectionSyncRunning) return;
+    projectionSyncRunning = true;
+    try {
+      await db.execute(sql.raw("UPDATE users SET presence_status='offline' WHERE presence_status <> 'offline' AND (last_seen IS NULL OR last_seen < NOW() - INTERVAL '90 seconds')"));
+      await syncChatUserProjection();
+      await syncChatBlockProjection();
+    } catch (error) {
+      console.error("[chat-projection-sync] Failed:", error);
+    } finally {
+      projectionSyncRunning = false;
+    }
+  }, 5 * 60_000);
   timer.unref?.();
 }
 
