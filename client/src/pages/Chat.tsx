@@ -749,6 +749,8 @@ export default function Chat() {
   const [showGroupCallInvites,setShowGroupCallInvites]=useState(false);
   const [groupInviteUsers,setGroupInviteUsers]=useState<Array<{userId:number;username:string;avatarUrl?:string|null}>>([]);
   const [groupCallWithVideo,setGroupCallWithVideo]=useState(false);
+  const groupScreenStreamRef=useRef<MediaStream|null>(null);
+  const [groupScreenSharing,setGroupScreenSharing]=useState(false);
   const groupPeersRef=useRef<Map<number,RTCPeerConnection>>(new Map());
   const groupLocalStreamRef=useRef<MediaStream|null>(null);
   const groupCallIdRef=useRef<string|null>(null);
@@ -774,7 +776,7 @@ export default function Chat() {
       groupLocalStreamRef.current=stream;
     }
     const peer=new RTCPeerConnection(await getRtcConfiguration());
-    stream.getTracks().forEach(track=>peer.addTrack(track,stream!));
+    stream.getTracks().forEach(track=>peer.addTrack(track.kind==="video"&&groupScreenStreamRef.current?.getVideoTracks()[0]?groupScreenStreamRef.current.getVideoTracks()[0]:track,stream!));
     peer.onicecandidate=event=>{if(event.candidate)sendGroupPeerSignal(peerId,{type:"ice",candidate:event.candidate.toJSON()});};
     peer.ontrack=event=>{
       setGroupCallParticipants(current=>current.map(person=>person.userId===peerId?{...person,stream:(person as any).stream||new MediaStream()}:person));
@@ -828,11 +830,40 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
     try{await groupVoicePost("/api/chat/group-voice/invite",{roomId:groupCallIdRef.current,userId});toast({title:"INVITE_SENT"});}
     catch(error:any){toast({title:"INVITE_FAILED",description:error.message,variant:"destructive"});}
   };
+  const toggleGroupScreenShare=async()=>{
+    if(!groupCallIdRef.current||!groupLocalStreamRef.current)return;
+    if(groupScreenStreamRef.current){
+      const cameraTrack=groupLocalStreamRef.current.getVideoTracks()[0]||null;
+      groupPeersRef.current.forEach(peer=>peer.getSenders().filter(sender=>sender.track?.kind==="video").forEach(sender=>{void sender.replaceTrack(cameraTrack);}));
+      groupScreenStreamRef.current.getTracks().forEach(track=>track.stop());
+      groupScreenStreamRef.current=null;setGroupScreenSharing(false);
+      return;
+    }
+    try{
+      if(!navigator.mediaDevices?.getDisplayMedia)throw new Error("Screen sharing is not supported by this browser.");
+      const screen=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:15,max:30}},audio:false});
+      const screenTrack=screen.getVideoTracks()[0];
+      if(!screenTrack)throw new Error("No screen video track was provided.");
+      groupScreenStreamRef.current=screen;setGroupScreenSharing(true);
+      groupPeersRef.current.forEach(peer=>{
+        const sender=peer.getSenders().find(item=>item.track?.kind==="video");
+        if(sender)void sender.replaceTrack(screenTrack);
+        else peer.addTrack(screenTrack,screen);
+      });
+      screenTrack.onended=()=>{
+        const cameraTrack=groupLocalStreamRef.current?.getVideoTracks()[0]||null;
+        groupPeersRef.current.forEach(peer=>peer.getSenders().filter(sender=>sender.track?.kind==="video").forEach(sender=>{void sender.replaceTrack(cameraTrack);}));
+        groupScreenStreamRef.current?.getTracks().forEach(track=>track.stop());
+        groupScreenStreamRef.current=null;setGroupScreenSharing(false);
+      };
+    }catch(error:any){toast({title:"SCREEN_SHARE_FAILED",description:error?.message||"Could not start screen sharing.",variant:"destructive"});}
+  };
   const leaveGroupCall=async()=>{
     const roomId=groupCallIdRef.current;
     groupCallActiveRef.current=false;groupCallIdRef.current=null;setGroupCallId(null);
     if(roomId)groupVoicePost("/api/chat/group-voice/leave",{roomId}).catch(()=>{});
     groupPeersRef.current.forEach(peer=>peer.close());groupPeersRef.current.clear();groupRemoteStreamsRef.current.clear();groupPendingIceRef.current.clear();
+    groupScreenStreamRef.current?.getTracks().forEach(track=>track.stop());groupScreenStreamRef.current=null;setGroupScreenSharing(false);
     groupLocalStreamRef.current?.getTracks().forEach(track=>track.stop());groupLocalStreamRef.current=null;
     stopNativeCallAudio().catch(()=>{});
     setGroupCallParticipants([]);setActiveGroupCallTab(null);setGroupCallGroupId(null);setGroupRemoteVersion(v=>v+1);setVisualizerStream(null);setShowGroupCallInvites(false);
@@ -2362,7 +2393,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
                 {!groupCallParticipants.length&&<div className="col-span-full flex min-h-40 items-center justify-center text-sm text-violet-200/50">Waiting for participants…</div>}
               </div>
             </div>
-            <div className="flex items-center justify-center gap-4 border-t border-violet-500/20 p-5"><button onClick={()=>{groupLocalStreamRef.current?.getAudioTracks().forEach(t=>t.enabled=!t.enabled);}} className="rounded-full border border-white/20 p-4"><Mic className="h-5 w-5"/></button><button disabled={!groupCallWithVideo} title={groupCallWithVideo?"Toggle camera":"Start a video group call to use camera"} onClick={()=>{groupLocalStreamRef.current?.getVideoTracks().forEach(t=>t.enabled=!t.enabled);}} className="rounded-full border border-white/20 p-4 disabled:opacity-30"><Video className="h-5 w-5"/></button><button onClick={leaveGroupCall} className="flex items-center gap-2 rounded-full bg-red-700 px-7 py-4 font-bold"><PhoneOff className="h-5 w-5"/> LEAVE</button></div>
+            <div className="flex items-center justify-center gap-4 border-t border-violet-500/20 p-5"><button onClick={()=>{groupLocalStreamRef.current?.getAudioTracks().forEach(t=>t.enabled=!t.enabled);}} className="rounded-full border border-white/20 p-4"><Mic className="h-5 w-5"/></button><button disabled={!groupCallWithVideo} title={groupCallWithVideo?"Toggle camera":"Start a video group call to use camera"} onClick={()=>{groupLocalStreamRef.current?.getVideoTracks().forEach(t=>t.enabled=!t.enabled);}} className="rounded-full border border-white/20 p-4 disabled:opacity-30"><Video className="h-5 w-5"/></button><button onClick={()=>void toggleGroupScreenShare()} className={cn("rounded-full border px-4 py-3 text-xs font-bold",groupScreenSharing?"border-emerald-300/60 bg-emerald-500/20 text-emerald-100":"border-white/20 text-white/75")}>{groupScreenSharing?"STOP SHARING":"SHARE SCREEN"}</button><button onClick={leaveGroupCall} className="flex items-center gap-2 rounded-full bg-red-700 px-7 py-4 font-bold"><PhoneOff className="h-5 w-5"/> LEAVE</button></div>
           </div>}
         </AnimatePresence>
 
