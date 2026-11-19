@@ -27,7 +27,14 @@ export function useChat({ recipientId = null, groupId = null }: ChatChannel = {}
     queryKey: messagesKey,
     queryFn: async () => {
       const res = await fetch(apiUrl(messagesUrl), { credentials: "include", cache: "no-store" });
-      if (!res.ok) throw new Error("Failed to fetch messages");
+      if (!res.ok) {
+        let detail = "";
+        try {
+          const body = await res.json();
+          detail = typeof body?.message === "string" ? body.message : "";
+        } catch {}
+        throw new Error("CHAT_HTTP_" + res.status + (detail ? ": " + detail : ""));
+      }
       const incoming = await res.json();
       if (!Array.isArray(incoming)) throw new Error("The chat server returned an invalid message list.");
       const cachedMessages = queryClient.getQueryData<any[]>(messagesKey);
@@ -49,7 +56,9 @@ export function useChat({ recipientId = null, groupId = null }: ChatChannel = {}
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
-    staleTime: 250,
+    staleTime: 1000,
+    retry: 2,
+    retryDelay: attempt => Math.min(800 * (attempt + 1), 2000),
   });
 
   const { data: users, isLoading: isLoadingUsers } = useQuery({
