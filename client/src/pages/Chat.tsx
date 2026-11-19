@@ -2150,15 +2150,18 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
           if(event.type==="group-invite"&&!groupCallIdRef.current&&callStateRef.current==="idle"){
             setIncomingGroupCall(event);
           }else if(event.type==="group-signal"&&event.roomId===groupCallIdRef.current){
-            const {from,signal}=event;
+            const {from,fromName,avatarUrl,signal}=event;
             if(signal.type==="left"){
               groupPeersRef.current.get(from)?.close();groupPeersRef.current.delete(from);groupRemoteStreamsRef.current.delete(from);
               setGroupCallParticipants(items=>items.filter(person=>person.userId!==from));setGroupRemoteVersion(v=>v+1);
             }else if(signal.type==="offer"){
               try{
                 const person=groupCallParticipants.find(item=>item.userId===from);
-                const peer=await createGroupPeer(from,person?.username||("User "+from));
-                setGroupCallParticipants(items=>items.some(item=>item.userId===from)?items:[...items,{userId:from,username:person?.username||("User "+from)}]);
+                const peerName=fromName||person?.username||("User "+from);
+                const peer=await createGroupPeer(from,peerName);
+                setGroupCallParticipants(items=>items.some(item=>item.userId===from)
+                  ?items.map(item=>item.userId===from?{...item,username:peerName,avatarUrl:avatarUrl||item.avatarUrl}:item)
+                  :[...items,{userId:from,username:peerName,avatarUrl:avatarUrl||null}]);
                 setActiveGroupCallTab(current=>current??from);
                 await peer.setRemoteDescription(new RTCSessionDescription(signal.offer));
                 for(const candidate of groupPendingIceRef.current.get(from)||[])await peer.addIceCandidate(new RTCIceCandidate(candidate));
