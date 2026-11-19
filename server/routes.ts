@@ -2451,6 +2451,7 @@ export async function registerRoutes(
     if(!["👍","❤️","😂","🔥","👏","😍","🎉"].includes(emoji))return res.status(400).json({message:"Choose a supported reaction."});
     const [moment]=await chatDb.select().from(nexusMoments).where(and(eq(nexusMoments.id,id),sql`${nexusMoments.expiresAt}>NOW()`)).limit(1);
     if(!moment)return res.status(404).json({message:"Moment has expired."});
+    if(moment.userId!==userId&&(!(await areAcceptedFriends(userId,moment.userId))||await blockedEitherWay(userId,moment.userId)))return res.status(403).json({message:"You can only react to friends’ Moments."});
     const [existing]=await chatDb.select().from(nexusMomentReactions).where(and(eq(nexusMomentReactions.momentId,id),eq(nexusMomentReactions.userId,userId))).limit(1);
     if(existing)await chatDb.delete(nexusMomentReactions).where(eq(nexusMomentReactions.id,existing.id));
     await chatDb.insert(nexusMomentReactions).values({momentId:id,userId,emoji}).onConflictDoUpdate({target:[nexusMomentReactions.momentId,nexusMomentReactions.userId],set:{emoji}});
