@@ -10,6 +10,7 @@ export const ArrowLeft = (props: IconProps) => <AppIcon name="arrow-left" fallba
 export const ArrowRight = (props: IconProps) => <AppIcon name="arrow-right" fallback={Lucide.ArrowRight} {...props} />;
 export const Ban = (props: IconProps) => <AppIcon name="ban" fallback={Lucide.Ban} {...props} />;
 export const BarChart3 = (props: IconProps) => <AppIcon name="bar-chart3" fallback={Lucide.BarChart3} {...props} />;
+export const Bell = (props: IconProps) => <AppIcon name="bell" fallback={Lucide.Bell} {...props} />;
 export const BellOff = (props: IconProps) => <AppIcon name="bell-off" fallback={Lucide.BellOff} {...props} />;
 export const Binary = (props: IconProps) => <AppIcon name="binary" fallback={Lucide.Binary} {...props} />;
 export const Blocks = (props: IconProps) => <AppIcon name="blocks" fallback={Lucide.Blocks} {...props} />;
