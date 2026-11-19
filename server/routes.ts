@@ -2411,6 +2411,7 @@ export async function registerRoutes(
     if(!content||Number.isNaN(scheduledAt.getTime())||scheduledAt.getTime()<Date.now()+60000||scheduledAt.getTime()>Date.now()+30*24*60*60*1000)return res.status(400).json({message:"Choose a delivery time between 1 minute and 30 days from now."});
     if(recipientId!==null&&(!Number.isInteger(recipientId)||recipientId<=0||recipientId===userId)||groupId!==null&&(!Number.isInteger(groupId)||groupId<=0)||recipientId&&groupId)return res.status(400).json({message:"Choose a valid DM or group channel."});
     if(recipientId&&await blockedEitherWay(userId,recipientId))return res.status(403).json({message:"Messaging is unavailable for this user."});
+    if(recipientId){const target=await storage.getUser(recipientId);if(target?.dmFriendsOnly&&!(await areAcceptedFriends(userId,recipientId)))return res.status(403).json({message:"This user only accepts direct messages from friends."});}
     if(groupId){const [membership]=await chatDb.select({id:groupChatMembers.id}).from(groupChatMembers).where(and(eq(groupChatMembers.groupId,groupId),eq(groupChatMembers.userId,userId))).limit(1);if(!membership)return res.status(403).json({message:"You are not a member of this group."});}
     const [message]=await chatDb.insert(messages).values({senderId:userId,recipientId,groupId,content,scheduledAt}).returning();
     return res.status(201).json(message);
