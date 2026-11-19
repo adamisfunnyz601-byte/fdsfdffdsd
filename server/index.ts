@@ -82,6 +82,19 @@ app.use((req, res, next) => {
 // temporarily unavailable Postgres service does not cause connection-refused
 // health checks during cold starts.
 let startupState: "starting" | "ready" | "failed" = "starting";
+
+// Return a retryable response until migrations and API route registration finish.
+app.use("/api", (req, res, next) => {
+  if (startupState === "ready") return next();
+  res.setHeader("Retry-After", "3");
+  return res.status(503).json({
+    code: "NEXUS_STARTING",
+    message: startupState === "failed"
+      ? "NEXUS could not finish starting. Check the server database connection."
+      : "NEXUS is starting. Please retry shortly.",
+  });
+});
+
 app.get(["/health", "/healthz"], (_req, res) =>
   res.status(200).json({ status: "ok", service: "nexus-api", startup: startupState }),
 );
