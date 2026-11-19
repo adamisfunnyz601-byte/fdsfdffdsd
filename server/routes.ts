@@ -1,5 +1,5 @@
 
-import { db, pool, chatPool, enzonicPool } from "./db";
+import { db, pool, chatDb, chatPool, enzonicPool } from "./db";
 import { users, accessKeys, searchHistory, messages, groupChats, groupChatMembers, customEmojis, friendRequests, blocks, moderationLogs, blockBlastScores, dihhroAwards, communityServers, communityServerMembers, communityServerCategories, communityServerChannels, communityServerMessages, chatMessageReactions, chatPolls, chatPollOptions, chatPollVotes, passkeyCredentials } from "@shared/schema";
 import { eq, desc, and, or, gt, sql, inArray } from "drizzle-orm";
 import type { Express, Request } from "express";
@@ -1425,33 +1425,39 @@ export async function registerRoutes(
     }
 
     try {
-      await db.transaction(async tx => {
-        // Remove rows with restrictive user foreign keys before deleting the account.
-      const ownedGroups = await tx.select({ id: groupChats.id }).from(groupChats).where(eq(groupChats.ownerId, targetId));
-      const ownedGroupIds = ownedGroups.map(group => group.id);
-      if (ownedGroupIds.length) {
-        await tx.delete(messages).where(inArray(messages.groupId, ownedGroupIds));
-        await tx.delete(groupChatMembers).where(inArray(groupChatMembers.groupId, ownedGroupIds));
-        await tx.delete(groupChats).where(inArray(groupChats.id, ownedGroupIds));
-      }
-      await tx.delete(messages).where(or(eq(messages.senderId, targetId), eq(messages.recipientId, targetId)));
-      await tx.execute(sql`DELETE FROM friend_requests WHERE requester_id = ${targetId} OR addressee_id = ${targetId}`);
-      await tx.execute(sql`DELETE FROM blocks WHERE blocker_id = ${targetId} OR blocked_id = ${targetId}`);
-      await tx.delete(groupChatMembers).where(eq(groupChatMembers.userId, targetId));
-      await tx.execute(sql`DELETE FROM user_inventory WHERE user_id = ${targetId}`);
-      await tx.delete(searchHistory).where(eq(searchHistory.userId, targetId));
-      await tx.execute(sql`UPDATE access_keys SET created_by = NULL WHERE created_by = ${targetId}`);
-      await tx.execute(sql`UPDATE access_requests SET created_user_id = NULL WHERE created_user_id = ${targetId}`);
-      await tx.execute(sql`UPDATE custom_emojis SET created_by = NULL WHERE created_by = ${targetId}`);
-      await tx.delete(moderationLogs).where(or(eq(moderationLogs.actorId, targetId), eq(moderationLogs.targetId, targetId)));
-      await tx.execute(sql`DELETE FROM user_sessions WHERE sess->>'userId' = ${String(targetId)}`);
-      await tx.insert(moderationLogs).values({
-        actorId,
-        targetId: null,
-        action: "account-delete",
-        reason: `Deleted account ${target.username} (#${target.id})`,
-        metadata: { deletedUserId: target.id, deletedUsername: target.username, deletedRole: targetRole, actorRole },
+      // Chat tables live in Prisma Postgres; account, moderation and session
+      // tables live in Enzonic. A transaction cannot span the two databases.
+      await chatDb.transaction(async tx => {
+        const ownedGroups = await tx.select({ id: groupChats.id }).from(groupChats)
+          .where(eq(groupChats.ownerId, targetId));
+        const ownedGroupIds = ownedGroups.map(group => group.id);
+        if (ownedGroupIds.length) {
+          await tx.delete(messages).where(inArray(messages.groupId, ownedGroupIds));
+          await tx.delete(groupChatMembers).where(inArray(groupChatMembers.groupId, ownedGroupIds));
+          await tx.delete(groupChats).where(inArray(groupChats.id, ownedGroupIds));
+        }
+        await tx.delete(messages).where(or(eq(messages.senderId, targetId), eq(messages.recipientId, targetId)));
+        await tx.delete(groupChatMembers).where(eq(groupChatMembers.userId, targetId));
+        await tx.execute(sql`DELETE FROM blocks WHERE blocker_id = ${targetId} OR blocked_id = ${targetId}`);
       });
+
+      await db.transaction(async tx => {
+        await tx.execute(sql`DELETE FROM friend_requests WHERE requester_id = ${targetId} OR addressee_id = ${targetId}`);
+        await tx.execute(sql`DELETE FROM blocks WHERE blocker_id = ${targetId} OR blocked_id = ${targetId}`);
+        await tx.execute(sql`DELETE FROM user_inventory WHERE user_id = ${targetId}`);
+        await tx.delete(searchHistory).where(eq(searchHistory.userId, targetId));
+        await tx.execute(sql`UPDATE access_keys SET created_by = NULL WHERE created_by = ${targetId}`);
+        await tx.execute(sql`UPDATE access_requests SET created_user_id = NULL WHERE created_user_id = ${targetId}`);
+        await tx.execute(sql`UPDATE custom_emojis SET created_by = NULL WHERE created_by = ${targetId}`);
+        await tx.delete(moderationLogs).where(or(eq(moderationLogs.actorId, targetId), eq(moderationLogs.targetId, targetId)));
+        await tx.execute(sql`DELETE FROM user_sessions WHERE sess->>'userId' = ${String(targetId)}`);
+        await tx.insert(moderationLogs).values({
+          actorId,
+          targetId: null,
+          action: "account-delete",
+          reason: `Deleted account ${target.username} (#${target.id})`,
+          metadata: { deletedUserId: target.id, deletedUsername: target.username, deletedRole: targetRole, actorRole },
+        });
         await tx.delete(users).where(eq(users.id, targetId));
       });
     } catch (error) {
@@ -2390,7 +2396,7 @@ export async function registerRoutes(
     if (activeMute && !["unmute","untimeout","unjail","unrestrict"].includes(activeMute.action) && (!activeMute.expiresAt || activeMute.expiresAt > new Date())) {
       return res.status(403).json({ message: "You are currently muted or restricted." });
     }
-    const created = await db.transaction(async tx => {
+    const created = await chatDb.transaction(async tx => {
       const [message] = await tx.insert(messages).values({
         senderId: req.session.userId!,
         recipientId,
@@ -2418,7 +2424,7 @@ export async function registerRoutes(
     if (!visible.some((item: any) => Number(item.id) === message.id)) return res.status(403).json({ message: "You cannot vote in this poll." });
     const [option] = await db.select().from(chatPollOptions).where(and(eq(chatPollOptions.id, optionId), eq(chatPollOptions.pollId, pollId))).limit(1);
     if (!option) return res.status(400).json({ message: "That option does not belong to this poll." });
-    await db.transaction(async tx => {
+    await chatDb.transaction(async tx => {
       await tx.delete(chatPollVotes).where(and(eq(chatPollVotes.pollId, pollId), eq(chatPollVotes.userId, req.session.userId!)));
       await tx.insert(chatPollVotes).values({ pollId, optionId, userId: req.session.userId! });
     });
