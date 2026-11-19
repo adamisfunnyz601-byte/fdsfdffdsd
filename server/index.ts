@@ -82,7 +82,6 @@ app.use((req, res, next) => {
 // temporarily unavailable Postgres service does not cause connection-refused
 // health checks during cold starts.
 let startupState: "starting" | "ready" | "failed" = "starting";
-let startupFailure = "";
 app.get(["/health", "/healthz"], (_req, res) =>
   res.status(200).json({ status: "ok", service: "nexus-api", startup: startupState }),
 );
@@ -128,9 +127,6 @@ httpServer.listen({ port, host: "0.0.0.0" }, () => {
   try {
   await registerRoutes(httpServer, app);
   startStorageCleanup();
-  startupState = "ready";
-  log("Database initialization and route registration completed.");
-
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
@@ -154,14 +150,9 @@ httpServer.listen({ port, host: "0.0.0.0" }, () => {
     await setupVite(httpServer, app);
   }
 
-  if (process.env.NODE_ENV === "production") {
-    serveStatic(app);
-  } else {
-    const { setupVite } = await import("./vite");
-    await setupVite(httpServer, app);
-  }
+  startupState = "ready";
+  log("Database initialization and route registration completed.");
 })().catch((error) => {
   startupState = "failed";
-  startupFailure = error instanceof Error ? error.message : "Database initialization failed";
   console.error("[startup] Database initialization failed:", error);
 });
