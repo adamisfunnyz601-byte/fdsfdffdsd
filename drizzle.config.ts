@@ -20,6 +20,6 @@ export default defineConfig({
   schema: "./shared/chat-schema.ts",
   dialect: "postgresql",
   // Enzonic installs pg_stat_statements; never let Drizzle manage its extension-owned views.
-  tablesFilter: ["!pg_stat_*"],
+  tablesFilter: ["!pg_stat_*", "!nexus_storage_cleanup_state"],
   dbCredentials: { url: chatDatabaseUrl },
 });
