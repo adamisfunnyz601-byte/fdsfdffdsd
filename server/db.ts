@@ -5,10 +5,21 @@ import * as schema from "@shared/schema";
 
 const { Pool } = pg;
 
-const chatConnectionString = process.env.DATABASE_URL;
-if (!chatConnectionString) {
+const rawChatConnectionString = process.env.DATABASE_URL;
+if (!rawChatConnectionString) {
   throw new Error("DATABASE_URL must point to the chat PostgreSQL database.");
 }
+function withEnzonicEndpoint(connectionString: string): string {
+  const url = new URL(connectionString);
+  if (url.hostname.endsWith(".db.enzonic.com") && !url.searchParams.has("options")) {
+    const endpoint = url.hostname
+      .replace(/-pooler\.db\.enzonic\.com$/, "")
+      .replace(/\.db\.enzonic\.com$/, "");
+    url.searchParams.set("options", `endpoint=${endpoint}`);
+  }
+  return url.toString();
+}
+const chatConnectionString = withEnzonicEndpoint(rawChatConnectionString);
 if (!process.env.ENZONIC_DATABASE_URL) {
   throw new Error("ENZONIC_DATABASE_URL must point to the Enzonic accounts database.");
 }
