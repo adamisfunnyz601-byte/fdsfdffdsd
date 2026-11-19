@@ -12,24 +12,11 @@ if (!process.env.ENZONIC_DATABASE_URL) {
   throw new Error("ENZONIC_DATABASE_URL must point to the Enzonic accounts database.");
 }
 
-// pg-connection-string currently treats these modes as verify-full aliases.
- // Make that behavior explicit now so pg v9/libpq-compat upgrades do not
- // silently weaken TLS verification.
-function explicitSslMode(connectionString: string): string {
-  try {
-    const parsed = new URL(connectionString);
-    const mode = parsed.searchParams.get("sslmode")?.toLowerCase();
-    if (mode && ["prefer", "require", "verify-ca"].includes(mode)) {
-      parsed.searchParams.set("sslmode", "verify-full");
-    }
-    return parsed.toString();
-  } catch {
-    return connectionString;
-  }
-}
-
-const chatConnectionString = explicitSslMode(process.env.DATABASE_URL);
-const enzonicConnectionString = explicitSslMode(process.env.ENZONIC_DATABASE_URL);
+// Preserve the database provider's requested TLS mode. Rewriting
+// sslmode=require to verify-full can reject managed-provider certificates
+// that are valid for the provider but not trusted by this container.
+const chatConnectionString = process.env.DATABASE_URL;
+const enzonicConnectionString = process.env.ENZONIC_DATABASE_URL;
 
 const poolMax = Number.parseInt(process.env.DATABASE_POOL_MAX || "10", 10);
 const commonPoolOptions = {
