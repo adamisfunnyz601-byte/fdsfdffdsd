@@ -61,6 +61,7 @@ export const Lightbulb = (props: IconProps) => <AppIcon name="lightbulb" fallbac
 export const Link = (props: IconProps) => <AppIcon name="link" fallback={Lucide.Link} {...props} />;
 export const Link2 = (props: IconProps) => <AppIcon name="link2" fallback={Lucide.Link2} {...props} />;
 export const Loader2 = (props: IconProps) => <AppIcon name="loader2" fallback={Lucide.Loader2} {...props} />;
+export const Lock = (props: IconProps) => <AppIcon name="lock" fallback={Lucide.Lock} {...props} />;
 export const LockKeyhole = (props: IconProps) => <AppIcon name="lock-keyhole" fallback={Lucide.LockKeyhole} {...props} />;
 export const LogIn = (props: IconProps) => <AppIcon name="log-in" fallback={Lucide.LogIn} {...props} />;
 export const LogOut = (props: IconProps) => <AppIcon name="log-out" fallback={Lucide.LogOut} {...props} />;
