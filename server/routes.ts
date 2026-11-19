@@ -2150,10 +2150,15 @@ export async function registerRoutes(
     if (groupId !== undefined && (!Number.isInteger(groupId) || groupId <= 0)) {
       return res.status(400).json({ message: "Invalid group" });
     }
-    const messages = await storage.getMessages(req.session.userId!, recipientId, groupId);
-    res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate");
-    res.setHeader("Pragma", "no-cache");
-    res.json(messages);
+    try {
+      const messages = await storage.getMessages(req.session.userId!, recipientId, groupId);
+      res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.json(messages);
+    } catch (error) {
+      console.error("[chat-messages] Failed to load messages:", error);
+      res.status(503).json({ message: "The chat database is temporarily unavailable. Please retry." });
+    }
   });
 
   app.post(api.chat.send.path, requireAuth, async (req, res) => {
