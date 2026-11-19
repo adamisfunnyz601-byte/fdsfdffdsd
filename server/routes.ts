@@ -3611,7 +3611,10 @@ export async function registerRoutes(
     room.invited.delete(userId);
     const user=await storage.getUser(userId);
     room.participants.set(userId,user?.username||("User_"+userId));
-    const participants=Array.from(room.participants.entries()).filter(([id])=>id!==userId).map(([userId,username])=>({userId,username}));
+    const participants=await Promise.all(Array.from(room.participants.entries()).filter(([id])=>id!==userId).map(async([peerId,username])=>{
+      const peer=await storage.getUser(peerId);
+      return {userId:peerId,username,avatarUrl:peer?.avatarUrl||null};
+    }));
     res.json({roomId,withVideo:room.withVideo,participants});
   });
   app.post("/api/chat/group-voice/decline",requireAuth,async(req,res)=>{
