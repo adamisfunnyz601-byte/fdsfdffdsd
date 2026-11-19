@@ -124,7 +124,6 @@ httpServer.listen({ port, host: "0.0.0.0" }, () => {
 });
 
 (async () => {
-  try {
   await registerRoutes(httpServer, app);
   startStorageCleanup();
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
@@ -152,9 +151,6 @@ httpServer.listen({ port, host: "0.0.0.0" }, () => {
 
   startupState = "ready";
   log("Database initialization and route registration completed.");
-  } catch (error) {
-    throw error;
-  }
 })().catch((error) => {
   startupState = "failed";
   console.error("[startup] Database initialization failed:", error);
