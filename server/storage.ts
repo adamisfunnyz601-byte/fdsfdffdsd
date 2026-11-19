@@ -126,6 +126,7 @@ export class DatabaseStorage implements IStorage {
         : sql`${messages.recipientId} IS NULL AND ${messages.groupId} IS NULL`;
     const visibleFilter = and(
       channelFilter,
+      sql`(${messages.scheduledAt} IS NULL OR ${messages.scheduledAt} <= NOW() OR ${messages.senderId} = ${currentUserId})`,
       sql`NOT EXISTS (
         SELECT 1 FROM blocks
         WHERE (blocks.blocker_id = ${currentUserId} AND blocks.blocked_id = ${messages.senderId})
@@ -145,6 +146,9 @@ export class DatabaseStorage implements IStorage {
       mediaType: messages.mediaType,
       hasMedia: sql<boolean>`(${messages.mediaUrl} IS NOT NULL)`,
       replyToId: messages.replyToId,
+      editedAt: messages.editedAt,
+      scheduledAt: messages.scheduledAt,
+      isPinned: messages.isPinned,
       createdAt: messages.createdAt,
       senderName: users.username,
       senderRole: users.role,
