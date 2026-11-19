@@ -1,6 +1,6 @@
 import { pgTable, integer, text } from "drizzle-orm/pg-core";
 
-// Public profile projection mirrored from Enzonic into Prisma for chat joins.
+// Public profile projection mirrored from Enzonic into the chat database for chat joins.
 // Never add credentials or private account fields to this table.
 export const chatUsers = pgTable("users", {
   id: integer("id").primaryKey(),
