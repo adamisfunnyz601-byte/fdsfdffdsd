@@ -6,8 +6,8 @@ function withEnzonicEndpoint(connectionString: string): string {
   const url = new URL(connectionString);
   if (url.hostname.endsWith(".db.enzonic.com") && !url.searchParams.has("options")) {
     const endpoint = url.hostname
-      .replace(/-pooler\\.db\\.enzonic\\.com$/, "")
-      .replace(/\\.db\\.enzonic\\.com$/, "");
+      .replace(/-pooler\.db\\.enzonic\\.com$/, "")
+      .replace(/\.db\\.enzonic\\.com$/, "");
     url.searchParams.set("options", `endpoint=${endpoint}`);
   }
   return url.toString();
