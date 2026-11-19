@@ -5,9 +5,9 @@ import * as schema from "@shared/schema";
 
 const { Pool } = pg;
 
-const chatConnectionString = process.env.CHAT_DATABASE_URL || process.env.DATABASE_URL;
+const chatConnectionString = process.env.DATABASE_URL;
 if (!chatConnectionString) {
-  throw new Error("CHAT_DATABASE_URL (or legacy DATABASE_URL) must point to the chat PostgreSQL database.");
+  throw new Error("DATABASE_URL must point to the chat PostgreSQL database.");
 }
 if (!process.env.ENZONIC_DATABASE_URL) {
   throw new Error("ENZONIC_DATABASE_URL must point to the Enzonic accounts database.");
@@ -39,7 +39,7 @@ export const chatDb = drizzle(chatPool, { schema });
 export const enzonicDb = drizzle(enzonicPool, { schema });
 
 // Account identity/profile/security remains in Enzonic. Chat content and
-// community-chat structures use CHAT_DATABASE_URL (DATABASE_URL is a legacy fallback).
+// community-chat structures use DATABASE_URL.
 const CHAT_TABLES = new Set([
   "group_chats", "group_chat_members", "community_servers",
   "community_server_members", "community_server_categories",
