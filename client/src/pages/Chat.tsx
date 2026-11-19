@@ -20,6 +20,8 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@shared/routes";
+import { NexusAudioPlayer } from "@/components/NexusAudioPlayer";
+import { NexusVideoPlayer } from "@/components/NexusVideoPlayer";
 import { motion, AnimatePresence } from "framer-motion";
 import { ProfileModal, Avatar } from "@/components/ProfileModal";
 import { getFontClass, getUsernameGradientStyle } from "@/components/ProfileTextStyle";
@@ -377,15 +379,10 @@ function LazyMediaAttachment({
     );
   }
   if (message.mediaType === "video") {
-    return <video src={mediaUrl} controls className="mt-2 max-w-full max-h-60 w-full rounded" preload="metadata" />;
+    return <NexusVideoPlayer src={mediaUrl} title={message.fileName || "NEXUS video"} />;
   }
   if (message.mediaType === "audio") {
-    return (
-      <div className="mt-2 flex items-center gap-3">
-        <Music className="w-4 h-4 text-violet-200 shrink-0" />
-        <audio src={mediaUrl} controls className="h-8 flex-1 accent-violet-400" />
-      </div>
-    );
+    return <div className="mt-2"><NexusAudioPlayer src={mediaUrl} title={message.fileName || "Audio message"} nexusFormat={String(message.fileName || "").toLowerCase().endsWith(".namaf1")} /></div>;
   }
   return (
     <a href={mediaUrl} download className="mt-2 inline-flex items-center gap-2 text-[10px] font-mono text-violet-200 underline">
@@ -2620,12 +2617,23 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
           )}
         </AnimatePresence>
 
-        {/* Media Lightbox */}
+        {/* NEXUS media studio: image preview with save/open/close actions. */}
         {mediaPreview && (
-          <div className="fixed inset-0 z-[1000] bg-black/98 flex items-center justify-center p-8" onClick={() => setMediaPreview(null)}>
-            <button className="absolute top-6 right-6 text-white/50 hover:text-white"><X className="w-8 h-8" /></button>
-            {mediaPreview.type === 'image' && <img src={mediaPreview.url} className="max-w-full max-h-[85vh] object-contain" />}
-            {mediaPreview.type === 'video' && <video src={mediaPreview.url} controls autoPlay className="max-w-full max-h-[85vh]" />}
+          <div role="dialog" aria-modal="true" aria-label="NEXUS media viewer" className="fixed inset-0 z-[1000] flex items-center justify-center bg-[#030208]/95 p-3 backdrop-blur-2xl sm:p-6" onClick={() => setMediaPreview(null)}>
+            <div className="absolute inset-x-0 top-0 flex items-center justify-between border-b border-white/10 bg-black/45 px-4 py-3 sm:px-6">
+              <div className="min-w-0"><div className="text-xs font-bold tracking-[.22em] text-violet-200">NEXUS MEDIA</div><div className="truncate text-[11px] text-white/45">{mediaPreview.name || "Attachment"}</div></div>
+              <div className="flex shrink-0 items-center gap-2">
+                <a href={mediaPreview.url} download={mediaPreview.name || "nexus-image"} onClick={event=>event.stopPropagation()} className="rounded-xl border border-violet-300/25 bg-violet-500/15 px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-500/25"><Download className="mr-1 inline h-4 w-4"/> Save</a>
+                <a href={mediaPreview.url} target="_blank" rel="noopener noreferrer" onClick={event=>event.stopPropagation()} className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs text-white/80 hover:bg-white/10">Open original ↗</a>
+                <button type="button" aria-label="Close viewer" onClick={()=>setMediaPreview(null)} className="rounded-xl border border-white/15 bg-white/5 p-2 text-white/75 hover:bg-white/10"><X className="h-5 w-5"/></button>
+              </div>
+            </div>
+            <div className="flex max-h-full max-w-full items-center justify-center pt-16" onClick={event=>event.stopPropagation()}>
+              {mediaPreview.type === "image" && <img src={mediaPreview.url} alt={mediaPreview.name || "Expanded image"} className="max-h-[82vh] max-w-[96vw] rounded-xl object-contain shadow-[0_20px_90px_rgba(0,0,0,.7)]"/>}
+              {mediaPreview.type === "video" && <NexusVideoPlayer src={mediaPreview.url} title={mediaPreview.name || "NEXUS video"}/>}
+              {mediaPreview.type === "audio" && <NexusAudioPlayer src={mediaPreview.url} title={mediaPreview.name || "NEXUS audio"}/>}
+            </div>
+            <div className="absolute bottom-4 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[10px] text-white/45">Click outside to close · Your media stays in NEXUS</div>
           </div>
         )}
 
