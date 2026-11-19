@@ -1,10 +1,11 @@
 import { defineConfig } from "drizzle-kit";
 
-if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL must point to Prisma Postgres.");
+const chatDatabaseUrl = process.env.CHAT_DATABASE_URL || process.env.DATABASE_URL;
+if (!chatDatabaseUrl) throw new Error("CHAT_DATABASE_URL (or legacy DATABASE_URL) must point to the chat PostgreSQL database.");
 
 export default defineConfig({
-  out: "./migrations/prisma",
+  out: "./migrations/chat",
   schema: "./shared/chat-schema.ts",
   dialect: "postgresql",
-  dbCredentials: { url: process.env.DATABASE_URL },
+  dbCredentials: { url: chatDatabaseUrl },
 });
