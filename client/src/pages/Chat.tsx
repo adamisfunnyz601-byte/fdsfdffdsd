@@ -619,7 +619,7 @@ const TerminalMessage = ({
                   </div>
                 )}
                 {isMe && (
-                  <button type="button" onClick={async()=>{const next=window.prompt("Edit message",String(msg.content||""));if(next===null||!next.trim())return;try{const response=await apiFetch(`/api/chat/messages/${msg.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:next}),credentials:"include"});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.message||"Edit failed");queryClient.invalidateQueries({queryKey:["/api/chat/list"]});toast({title:"Message updated"});}catch(error:any){toast({title:"Edit failed",description:error.message,variant:"destructive"});}setShowActions(false);}} className="flex items-center gap-2 px-3 py-1.5 text-[10px] text-emerald-200 hover:bg-emerald-500/15 font-bold uppercase border-t border-white/5"><Pencil className="h-3 w-3"/> Edit message</button>
+                  <button type="button" onClick={async()=>{const next=window.prompt("Edit message",String(msg.content||""));if(next===null||!next.trim())return;try{const response=await apiFetch(`/api/chat/messages/${msg.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:next}),credentials:"include"});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.message||"Edit failed");queryClient.invalidateQueries({queryKey:[api.chat.list.path]});toast({title:"Message updated"});}catch(error:any){toast({title:"Edit failed",description:error.message,variant:"destructive"});}setShowActions(false);}} className="flex items-center gap-2 px-3 py-1.5 text-[10px] text-emerald-200 hover:bg-emerald-500/15 font-bold uppercase border-t border-white/5"><Pencil className="h-3 w-3"/> Edit message</button>
                 )}
                 <button type="button" onClick={async()=>{try{const response=await apiFetch(`/api/chat/messages/${msg.id}/history`,{credentials:"include"});const data=await response.json();if(!response.ok)throw new Error(data.message||"History unavailable");window.alert(data.length?data.map((entry:any)=>new Date(entry.editedAt||Date.now()).toLocaleString()+"\n"+entry.content).join("\n\n────────\n\n"):"No previous edits.");}catch(error:any){toast({title:"History unavailable",description:error.message,variant:"destructive"});}setShowActions(false);}} className="flex items-center gap-2 px-3 py-1.5 text-[10px] text-sky-200 hover:bg-sky-500/15 font-bold uppercase border-t border-white/5"><Pencil className="h-3 w-3"/> Edit history</button>
                 <button type="button" onClick={async()=>{try{const response=await apiFetch(`/api/chat/messages/${msg.id}/pin`,{method:"POST",credentials:"include"});const data=await response.json();if(!response.ok)throw new Error(data.message||"Pin failed");queryClient.invalidateQueries({queryKey:["/api/chat/list"]});toast({title:data.isPinned?"Message pinned":"Message unpinned"});}catch(error:any){toast({title:"Pin failed",description:error.message,variant:"destructive"});}setShowActions(false);}} className="flex items-center gap-2 px-3 py-1.5 text-[10px] text-amber-200 hover:bg-amber-500/15 font-bold uppercase border-t border-white/5">📌 {msg.isPinned?"Unpin":"Pin"} message</button>
@@ -1308,6 +1308,22 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
   };
 
 
+
+  const scheduleCurrentMessage=async()=>{
+    const content=inputContent.trim();
+    if(!content){toast({title:"Nothing to schedule",description:"Write a message first.",variant:"destructive"});return;}
+    const localTime=window.prompt("Schedule for (local date and time, e.g. 2026-11-20 18:30):");
+    if(!localTime)return;
+    const scheduledAt=new Date(localTime.replace(" ","T"));
+    if(Number.isNaN(scheduledAt.getTime())){toast({title:"Invalid date",description:"Use YYYY-MM-DD HH:MM.",variant:"destructive"});return;}
+    try{
+      const response=await apiFetch("/api/chat/schedule",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content,recipientId:selectedRecipientId,groupId:selectedGroupId,scheduledAt:scheduledAt.toISOString()}),credentials:"include"});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.message||"Could not schedule message.");
+      setInputContent("");queryClient.invalidateQueries({queryKey:[api.chat.list.path]});
+      toast({title:"Message scheduled",description:scheduledAt.toLocaleString()});
+    }catch(error:any){toast({title:"Schedule failed",description:error.message||"Could not schedule message.",variant:"destructive"});}
+  };
 
   // ============================================================
   // SEND MESSAGE
@@ -3072,7 +3088,7 @@ const openGroupInvitePicker=async()=>{setShowGroupCallInvites(v=>!v);const invit
               </button>
               <EmojiButton onSelect={emoji => setInputContent(prev => prev + emoji)} />
 
-              <CyberButton type="submit" disabled={!inputContent.trim() && !uploadFile} size="sm" className="h-10 px-4 flex-shrink-0">
+              <button type="button" onClick={()=>void scheduleCurrentMessage()} disabled={!inputContent.trim()} title="Schedule message" className="flex h-10 shrink-0 items-center rounded-xl border border-amber-300/20 px-3 text-[9px] font-bold text-amber-200/80 hover:bg-amber-300/10 disabled:opacity-30">SCHEDULE</button><CyberButton type="submit" disabled={!inputContent.trim() && !uploadFile} size="sm" className="h-10 px-4 flex-shrink-0">
                 <Send className="w-4 h-4" />
               </CyberButton>
             </form>
