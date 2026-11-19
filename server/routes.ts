@@ -2409,6 +2409,8 @@ export async function registerRoutes(
     const groupId=req.body?.groupId==null?null:Number(req.body.groupId);
     const scheduledAt=new Date(req.body?.scheduledAt);
     if(!content||Number.isNaN(scheduledAt.getTime())||scheduledAt.getTime()<Date.now()+60000||scheduledAt.getTime()>Date.now()+30*24*60*60*1000)return res.status(400).json({message:"Choose a delivery time between 1 minute and 30 days from now."});
+    const [activeMute]=await db.select().from(moderationLogs).where(and(eq(moderationLogs.targetId,userId),sql`${moderationLogs.action} IN ('mute','timeout','jail','restrict','unmute','untimeout','unjail','unrestrict')`)).orderBy(desc(moderationLogs.createdAt)).limit(1);
+    if(activeMute&&!['unmute','untimeout','unjail','unrestrict'].includes(activeMute.action)&&(!activeMute.expiresAt||activeMute.expiresAt>new Date()))return res.status(403).json({message:'You are currently muted or restricted.'});
     if(recipientId!==null&&(!Number.isInteger(recipientId)||recipientId<=0||recipientId===userId)||groupId!==null&&(!Number.isInteger(groupId)||groupId<=0)||recipientId&&groupId)return res.status(400).json({message:"Choose a valid DM or group channel."});
     if(recipientId&&await blockedEitherWay(userId,recipientId))return res.status(403).json({message:"Messaging is unavailable for this user."});
     if(recipientId){const target=await storage.getUser(recipientId);if(target?.dmFriendsOnly&&!(await areAcceptedFriends(userId,recipientId)))return res.status(403).json({message:"This user only accepts direct messages from friends."});}
