@@ -5,8 +5,9 @@ import * as schema from "@shared/schema";
 
 const { Pool } = pg;
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL must point to the Prisma Postgres database.");
+const chatConnectionString = process.env.CHAT_DATABASE_URL || process.env.DATABASE_URL;
+if (!chatConnectionString) {
+  throw new Error("CHAT_DATABASE_URL (or legacy DATABASE_URL) must point to the chat PostgreSQL database.");
 }
 if (!process.env.ENZONIC_DATABASE_URL) {
   throw new Error("ENZONIC_DATABASE_URL must point to the Enzonic accounts database.");
@@ -15,7 +16,6 @@ if (!process.env.ENZONIC_DATABASE_URL) {
 // Preserve the database provider's requested TLS mode. Rewriting
 // sslmode=require to verify-full can reject managed-provider certificates
 // that are valid for the provider but not trusted by this container.
-const chatConnectionString = process.env.DATABASE_URL;
 const enzonicConnectionString = process.env.ENZONIC_DATABASE_URL;
 
 const poolMax = Number.parseInt(process.env.DATABASE_POOL_MAX || "10", 10);
@@ -31,15 +31,15 @@ const commonPoolOptions = {
 export const chatPool = new Pool({ ...commonPoolOptions, connectionString: chatConnectionString });
 export const enzonicPool = new Pool({ ...commonPoolOptions, connectionString: enzonicConnectionString, max: 5 });
 
-for (const [name, target] of [["prisma", chatPool], ["enzonic", enzonicPool]] as const) {
+for (const [name, target] of [["chat", chatPool], ["enzonic", enzonicPool]] as const) {
   target.on("error", (error) => console.error(`[${name}-database] Unexpected idle-client error:`, error));
 }
 
 export const chatDb = drizzle(chatPool, { schema });
 export const enzonicDb = drizzle(enzonicPool, { schema });
 
-// Account identity/profile/security remains in Enzonic. All chat content and
-// community-chat structures are routed to Prisma Postgres (DATABASE_URL).
+// Account identity/profile/security remains in Enzonic. Chat content and
+// community-chat structures use CHAT_DATABASE_URL (DATABASE_URL is a legacy fallback).
 const CHAT_TABLES = new Set([
   "group_chats", "group_chat_members", "community_servers",
   "community_server_members", "community_server_categories",
