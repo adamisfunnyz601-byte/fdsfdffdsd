@@ -3577,9 +3577,14 @@ export async function registerRoutes(
   app.get("/api/chat/group-voice/members",requireAuth,async(req,res)=>{
     const userId=Number(req.session.userId!),groupId=Number(req.query.groupId);
     if(!Number.isInteger(groupId)||groupId<=0||!await isGroupChatMember(groupId,userId)) return res.status(403).json({message:"You are not a member of this group."});
-    const members=await db.select({userId:users.id,username:users.username}).from(groupChatMembers)
+    const members=await db.select({userId:users.id,username:users.username,avatarUrl:users.avatarUrl}).from(groupChatMembers)
       .innerJoin(users,eq(groupChatMembers.userId,users.id)).where(eq(groupChatMembers.groupId,groupId));
-    res.json(members);
+    // Only show group members who are already accepted friends of the caller.
+    const friendsOnly=await Promise.all(members.filter(member=>member.userId!==userId).map(async member=>({
+      ...member,
+      isFriend:await areAcceptedFriends(userId,member.userId),
+    })));
+    res.set("Cache-Control","no-store").json(friendsOnly.filter(member=>member.isFriend).map(({isFriend:_isFriend,...member})=>member));
   });
   app.post("/api/chat/group-voice/invite",requireAuth,async(req,res)=>{
     const userId=Number(req.session.userId!), targetId=Number(req.body?.userId), room=getGroupVoiceRoom(req.body?.roomId,userId);
