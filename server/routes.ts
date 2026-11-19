@@ -3638,11 +3638,12 @@ export async function registerRoutes(
     pushGroupVoiceSignal(room.ownerId,{type:"group-invite-declined",roomId:room.id,userId,username:decliner?.username||"Your friend"});
     res.json({success:true});
   });
-  app.post("/api/chat/group-voice/signal",requireAuth,(req,res)=>{
+  app.post("/api/chat/group-voice/signal",requireAuth,async(req,res)=>{
     const userId=Number(req.session.userId!),to=Number(req.body?.to),room=getGroupVoiceRoom(req.body?.roomId,userId),signal=req.body?.signal;
     if(!room||!room.participants.has(to)||to===userId) return res.status(403).json({message:"Both people must be in this group call."});
     if(!signal||!["offer","answer","ice","left"].includes(signal.type)) return res.status(400).json({message:"Invalid WebRTC signal."});
-    pushGroupVoiceSignal(to,{type:"group-signal",roomId:room.id,from:userId,signal});
+    const sender=await storage.getUser(userId);
+    pushGroupVoiceSignal(to,{type:"group-signal",roomId:room.id,from:userId,fromName:sender?.username||room.participants.get(userId)||"NEXUS user",avatarUrl:sender?.avatarUrl||null,signal});
     res.json({success:true});
   });
   app.get("/api/chat/group-voice/poll",requireAuth,(req,res)=>{
