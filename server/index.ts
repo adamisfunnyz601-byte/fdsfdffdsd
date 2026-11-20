@@ -149,7 +149,17 @@ function describeDatabaseError(error: unknown): string {
     ? error.message
     : typeof details.message === "string" ? details.message : String(error);
   // Connection errors should be useful without ever printing credentials.
-  const safeMessage = message.replace(/(postgres(?:ql)?:\/\/)[^@\s]+@/gi, "$1[redacted]@");
+  let safeMessage = message;
+  for (const prefix of ["postgres://", "postgresql://"]) {
+    let start = safeMessage.indexOf(prefix);
+    while (start !== -1) {
+      const credentialsStart = start + prefix.length;
+      const at = safeMessage.indexOf("@", credentialsStart);
+      if (at === -1) break;
+      safeMessage = safeMessage.slice(0, credentialsStart) + "[redacted]" + safeMessage.slice(at);
+      start = safeMessage.indexOf(prefix, credentialsStart + "[redacted]".length);
+    }
+  }
   const code = typeof details.code === "string" ? ` ${details.code}` : "";
   const endpoint = typeof details.address === "string"
     ? ` (${details.address}${typeof details.port === "number" ? `:${details.port}` : ""})`
