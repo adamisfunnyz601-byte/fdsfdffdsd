@@ -1,7 +1,7 @@
 import { defineConfig } from "drizzle-kit";
 
-const rawChatDatabaseUrl = process.env.DATABASE_URL;
-if (!rawChatDatabaseUrl) throw new Error("DATABASE_URL must point to the chat PostgreSQL database.");
+const rawChatDatabaseUrl = process.env.MESSAGES_URL || process.env.DATABASE_URL;
+if (!rawChatDatabaseUrl) throw new Error("MESSAGES_URL (or DATABASE_URL) must point to the chat PostgreSQL database.");
 
 const chatDatabaseUrl = rawChatDatabaseUrl;
 
