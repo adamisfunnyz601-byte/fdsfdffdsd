@@ -104,7 +104,7 @@ app.get("/readyz", async (_req, res) => {
   }
   try {
     await Promise.all([chatPool.query("SELECT 1"), enzonicPool.query("SELECT 1")]);
-    return res.status(200).json({ status: "ready", service: "nexus-api", databases: { prisma: "ok", enzonic: "ok" } });
+    return res.status(200).json({ status: "ready", service: "nexus-api", databases: { chat: "ok", accounts: "ok" } });
   } catch (error) {
     console.error("[health] Readiness check failed:", error);
     return res.status(503).json({ status: "not_ready", service: "nexus-api" });
@@ -137,20 +137,49 @@ httpServer.listen({ port, host: "0.0.0.0" }, () => {
 });
 
 // Managed databases can take time to wake and may reset early connections.
-// Keep the service alive and retry both pools until PostgreSQL is reachable.
+// Check both independently so one unavailable database never hides the state
+// of the other. Enzonic recommends pooled URLs for application connections.
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function describeDatabaseError(error: unknown): string {
+  const details = error && typeof error === "object"
+    ? error as { code?: unknown; message?: unknown; syscall?: unknown; address?: unknown; port?: unknown }
+    : {};
+  const message = error instanceof Error
+    ? error.message
+    : typeof details.message === "string" ? details.message : String(error);
+  // Connection errors should be useful without ever printing credentials.
+  const safeMessage = message.replace(/(postgres(?:ql)?:\\/\\/)[^@\\s]+@/gi, "$1[redacted]@");
+  const code = typeof details.code === "string" ? ` ${details.code}` : "";
+  const endpoint = typeof details.address === "string"
+    ? ` (${details.address}${typeof details.port === "number" ? `:${details.port}` : ""})`
+    : "";
+  const syscall = typeof details.syscall === "string" ? ` ${details.syscall}` : "";
+  return `${code}${syscall}${endpoint}: ${safeMessage}`;
+}
+
 async function waitForDatabaseConnections() {
   let retryDelay = 2_000;
   while (!isShuttingDown) {
-    try {
-      await enzonicPool.query("SELECT 1");
-      await chatPool.query("SELECT 1");
+    const checks = await Promise.allSettled([
+      enzonicPool.query("SELECT 1"),
+      chatPool.query("SELECT 1"),
+    ]);
+    const [accounts, chat] = checks;
+    if (accounts.status === "fulfilled" && chat.status === "fulfilled") {
+      log("Accounts and chat PostgreSQL connections are ready.", "startup");
       return;
-    } catch {
-      log(`Database is not reachable yet; retrying in ${Math.round(retryDelay / 1000)}s.`, "startup");
-      await wait(retryDelay);
-      retryDelay = Math.min(Math.round(retryDelay * 1.5), 15_000);
     }
+
+    if (accounts.status === "rejected") {
+      log(`Accounts database connection failed:${describeDatabaseError(accounts.reason)}`, "startup");
+    }
+    if (chat.status === "rejected") {
+      log(`Chat database connection failed:${describeDatabaseError(chat.reason)}`, "startup");
+    }
+    log(`Retrying database connections in ${Math.round(retryDelay / 1000)}s.`, "startup");
+    await wait(retryDelay);
+    retryDelay = Math.min(Math.round(retryDelay * 1.5), 15_000);
   }
   throw new Error("Server is shutting down.");
 }
