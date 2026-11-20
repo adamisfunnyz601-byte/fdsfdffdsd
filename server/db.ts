@@ -40,13 +40,13 @@ for (const [name, target] of [["chat", chatPool], ["enzonic", enzonicPool]] as c
 export const chatDb = drizzle(chatPool, { schema });
 export const enzonicDb = drizzle(enzonicPool, { schema });
 
-// Account identity/profile/security remains in Enzonic. Chat content and
-// community-chat structures use DATABASE_URL.
+// Account identity/profile/security remains in ACCOUNTS_URL. Chat content and
+// community-chat structures use MESSAGES_URL.
 const CHAT_TABLES = new Set([
   "group_chats", "group_chat_members", "community_servers",
   "community_server_members", "community_server_categories",
   "community_server_channels", "community_server_messages",
-  "messages", "blocks", "chat_message_reactions", "chat_message_edit_history", "nexus_moments", "nexus_moment_reactions", "chat_polls",
+  "messages", "blocks", "nexus_chat_gif_attachments", "nexus_voice_calls", "nexus_voice_signals", "nexus_chat_mention_notifications", "chat_message_reactions", "chat_message_edit_history", "nexus_moments", "nexus_moment_reactions", "chat_polls",
   "chat_poll_options", "chat_poll_votes",
 ]);
 
