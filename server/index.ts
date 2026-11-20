@@ -136,7 +136,27 @@ httpServer.listen({ port, host: "0.0.0.0" }, () => {
   log(`serving on port ${port} (database initialization pending)`);
 });
 
+// Managed databases can take time to wake and may reset early connections.
+// Keep the service alive and retry both pools until PostgreSQL is reachable.
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+async function waitForDatabaseConnections() {
+  let retryDelay = 2_000;
+  while (!isShuttingDown) {
+    try {
+      await enzonicPool.query("SELECT 1");
+      await chatPool.query("SELECT 1");
+      return;
+    } catch {
+      log(`Database is not reachable yet; retrying in ${Math.round(retryDelay / 1000)}s.`, "startup");
+      await wait(retryDelay);
+      retryDelay = Math.min(Math.round(retryDelay * 1.5), 15_000);
+    }
+  }
+  throw new Error("Server is shutting down.");
+}
+
 (async () => {
+  await waitForDatabaseConnections();
   await registerRoutes(httpServer, app);
   startStorageCleanup();
 
