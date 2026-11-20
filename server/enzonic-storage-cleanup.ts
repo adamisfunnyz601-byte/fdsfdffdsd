@@ -13,9 +13,10 @@ function mbBytes(value: string | undefined, fallback: number): number {
   return Math.floor(mb * 1024 * 1024);
 }
 
-const enzonicPool = process.env.ENZONIC_DATABASE_URL
+const accountsDatabaseUrl = process.env.ACCOUNTS_URL || process.env.ENZONIC_DATABASE_URL;
+const enzonicPool = accountsDatabaseUrl
   ? new Pool({
-      connectionString: process.env.ENZONIC_DATABASE_URL,
+      connectionString: accountsDatabaseUrl,
       max: 2,
       connectionTimeoutMillis: 10_000,
       idleTimeoutMillis: 30_000,
@@ -150,7 +151,7 @@ let cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
 export function startEnzonicStorageCleanup(): void {
   if (!enzonicPool) {
-    console.warn("[enzonic-cleanup] ENZONIC_DATABASE_URL is not configured; cleanup is disabled.");
+    console.warn("[enzonic-cleanup] ACCOUNTS_URL (or ENZONIC_DATABASE_URL) is not configured; cleanup is disabled.");
     return;
   }
   if (cleanupTimer) return;
