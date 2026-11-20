@@ -3868,7 +3868,7 @@ export async function registerRoutes(
     if (name.length < 2 || name.length > 48) return res.status(400).json({ message: "Server names must be 2–48 characters." });
     const ownerId = Number(req.session.userId);
     try {
-      const created = await db.transaction(async (tx) => {
+      const created = await chatDb.transaction(async (tx) => {
         const [server] = await tx.insert(communityServers).values({ name, description, visibility, ownerId, inviteCode: randomBytes(5).toString("hex").toUpperCase() }).returning();
         await tx.insert(communityServerMembers).values({ serverId: server.id, userId: ownerId, role: "owner" });
         const [category] = await tx.insert(communityServerCategories).values({ serverId: server.id, name: "GENERAL", position: 0 }).returning();
