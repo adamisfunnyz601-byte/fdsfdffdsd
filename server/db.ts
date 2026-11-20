@@ -5,21 +5,21 @@ import * as schema from "@shared/schema";
 
 const { Pool } = pg;
 
-const rawChatConnectionString = process.env.DATABASE_URL;
-if (!rawChatConnectionString) {
-  throw new Error("DATABASE_URL must point to the chat PostgreSQL database.");
+// Support the Enzonic project variable names as well as the legacy names.
+// MESSAGES_URL is the chat database; ACCOUNTS_URL is the accounts database.
+const chatConnectionString = process.env.MESSAGES_URL || process.env.DATABASE_URL;
+if (!chatConnectionString) {
+  throw new Error("MESSAGES_URL (or DATABASE_URL) must point to the chat PostgreSQL database.");
 }
-const chatConnectionString = rawChatConnectionString;
-if (!process.env.ENZONIC_DATABASE_URL) {
-  throw new Error("ENZONIC_DATABASE_URL must point to the Enzonic accounts database.");
+const enzonicConnectionString = process.env.ACCOUNTS_URL || process.env.ENZONIC_DATABASE_URL;
+if (!enzonicConnectionString) {
+  throw new Error("ACCOUNTS_URL (or ENZONIC_DATABASE_URL) must point to the accounts PostgreSQL database.");
 }
 
 // Preserve the database provider's requested TLS mode. Rewriting
 // sslmode=require to verify-full can reject managed-provider certificates
 // that are valid for the provider but not trusted by this container.
 // Use the exact provider-issued connection URL. Do not synthesize libpq options.
-const enzonicConnectionString = process.env.ENZONIC_DATABASE_URL;
-
 const poolMax = Number.parseInt(process.env.DATABASE_POOL_MAX || "10", 10);
 const commonPoolOptions = {
   max: Number.isFinite(poolMax) && poolMax > 0 ? Math.min(poolMax, 20) : 10,
