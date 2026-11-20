@@ -23,7 +23,7 @@ const enzonicConnectionString = process.env.ENZONIC_DATABASE_URL;
 const poolMax = Number.parseInt(process.env.DATABASE_POOL_MAX || "10", 10);
 const commonPoolOptions = {
   max: Number.isFinite(poolMax) && poolMax > 0 ? Math.min(poolMax, 20) : 10,
-  connectionTimeoutMillis: 10_000,
+  connectionTimeoutMillis: 30_000,
   idleTimeoutMillis: 30_000,
   keepAlive: true,
   keepAliveInitialDelayMillis: 10_000,
