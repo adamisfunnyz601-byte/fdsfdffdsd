@@ -139,6 +139,14 @@ httpServer.listen({ port, host: "0.0.0.0" }, () => {
 (async () => {
   await registerRoutes(httpServer, app);
   startStorageCleanup();
+
+  // Never let the frontend's SPA fallback turn unknown API paths into HTTP 200.
+  // This also prevents scanners probing for exposed files such as /api/.env
+  // from receiving the application HTML as a successful API response.
+  app.use("/api", (req, res) => {
+    res.status(404).json({ message: "API endpoint not found." });
+  });
+
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
