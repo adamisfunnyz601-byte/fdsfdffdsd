@@ -404,26 +404,6 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // Identify which managed database is unavailable before running migrations.
-  // Log hostnames only; never expose credentials or complete connection URLs.
-  const safeDatabaseHost = (value?: string) => {
-    try { return new URL(value || "").hostname || "missing"; }
-    catch { return "invalid"; }
-  };
-  console.info("[startup] Database targets", {
-    usersHost: safeDatabaseHost(process.env.ENZONIC_DATABASE_URL),
-    messageStorageHost: safeDatabaseHost(process.env.DATABASE_URL),
-  });
-  for (const [label, target] of [["users", enzonicPool], ["message-storage", chatPool]] as const) {
-    try {
-      await target.query("SELECT 1");
-      console.info(`[startup] ${label} database connection OK`);
-    } catch (error) {
-      console.error(`[startup] ${label} database connection FAILED`, error);
-      throw new Error(`Startup blocked: ${label} database is unavailable; see the preceding connection error.`, { cause: error });
-    }
-  }
-
   // Safe additive Enzonic migration: keep existing accounts and subscriptions intact.
   await enzonicPool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_tier TEXT NOT NULL DEFAULT 'none'`);
   await enzonicPool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS mute_emotes BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN IF NOT EXISTS mute_non_friend_calls BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN IF NOT EXISTS dm_friends_only BOOLEAN NOT NULL DEFAULT FALSE`);
