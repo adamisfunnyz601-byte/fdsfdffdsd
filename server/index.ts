@@ -196,6 +196,17 @@ async function waitForDatabaseConnections() {
 
 (async () => {
   await waitForDatabaseConnections();
+
+  // Apply this small, backwards-compatible chat schema repair from the
+  // actual server entrypoint. Serverless platforms can invoke dist/index.cjs
+  // directly and bypass package.json's "start" script, so this must run here.
+  // IF NOT EXISTS makes it safe across concurrent cold starts and preserves
+  // all existing messages.
+  await chatPool.query(
+    "ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS edited_at TIMESTAMP",
+  );
+  log("Verified public.messages.edited_at exists.", "chat-schema");
+
   await registerRoutes(httpServer, app);
   startStorageCleanup();
 
