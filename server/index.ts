@@ -202,10 +202,59 @@ async function waitForDatabaseConnections() {
   // directly and bypass package.json's "start" script, so this must run here.
   // IF NOT EXISTS makes it safe across concurrent cold starts and preserves
   // all existing messages.
-  await chatPool.query(
-    "ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS edited_at TIMESTAMP",
-  );
-  log("Verified public.messages.edited_at exists.", "chat-schema");
+  // Keep the entrypoint migration aligned with script/ensure-chat-schema.mjs:
+  // serverless hosts may execute dist/index.cjs directly and skip npm start.
+  // Run additively in one transaction and serialize concurrent cold starts.
+  const chatSchemaClient = await chatPool.connect();
+  try {
+    await chatSchemaClient.query("BEGIN");
+    await chatSchemaClient.query(
+      "SELECT pg_advisory_xact_lock(hashtext('nexus-chat-schema-v2'))",
+    );
+    await chatSchemaClient.query(`
+      ALTER TABLE public.messages
+        ADD COLUMN IF NOT EXISTS edited_at TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN NOT NULL DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE
+    `);
+    await chatSchemaClient.query(`
+      CREATE TABLE IF NOT EXISTS public.nexus_moments (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        content TEXT NOT NULL DEFAULT '',
+        media_url TEXT,
+        media_type TEXT,
+        background TEXT NOT NULL DEFAULT 'violet',
+        expires_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await chatSchemaClient.query(`
+      CREATE TABLE IF NOT EXISTS public.nexus_moment_reactions (
+        id SERIAL PRIMARY KEY,
+        moment_id INTEGER NOT NULL REFERENCES public.nexus_moments(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL,
+        emoji TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await chatSchemaClient.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS nexus_moment_reaction_unique
+        ON public.nexus_moment_reactions(moment_id, user_id)
+    `);
+    await chatSchemaClient.query(`
+      CREATE INDEX IF NOT EXISTS nexus_moments_expires_at_idx
+        ON public.nexus_moments(expires_at)
+    `);
+    await chatSchemaClient.query("COMMIT");
+    log("Verified scheduled-message and Moments schema.", "chat-schema");
+  } catch (error) {
+    await chatSchemaClient.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    chatSchemaClient.release();
+  }
 
   await registerRoutes(httpServer, app);
   startStorageCleanup();
